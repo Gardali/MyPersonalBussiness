@@ -383,6 +383,18 @@ function buatPdf_(html, nama, folderNama) {
 function buatLaporanPdf(html, bulan) { return buatPdf_(html, 'Laporan Posetive ' + bulan, 'Posetive - Laporan'); }
 function buatInvoice(html, nomor) { return buatPdf_(html, String(nomor).replace(/\//g, '-'), 'Posetive - Invoice'); }
 
+/** Membuat file .xlsx dari baris data (array 2D) lewat Sheet sementara, lalu simpan ke Drive. */
+function buatLaporanEventXlsx(nama, rows) {
+  var temp = SpreadsheetApp.create(nama);
+  if (rows.length) temp.getSheets()[0].getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+  SpreadsheetApp.flush();
+  var file = DriveApp.getFileById(temp.getId());
+  var blob = file.getAs(MimeType.MICROSOFT_EXCEL).setName(nama + '.xlsx');
+  var out = folder_('Posetive - Laporan Event').createFile(blob);
+  file.setTrashed(true);
+  return out.getUrl();
+}
+
 /** Salinan file master ke folder "Posetive - Backup"; hanya 8 salinan terbaru yang disimpan. */
 function backupSekarang() {
   var tz = ss_().getSpreadsheetTimeZone();

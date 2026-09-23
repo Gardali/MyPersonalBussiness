@@ -483,7 +483,7 @@ function vDetailEvent() {
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">' + statusPill(e.status) + '<span class="pill">' + esc(e.model_pendapatan || 'Model belum diisi') + '</span>' + (e.skema ? '<span class="pill">' + esc(e.skema) + '</span>' : '') + '</div>';
   var kEv = kontakEvent(e);
   h += '<div class="meta">' + esc(e.lokasi || '') + (e.tim ? ' · ' + esc(e.tim) : '') + (kEv ? ' · ' + esc(kEv) + ' ' + waBtn(kEv) : '') + '</div>';
-  h += '<div class="btns" style="margin-bottom:20px"><button class="btn sm" onclick="formLaporan(\'' + e.id_event + '\')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="btn sm ghost" onclick="formKas(null,\'' + e.id_event + '\')">+ Kas</button><button class="btn sm ghost" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button>' + (e.model_pendapatan === 'Kontrak Klien' ? '<button class="btn sm ghost" onclick="buatInvoiceUI(\'' + e.id_event + '\',this)">Invoice PDF</button>' : '') + '<button class="btn sm ghost" onclick="formEvent(\'' + e.id_event + '\')">Ubah</button></div>';
+  h += '<div class="btns" style="margin-bottom:20px"><button class="btn sm" onclick="formLaporan(\'' + e.id_event + '\')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="btn sm ghost" onclick="formKas(null,\'' + e.id_event + '\')">+ Kas</button><button class="btn sm ghost" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button><button class="btn sm ghost" onclick="exportLaporanEventXlsx(\'' + e.id_event + '\',this)">Export XLSX</button>' + (e.model_pendapatan === 'Kontrak Klien' ? '<button class="btn sm ghost" onclick="buatInvoiceUI(\'' + e.id_event + '\',this)">Invoice PDF</button>' : '') + '<button class="btn sm ghost" onclick="formEvent(\'' + e.id_event + '\')">Ubah</button></div>';
   if (String(e.catatan || '').indexOf('CEK:') === 0) h += notice('', esc(e.catatan.slice(4).trim()));
 
   var hk = '<div class="card pad"><div class="meta">Laba kotor</div><div class="big ' + cls(r.labaKotor) + '">' + rp(r.labaKotor) + '</div>' +
@@ -845,6 +845,44 @@ function htmlInvoice(e) {
   if (!lunas && P2.REKENING) h += '<div style="margin-top:18px">Pembayaran ke: <b>' + esc(P2.REKENING) + '</b></div>';
   h += '<div style="margin-top:30px;color:#7a736a">Terima kasih.</div></div>';
   return {html: h, nomor: nomor};
+}
+function dataLaporanEventXlsx(e) {
+  var r = hasilEvent(e), lap = r.lap, rows = [];
+  var kv = function (arr) { arr.forEach(function (x) { rows.push(x); }); };
+  rows.push(['Laporan Event — ' + e.nama_event]);
+  kv([['Kode', e.id_event], ['Tanggal', e.tanggal], ['Status', e.status], ['Model pendapatan', e.model_pendapatan || ''], ['Lokasi', e.lokasi || ''], []]);
+  rows.push(['KEUANGAN']);
+  kv([
+    ['Pemasukan', r.masuk], ['Biaya langsung', -r.keluar],
+    ['Bahan (' + r.tercetak + ' lembar × ' + Math.round(r.bl) + ')', -r.bahan],
+    ['Alokasi per event', -r.alokasi], ['Laba kotor', r.labaKotor], ['Laba bersih', r.labaBersih]
+  ]);
+  if (r.piutang !== undefined) kv([['Nilai kontrak', num(e.nilai_kontrak)], ['Piutang', r.piutang]]);
+  rows.push([]);
+  if (lap) {
+    rows.push(['LAPORAN PRODUKSI']);
+    kv([
+      ['Jam buka–tutup aktual', (lap.jam_buka_aktual || '') + '–' + (lap.jam_tutup_aktual || '')],
+      ['Jumlah transaksi', num(lap.jumlah_transaksi)], ['Foto 4R terjual', num(lap.foto_4r_terjual)],
+      ['Graduation Book terjual', num(lap.grad_book_terjual)], ['Strip terjual', num(lap.strip_terjual)],
+      ['Counter awal', num(lap.counter_awal)], ['Counter akhir', num(lap.counter_akhir)], ['Tercetak', r.tercetak],
+      ['Lembar uji/bonus', num(lap.lembar_uji_bonus)], ['Lembar gagal', num(lap.lembar_gagal)], ['Selisih lembar', r.selisihLembar || 0],
+      ['Omzet menurut laporan', r.omzet || 0], ['Uang diterima', r.diterima || 0], ['Selisih kas', r.selisihKas || 0],
+      ['Kendala', lap.kendala || ''], ['Rekomendasi', lap.rekomendasi || ''], []
+    ]);
+  }
+  rows.push(['TRANSAKSI KAS']);
+  rows.push(['Tanggal', 'Jenis', 'Kategori', 'Keterangan', 'Metode', 'Nominal']);
+  r.kas.forEach(function (k) { rows.push([k.tanggal, k.jenis, k.kategori || '', k.keterangan || '', k.metode || '', num(k.nominal)]); });
+  var lebar = rows.reduce(function (m, x) { return Math.max(m, x.length); }, 1);
+  return rows.map(function (x) { while (x.length < lebar) x.push(''); return x; });
+}
+function exportLaporanEventXlsx(id, btn) {
+  var e = cari(D.event, 'id_event', id), rows = dataLaporanEventXlsx(e);
+  var nama = (e.id_event + ' - ' + e.nama_event).replace(/[\/\\]/g, '-');
+  btn.disabled = true; btn.textContent = 'Membuat XLSX…';
+  panggil('buatLaporanEventXlsx', nama, rows).then(function (url) { btn.disabled = false; btn.textContent = 'Export XLSX'; bukaLink(url, nama + '.xlsx'); })
+    .catch(function (err) { btn.disabled = false; btn.textContent = 'Export XLSX'; toast('Gagal: ' + (err && err.message || err)); });
 }
 function buatInvoiceUI(id, btn) {
   var e = cari(D.event, 'id_event', id);
