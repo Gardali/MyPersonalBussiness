@@ -342,6 +342,14 @@ function simpanFotoCrew(idCrew, base64, mime, namaFile) {
   return file.getId();
 }
 
+/** Menyimpan file nota/bukti kas ke Drive (nama file sudah dibentuk di klien), lalu mengaitkan URL-nya ke catatan KAS. */
+function simpanNotaKas(idKas, base64, mime, namaFile) {
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64), mime, namaFile);
+  var file = folder_('Posetive - Nota Kas').createFile(blob);
+  saveRecord('KAS', { id: idKas, no_nota: file.getUrl() });
+  return file.getUrl();
+}
+
 /** Foto profil crew sebagai data URI (base64), atau null bila belum ada foto. */
 function getFotoCrew(idCrew) {
   var c = readTab_('CREW').filter(function (x) { return x.id_crew === idCrew; })[0];

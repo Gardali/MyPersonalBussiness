@@ -60,6 +60,8 @@ main{max-width:640px;margin:0 auto;padding:20px 16px}
 .ic.in{background:var(--ok-soft);color:var(--ok)}
 .wa{display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--ok-soft);color:var(--ok);align-items:center;justify-content:center;vertical-align:middle;flex:none}
 .wa svg{width:16px;height:16px}
+.att{display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--soft);color:var(--muted);align-items:center;justify-content:center;vertical-align:middle;flex:none}
+.att svg{width:15px;height:15px}
 .pill{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px;background:var(--soft);color:var(--muted)}
 .p-ok{background:var(--ok-soft);color:var(--ok)}.p-bad{background:var(--bad-soft);color:var(--bad)}.p-warn{background:var(--warn-soft);color:var(--warn)}.p-acc{background:var(--accent-soft);color:var(--accent)}
 .pos{color:var(--ok)}.neg{color:var(--bad)}.muted{color:var(--muted)}
@@ -173,7 +175,8 @@ var IC = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   box: '<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7M12 11v10"/>',
   calc: '<rect x="5" y="3" width="14" height="18" rx="3"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/>',
-  chat: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>'
+  chat: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>',
+  nota: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>'
 };
 function ikon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC[n] + '</svg>'; }
 document.getElementById('nav').innerHTML = '<div class="brand">Posetive<small>Photobooth</small></div>' + [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas'], ['stok', 'box', 'Stok'], ['lainnya', 'gear', 'Lainnya']]
@@ -530,10 +533,13 @@ function vDetailEvent() {
   return h + '</div></div>';
 }
 
+function notaBtn(url) {
+  return /^https?:\/\//.test(url || '') ? '<a class="att" href="' + esc(url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Lihat nota">' + ikon('nota') + '</a>' : '';
+}
 function barisKas(k) {
   var m = k.jenis === 'Masuk';
   return item({lead: '<div class="ic ' + (m ? 'in' : '') + '">' + ikon(m ? 'down' : 'up') + '</div>', t: esc(k.keterangan || k.kategori), s: tgl(k.tanggal) + ' · ' + esc(k.kategori) + (k.id_event ? ' · ' + esc(k.id_event) : ''),
-    end: '<span class="' + (m ? 'pos' : '') + '">' + (m ? '+' : '−') + rp(k.nominal) + '</span>', on: "formKas('" + k.id + "')"});
+    end: notaBtn(k.no_nota) + '<span class="' + (m ? 'pos' : '') + '">' + (m ? '+' : '−') + rp(k.nominal) + '</span>', on: "formKas('" + k.id + "')"});
 }
 
 function vKas() {
@@ -893,7 +899,18 @@ function buatInvoiceUI(id, btn) {
 }
 
 // ---------------------------------------------------------------- formulir
-var FORM = null, FOTO_BARU = null;
+var FORM = null, FOTO_BARU = null, NOTA_BARU = null;
+function pilihBukti(inp) {
+  var f = inp.files[0]; if (!f) return;
+  var ok = {'image/png': 1, 'image/jpeg': 1, 'application/pdf': 1};
+  if (!ok[f.type]) { toast('Harus PNG, JPG, atau PDF'); inp.value = ''; return; }
+  var reader = new FileReader();
+  reader.onload = function () {
+    NOTA_BARU = {base64: reader.result.split(',')[1], mime: f.type};
+    var span = document.getElementById('bukti_nama'); if (span) span.textContent = f.name;
+  };
+  reader.readAsDataURL(f);
+}
 function pilihFoto(inp) {
   var f = inp.files[0]; if (!f) return;
   var reader = new FileReader();
@@ -964,7 +981,7 @@ var F_KAS = [
   {n: 'tanggal', l: 'Tanggal', t: 'date', def: 'today', wajib: 1}, {n: 'jenis', l: 'Jenis', t: 'sel', o: pil('Jenis Kas'), def: 'Keluar', wajib: 1},
   {n: 'nominal', l: 'Nominal (Rp)', t: 'num', wajib: 1}, {n: 'kategori', l: 'Kategori', t: 'sel', o: pil('Kategori Kas'), wajib: 1},
   {n: 'keterangan', l: 'Keterangan'}, {n: 'id_event', l: 'Event terkait', t: 'sel', o: pilEvent},
-  {n: 'metode', l: 'Metode', t: 'sel', o: pil('Metode')}, {n: 'no_nota', l: 'No. nota / bukti'}, {n: 'catatan', l: 'Catatan', t: 'area'}
+  {n: 'metode', l: 'Metode', t: 'sel', o: pil('Metode')}, {n: 'no_nota', l: 'Nota / bukti (PNG, JPG, atau PDF)', t: 'bukti'}, {n: 'catatan', l: 'Catatan', t: 'area'}
 ];
 var F_CREW = [
   {n: '_foto', l: 'Foto profil', t: 'file'},
@@ -988,11 +1005,13 @@ function bukaForm(judul, fields, rec, onSave, extra, preview) {
     if (f.t === 'sel') inp = '<select name="' + f.n + '"><option value="">— pilih —</option>' + f.o().map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(v) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
     else if (f.t === 'area') inp = '<textarea name="' + f.n + '">' + esc(v) + '</textarea>';
     else if (f.t === 'file') inp = '<div style="display:flex;align-items:center;gap:12px"><img id="foto_prev" style="width:56px;height:56px;border-radius:50%;object-fit:cover;background:var(--soft);visibility:hidden;flex:none"><input type="file" accept="image/*" onchange="pilihFoto(this)"></div>';
+    else if (f.t === 'bukti') inp = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' + (/^https?:\/\//.test(v) ? '<a class="btn sm ghost" href="' + esc(v) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">Lihat nota</a>' : '') +
+      '<input type="file" accept="image/png,image/jpeg,application/pdf" onchange="pilihBukti(this)"><span id="bukti_nama" class="meta"></span></div>';
     else {
       var type = {date: 'date', time: 'time', num: 'number', pct: 'number', tel: 'tel'}[f.t] || 'text';
       inp = '<input name="' + f.n + '" type="' + type + '"' + (type === 'number' ? ' inputmode="decimal" step="any"' : '') + ' value="' + esc(v) + '">';
     }
-    h += '<div class="f' + (f.t === 'area' || f.t === 'file' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
+    h += '<div class="f' + (f.t === 'area' || f.t === 'file' || f.t === 'bukti' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
   });
   if (FORM.preview) h += '<div id="preview" class="f wide" style="margin-top:10px"></div>';
   h += '<div class="btns"><button class="btn" type="submit" style="flex:1">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()">Batal</button></div>' + (extra ? '<div class="btns">' + extra + '</div>' : '') + '</form>';
@@ -1073,8 +1092,16 @@ function formLaporan(idEvent) {
 }
 function formKas(id, idEvent) {
   var k = id ? cari(D.kas, 'id', id) : {id_event: idEvent || ''};
+  NOTA_BARU = null;
   var extra = id ? '<button class="btn danger" type="button" onclick="hapus(\'KAS\',\'' + id + '\')">Hapus</button>' : '';
-  bukaForm(id ? 'Kas ' + id : 'Catat kas', F_KAS, k, function (r) { return panggil('saveRecord', 'KAS', r); }, extra);
+  bukaForm(id ? 'Kas ' + id : 'Catat kas', F_KAS, k, function (r) {
+    return panggil('saveRecord', 'KAS', r).then(function (idBaru) {
+      if (!NOTA_BARU) return idBaru;
+      var ext = {'image/png': '.png', 'image/jpeg': '.jpg', 'application/pdf': '.pdf'}[NOTA_BARU.mime] || '';
+      var nama = idBaru + ' - ' + r.tanggal + (r.kategori ? ' - ' + r.kategori : '') + ext;
+      return panggil('simpanNotaKas', idBaru, NOTA_BARU.base64, NOTA_BARU.mime, nama).then(function () { return idBaru; });
+    });
+  }, extra);
 }
 function formCrew(id) {
   var c = id ? cari(D.crew, 'id_crew', id) : {};
