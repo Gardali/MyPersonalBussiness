@@ -158,7 +158,7 @@ nav button[data-v=lainnya]{display:none}
 <div id="toast"></div>
 
 <script>
-var D = null, VIEW = 'beranda', FILTER = {pipeline: 'Aktif', kas: ''}, DETAIL = null;
+var D = null, VIEW = 'beranda', FILTER = {pipeline: 'Aktif', kas: '', kasSumber: ''}, DETAIL = null;
 var NAMA = 'Garda', CEK_SEMUA = false;
 
 // ---------------------------------------------------------------- ikon
@@ -253,6 +253,8 @@ function hasilEvent(ev) {
 }
 
 function saldoKas() { return sum(D.kas, function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
+function saldoPosetive() { return sum(D.kas.filter(function (k) { return !k.id_event; }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
+function saldoEvent() { return sum(D.kas.filter(function (k) { return k.id_event; }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
 function perluCek() {
   var out = [];
   [['PIPELINE', 'id'], ['EVENT', 'id_event'], ['LAPORAN_EVENT', 'id_event'], ['KAS', 'id'], ['INVENTARIS', 'id_alat']].forEach(function (t) {
@@ -544,8 +546,10 @@ function barisKas(k) {
 
 function vKas() {
   var bulanList = Array.from(new Set(D.kas.map(function (k) { return String(k.tanggal).slice(0, 7); }))).sort().reverse();
-  var f = FILTER.kas;
-  var list = D.kas.filter(function (k) { return !f || String(k.tanggal).slice(0, 7) === f; }).sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : (a.id < b.id ? 1 : -1); });
+  var f = FILTER.kas, sb = FILTER.kasSumber;
+  var list = D.kas.filter(function (k) { return !f || String(k.tanggal).slice(0, 7) === f; })
+    .filter(function (k) { return !sb || (sb === 'umum' ? !k.id_event : !!k.id_event); })
+    .sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : (a.id < b.id ? 1 : -1); });
   var masuk = sum(list.filter(bukanSetoran), function (k) { return k.nominal; });
   var setoran = sum(list.filter(function (k) { return k.jenis === 'Masuk' && k.kategori === 'Setoran Owner'; }), function (k) { return k.nominal; });
   var keluar = sum(list.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
@@ -553,9 +557,14 @@ function vKas() {
   var h = '<div class="bar"><div class="pagetitle" style="margin:0">Kas</div><div style="display:flex;gap:8px;align-items:center"><select class="plain" onchange="FILTER.kas=this.value;tampil(\'kas\')"><option value="">Semua bulan</option>' +
     bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select><button class="btn sm" onclick="formKas()">+ Catat</button></div></div>';
   h += '<div class="head2"><div class="hero" style="margin-top:0"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div></div>';
+  h += '<div class="stats" style="grid-template-columns:repeat(2,1fr)"><div class="stat"><div class="k">Kas Posetive (operasional)</div><div class="v">' + rpSingkat(saldoPosetive()) + '</div></div>' +
+    '<div class="stat"><div class="k">Dari event</div><div class="v">' + rpSingkat(saldoEvent()) + '</div></div></div>';
   h += '<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><div class="k">Pemasukan</div><div class="v pos">' + rpSingkat(masuk) + '</div></div>' +
     '<div class="stat"><div class="k">Dari owner</div><div class="v">' + rpSingkat(setoran) + '</div></div>' +
     '<div class="stat"><div class="k">Keluar</div><div class="v">' + rpSingkat(keluar) + '</div></div></div></div>';
+  h += '<div class="chips" style="margin-bottom:14px">' + [['', 'Semua'], ['umum', 'Posetive'], ['event', 'Event']].map(function (c) {
+    return '<button class="chip ' + (c[0] === sb ? 'on' : '') + '" onclick="FILTER.kasSumber=\'' + c[0] + '\';tampil(\'kas\')">' + c[1] + '</button>';
+  }).join('') + '</div>';
   h += '<div class="card">' + (list.length ? list.map(barisKas).join('') : '<div class="empty">Belum ada transaksi.</div>') + '</div>';
   return h;
 }
