@@ -647,8 +647,7 @@ function bukaChecklist(idEvent) {
   D.pemakaian.filter(function (a) { return !a.id_alat; }).forEach(function (a) { rows['SET:' + a.nama_alat] = rows['SET:' + a.nama_alat] || {id_alat: '', nama_alat: a.nama_alat, dibawa: 'Tidak', kembali: '', kondisi_akhir: 'Baik', catatan: ''}; });
   ada.forEach(function (a) { var k = a.id_alat || 'SET:' + a.nama_alat; rows[k] = Object.assign(rows[k] || {}, a, {pemilik: pemilikAlat(a)}); });
   CL = {id: idEvent, rows: Object.keys(rows).map(function (k) { return rows[k]; }).sort(function (a, b) {
-    var pa = a.pemilik && a.pemilik !== 'Posetive' ? 0 : 1, pb = b.pemilik && b.pemilik !== 'Posetive' ? 0 : 1;
-    return pa - pb || String(a.nama_alat).localeCompare(String(b.nama_alat));
+    return String(a.nama_alat).localeCompare(String(b.nama_alat));
   })};
   renderChecklist();
   document.getElementById('sheet').classList.add('open');
