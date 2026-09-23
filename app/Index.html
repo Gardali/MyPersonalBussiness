@@ -1063,7 +1063,8 @@ var F_EVENT = [
   {n: 'jumlah_crew', l: 'Jumlah crew', t: 'num'}, {n: 'penanggung_jawab', l: 'Penanggung jawab'}, {n: 'tim', l: 'Tim'},
   {n: 'folder_drive', l: 'Folder Drive'},
   {g: 'RAB (Rencana Anggaran Biaya)'},
-  {n: 'rab_penyusutan', l: 'Alokasi penyusutan (Rp)', t: 'num'}, {n: 'rab_jepreto', l: 'Alokasi langganan Jepreto (Rp)', t: 'num'},
+  {n: 'rab_penyusutan', l: 'Alokasi penyusutan (Rp) — saran dari Inventaris ÷ target event/bulan', t: 'num', def: function () { return Math.round(totalPenyusutanBulanan() / (Pd('EVENT_BULAN', 4))); }},
+  {n: 'rab_jepreto', l: 'Alokasi langganan Jepreto (Rp) — saran dari PENGATURAN ÷ target event/bulan', t: 'num', def: function () { return Math.round(P('JEPRETO_BULAN') / (Pd('EVENT_BULAN', 4))); }},
   {n: 'rab_fee_crew', l: 'Fee crew (Rp)', t: 'num'}, {n: 'rab_transport', l: 'Transport (Rp)', t: 'num'}, {n: 'rab_konsumsi', l: 'Konsumsi (Rp)', t: 'num'},
   {n: 'catatan', l: 'Catatan', t: 'area'}
 ];
@@ -1104,7 +1105,7 @@ var F_CREW = [
 
 function bukaForm(judul, fields, rec, onSave, extra, preview) {
   FORM = {fields: fields, rec: Object.assign({}, rec), onSave: onSave, preview: preview};
-  fields.forEach(function (f) { if (f.n && FORM.rec[f.n] === undefined && f.def) FORM.rec[f.n] = f.def === 'today' ? D.hariIni : f.def; });
+  fields.forEach(function (f) { if (f.n && FORM.rec[f.n] === undefined && f.def) FORM.rec[f.n] = f.def === 'today' ? D.hariIni : (typeof f.def === 'function' ? f.def() : f.def); });
   var h = '<div class="grab"></div><h2>' + esc(judul) + '</h2><form id="frm" onsubmit="simpanForm();return false">';
   fields.forEach(function (f, i) {
     if (f.g) { h += '<div class="grp">' + esc(f.g) + '</div>'; return; }
