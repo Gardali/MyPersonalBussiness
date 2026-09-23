@@ -773,12 +773,18 @@ function vCrew() {
     var habis = c.tanggal_akhir_kontrak && c.tanggal_akhir_kontrak < now;
     var segera = !habis && c.tanggal_akhir_kontrak && selisihHari(c.tanggal_akhir_kontrak, now) <= 30;
     return item({
-      lead: '<div class="av">' + inisial(c.nama_panggilan || c.nama_lengkap) + '</div>',
+      lead: '<div class="av" id="avcrew-' + c.id_crew + '">' + inisial(c.nama_panggilan || c.nama_lengkap) + '</div>',
       t: esc(c.nama_panggilan || c.nama_lengkap), s: esc(c.role || '—') + (c.domisili ? ' · ' + esc(c.domisili) : ''),
       end: habis ? '<span class="pill p-bad">Kontrak berakhir</span>' : segera ? '<span class="pill p-warn">Kontrak segera berakhir</span>' : '',
       on: "formCrew('" + c.id_crew + "')"
     });
   }).join('') : '<div class="empty">Belum ada data crew.</div>') + '</div>';
+  list.filter(function (c) { return c.foto; }).forEach(function (c) {
+    panggil('getFotoCrew', c.id_crew).then(function (dataUri) {
+      var el = document.getElementById('avcrew-' + c.id_crew);
+      if (el && dataUri) el.innerHTML = '<img src="' + dataUri + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover">';
+    });
+  });
   return h;
 }
 function vInventaris() {
