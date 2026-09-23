@@ -388,10 +388,12 @@ function buatLaporanEventXlsx(nama, rows) {
   var temp = SpreadsheetApp.create(nama);
   if (rows.length) temp.getSheets()[0].getRange(1, 1, rows.length, rows[0].length).setValues(rows);
   SpreadsheetApp.flush();
-  var file = DriveApp.getFileById(temp.getId());
-  var blob = file.getAs(MimeType.MICROSOFT_EXCEL).setName(nama + '.xlsx');
+  var url = 'https://www.googleapis.com/drive/v3/files/' + temp.getId() + '/export?mimeType=' +
+    encodeURIComponent('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  var resp = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } });
+  var blob = resp.getBlob().setName(nama + '.xlsx');
   var out = folder_('Posetive - Laporan Event').createFile(blob);
-  file.setTrashed(true);
+  DriveApp.getFileById(temp.getId()).setTrashed(true);
   return out.getUrl();
 }
 
