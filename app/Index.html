@@ -161,7 +161,7 @@ nav button[data-v=lainnya]{display:none}
   nav button.on{background:var(--accent-soft)}
   nav svg{width:20px;height:20px}
   .cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:0 28px;align-items:start}
-  .head2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:end;margin-bottom:26px}
+  .head2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:28px;align-items:end;margin-bottom:26px}
   .head2 .hero,.head2 .quick,.head2 .stats{margin:0}
   .hero .v{font-size:44px}
   .top .hi{font-size:26px}.top .hi br{display:none}
@@ -478,7 +478,7 @@ function vBeranda() {
     '<div class="stats2" style="margin:0">' +
     '<div class="scard"><div class="sicon">' + ikon('down') + '</div><div class="k">Pemasukan</div><div class="v">' + rpSingkat(masukBln) + '</div>' + deltaHtml(masukBln, masukBlnLalu) + '</div>' +
     '<div class="scard"><div class="sicon">' + ikon('up') + '</div><div class="k">Biaya operasional</div><div class="v">' + rpSingkat(keluarBln) + '</div>' + deltaHtml(keluarBln, keluarBlnLalu) + '</div>' +
-    '<div class="scard"><div class="sicon">' + ikon('calc') + '</div><div class="k">Hasil operasional</div><div class="v">' + rpSingkat(masukBln - keluarBln) + '</div>' + deltaHtml(masukBln - keluarBln, masukBlnLalu - keluarBlnLalu) + '</div>' +
+    '<div class="scard"><div class="sicon">' + ikon('calc') + '</div><div class="k">Hasil operasional</div><div class="v ' + cls(masukBln - keluarBln) + '">' + rpSingkat(masukBln - keluarBln) + '</div>' + deltaHtml(masukBln - keluarBln, masukBlnLalu - keluarBlnLalu) + '</div>' +
     '<div class="scard"><div class="sicon">' + ikon('box') + '</div><div class="k">Belanja alat</div><div class="v">' + rpSingkat(alatBln) + '</div></div></div>');
 
   var tk = tintaTerakhir(), sk = stok('Kertas 4R'), sb = stok('Graduation Book');
