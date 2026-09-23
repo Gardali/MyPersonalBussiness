@@ -40,6 +40,17 @@ Buka URL tadi di Chrome HP (login dengan akun yang sama) → menu ⋮ → **Tamb
 Tempel kode baru di Code.gs / Index, simpan, lalu **Terapkan → Kelola deployment → ikon pensil →
 Versi: Versi baru → Terapkan**. URL tidak berubah.
 
+## Menghubungkan Google Calendar (sekali saja)
+1. Buka aplikasi → **Lainnya → Google Calendar → Hubungkan & sinkronkan**.
+2. Kalau muncul pesan gagal soal izin: buka editor Apps Script, pilih fungsi **sinkronSemuaKalender**
+   di daftar fungsi (atas), klik **Jalankan**, lalu **Izinkan** akses Kalender. Setelah itu klik lagi
+   tombolnya di aplikasi.
+3. Kalender baru **Posetive Photobooth** muncul di Google Calendar. Tiap event yang disimpan otomatis
+   masuk/diperbarui di sana; event Batal atau dihapus ikut hilang dari kalender. Ubah jadwal lewat
+   aplikasi, bukan langsung di kalender (perubahan di kalender akan tertimpa).
+4. Supaya crew atau bos ikut melihat: di Google Calendar, kalender Posetive Photobooth → ⋮ →
+   **Setelan dan berbagi** → **Bagikan dengan orang tertentu**.
+
 ## Aturan pakai
 - Isi data **lewat aplikasi**. Membuka spreadsheet langsung tetap boleh, tapi jangan mengubah judul
   kolom (baris 1) atau nama tab.

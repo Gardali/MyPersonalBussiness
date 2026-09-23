@@ -70,6 +70,26 @@ main{max-width:640px;margin:0 auto;padding:20px 16px}
 .evcard .end{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
 .pill2{display:inline-block;background:#6E1F2C;color:#fff;font-size:11px;font-weight:700;border-radius:999px;padding:4px 11px;white-space:nowrap}
 .pill2.soft{background:#F2E1E1;color:#6E1F2C}
+.kal{padding:14px}
+.kal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.kal-h b{font-size:15px}
+.kal-h button{border:0;background:var(--soft);color:var(--ink);width:32px;height:32px;border-radius:50%;font-size:17px;line-height:1;cursor:pointer}
+.kal-h .kal-kini{width:auto;padding:0 12px;font-size:12px;font-weight:600;border-radius:999px;margin-right:6px}
+.kal-g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));text-align:center}
+.kal-g .hd{font-size:11px;color:var(--muted);font-weight:600;padding:4px 0 6px}
+.kal-g button{border:0;background:none;color:var(--ink);padding:3px 0;font:inherit;font-size:13px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:44px}
+.kal-g button.lain{color:var(--muted);opacity:.5}
+.kal-g .n{width:30px;height:30px;display:grid;place-items:center;border-radius:50%;font-variant-numeric:tabular-nums}
+.kal-g .kini .n{box-shadow:inset 0 0 0 1.5px #6E1F2C;font-weight:700}
+.kal-g .pilih .n{background:#6E1F2C;color:#fff;font-weight:700}
+.kal-g .dots{display:flex;gap:3px;height:5px}
+.kal-g .dots i,.kal-leg i{width:5px;height:5px;border-radius:50%;display:inline-block}
+.d-ev{background:#6E1F2C}.d-tg{background:var(--warn)}.d-fu{background:var(--ok)}
+.kal-leg{display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:6px;flex-wrap:wrap}
+.kal-leg i{margin-right:5px;vertical-align:middle}
+.kal-ag{border-top:1px solid var(--line);margin-top:10px;padding-top:10px}
+.kal-ag .it:first-child{border-top:0}
+@media (prefers-color-scheme:dark){.kal-g .kini .n{box-shadow:inset 0 0 0 1.5px var(--accent)}.kal-g .pilih .n,.d-ev{background:var(--accent)}}
 .fcard{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:11px 13px;margin-bottom:8px}
 .fcard:last-child{margin-bottom:0}
 .favatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:12.5px;flex:none}
@@ -482,6 +502,62 @@ function addHari(s, n) { var d = new Date(Date.parse(s) + n * 864e5); return d.t
 function aktif(p) { return ['Deal', 'Kalah', 'Batal'].indexOf(p.status) < 0; }
 function salam() { var h = new Date().getHours(); return h < 11 ? 'Selamat pagi' : h < 15 ? 'Selamat siang' : h < 18 ? 'Selamat sore' : 'Selamat malam'; }
 
+// ---- kalender beranda
+var KAL = {bulan: '', pilih: ''};
+var BLN_PANJANG = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+/** Agenda per tanggal: event (kecuali batal), jatuh tempo tagihan klien, dan follow-up prospek aktif. */
+function agendaKalender() {
+  var a = {}, tambah = function (t, x) { if (t) (a[t] = a[t] || []).push(x); };
+  D.event.forEach(function (e) {
+    if (e.status === 'Batal') return;
+    tambah(e.tanggal, {j: 'ev', e: e});
+    var t = tagihan(e);
+    if (t && t.kurang > 0 && t.jatuh) tambah(t.jatuh, {j: 'tg', e: e, t: t});
+  });
+  D.pipeline.filter(aktif).forEach(function (p) { tambah(p.follow_up, {j: 'fu', p: p}); });
+  return a;
+}
+function itemAgenda(x) {
+  if (x.j === 'ev') return item({lead: '<div class="ic">' + ikon('camera') + '</div>', t: esc(x.e.nama_event),
+    s: [x.e.jam_buka ? esc(x.e.jam_buka) + (x.e.jam_tutup ? '–' + esc(x.e.jam_tutup) : '') : '', esc(x.e.lokasi || x.e.kota || '')].filter(Boolean).join(' · ') || 'Event',
+    end: statusPill(x.e.status), on: "bukaEvent('" + x.e.id_event + "')"});
+  if (x.j === 'tg') return item({lead: '<div class="ic">' + ikon('wallet') + '</div>', t: 'Jatuh tempo ' + (x.t.tahap === 'DP' ? 'DP' : 'pelunasan'),
+    s: esc(x.e.nama_event), end: '<span class="' + (x.t.sisaHari < 0 ? 'neg' : '') + '">' + rp(x.t.kurang) + '</span>', on: "bukaEvent('" + x.e.id_event + "')"});
+  return item({lead: '<div class="ic">' + ikon('user') + '</div>', t: 'Follow-up ' + esc(x.p.nama_klien), s: esc(x.p.referensi || x.p.status || ''),
+    end: waBtn(x.p.kontak), on: "formPipeline('" + x.p.id + "')"});
+}
+function htmlKalender() {
+  var now = D.hariIni;
+  if (!KAL.bulan) { KAL.bulan = now.slice(0, 7); KAL.pilih = now; }
+  var y = Number(KAL.bulan.slice(0, 4)), m = Number(KAL.bulan.slice(5)) - 1, ag = agendaKalender();
+  var mundur = (new Date(Date.UTC(y, m, 1)).getUTCDay() + 6) % 7; // minggu dimulai Senin
+  var sel = Math.ceil((mundur + new Date(Date.UTC(y, m + 1, 0)).getUTCDate()) / 7) * 7;
+  var h = '<div class="kal-h"><b>' + BLN_PANJANG[m] + ' ' + y + '</b><div>' +
+    (KAL.bulan !== now.slice(0, 7) ? '<button class="kal-kini" onclick="kalKe(\'' + now + '\')">Hari ini</button>' : '') +
+    '<button onclick="kalGeser(-1)" aria-label="Bulan sebelumnya">‹</button> <button onclick="kalGeser(1)" aria-label="Bulan berikutnya">›</button></div></div>';
+  h += '<div class="kal-g">' + ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map(function (d) { return '<div class="hd">' + d + '</div>'; }).join('');
+  for (var i = 0; i < sel; i++) {
+    var d = new Date(Date.UTC(y, m, 1 - mundur + i)).toISOString().slice(0, 10), isi = ag[d] || [];
+    var jenis = ['ev', 'tg', 'fu'].filter(function (j) { return isi.some(function (x) { return x.j === j; }); });
+    var c = [d.slice(0, 7) !== KAL.bulan ? 'lain' : '', d === now ? 'kini' : '', d === KAL.pilih ? 'pilih' : ''].filter(Boolean).join(' ');
+    h += '<button' + (c ? ' class="' + c + '"' : '') + ' onclick="kalKe(\'' + d + '\')" aria-label="' + tgl(d) + (isi.length ? ', ' + isi.length + ' agenda' : '') + '"><span class="n">' + Number(d.slice(8)) + '</span><span class="dots">' +
+      jenis.map(function (j) { return '<i class="d-' + j + '"></i>'; }).join('') + '</span></button>';
+  }
+  h += '</div><div class="kal-leg"><span><i class="d-ev"></i>Event</span><span><i class="d-tg"></i>Tagihan</span><span><i class="d-fu"></i>Follow-up</span></div>';
+  var hariIni = ag[KAL.pilih] || [];
+  h += '<div class="kal-ag"><div class="meta">' + hari(KAL.pilih) + ', ' + tgl(KAL.pilih) + '</div><div>' +
+    (hariIni.length ? hariIni.map(itemAgenda).join('') : '<div class="it"><div class="meta">Tidak ada agenda.</div></div>') + '</div></div>';
+  return h;
+}
+function renderKalender() { var el = document.getElementById('kal'); if (el) el.innerHTML = htmlKalender(); }
+function kalKe(d) { KAL.pilih = d; KAL.bulan = d.slice(0, 7); renderKalender(); }
+function kalGeser(n) {
+  var y = Number(KAL.bulan.slice(0, 4)), m = Number(KAL.bulan.slice(5)) - 1 + n;
+  KAL.bulan = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
+  KAL.pilih = KAL.bulan === D.hariIni.slice(0, 7) ? D.hariIni : KAL.bulan + '-01';
+  renderKalender();
+}
+
 function vBeranda() {
   var now = D.hariIni, bulan = now.slice(0, 7), saldo = saldoKas(), h = '';
   var kasBln = D.kas.filter(function (k) { return String(k.tanggal).slice(0, 7) === bulan; });
@@ -517,6 +593,9 @@ function vBeranda() {
     n += '<div onclick="bukaEvent(\'' + e.id_event + '\')" style="cursor:pointer">' + notice('', '<b>' + esc(e.nama_event) + ' (' + tgl(e.tanggal) + ')</b> sudah lewat — isi laporan & tutup event.') + '</div>';
   });
   if (n) h += sec('Perlu perhatian', n);
+
+  h += sec('Kalender', '<div class="card kal" id="kal">' + htmlKalender() + '</div>',
+    D.kalender ? '<a class="link" style="text-decoration:none" href="https://calendar.google.com/calendar/r/month/' + KAL.bulan.replace('-', '/') + '/1" target="_blank" rel="noopener">Google Calendar ↗</a>' : '');
 
   var akanDatang = D.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal >= now; }).sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : 1; });
   h += sec('Event mendatang', (akanDatang.length ? akanDatang.slice(0, 5).map(function (e) {
@@ -973,6 +1052,11 @@ function vLainnya() {
     '<button class="btn sm" onclick="LAP.bulan=document.getElementById(\'lap_bulan\').value;tampil(\'laporan\')">Buka laporan</button></div></div>');
   h += sec('Crew', '<div class="card pad"><div class="meta" style="margin-bottom:10px">Data tim (domisili, kendaraan, rekening, masa kontrak) dan fee yang belum dibayar.</div><button class="btn sm" onclick="tampil(\'crew\')">Kelola crew</button></div>');
   h += sec('Inventaris', '<div class="card pad"><div class="meta" style="margin-bottom:10px">Alat & aset milik atau pinjaman ke Posetive, beserta penyusutannya (' + rpSingkat(totalPenyusutanBulanan()) + '/bulan).</div><button class="btn sm" onclick="tampil(\'inventaris\')">Kelola inventaris</button></div>');
+  h += sec('Google Calendar', '<div class="card pad"><div class="meta" style="margin-bottom:10px">' + (D.kalender ?
+      '<span class="pill p-ok">Terhubung</span> Event otomatis masuk ke kalender <b>Posetive Photobooth</b> di Google Calendar setiap kali disimpan (jam, lokasi, klien, crew). Event batal dihapus dari kalender.' :
+      'Sambungkan supaya setiap event otomatis masuk ke Google Calendar (kalender baru "Posetive Photobooth") dan muncul sebagai notifikasi di HP.') + '</div>' +
+    '<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" onclick="sinkronKalenderUI(this)">' + (D.kalender ? 'Sinkronkan ulang semua' : 'Hubungkan & sinkronkan') + '</button>' +
+    (D.kalender ? '<button class="btn sm ghost" onclick="putusKalenderUI(this)">Putuskan</button>' : '') + '</div></div>');
   h += sec('Otomatis', '<div class="card" id="oto">' + (OTO ? isiOto() : '<div class="empty">Memeriksa…</div>') + '</div><div class="meta" style="margin-top:8px">Pertama kali dinyalakan, Google akan meminta izin tambahan (Gmail & Drive). Pilih akun Anda → Lanjutan → Izinkan.</div>');
   h += sec('Info usaha untuk invoice', '<div class="card pad"><table>' +
     '<tr><td>Nama usaha</td><td class="r">' + esc(D.pengaturan.NAMA_USAHA || '—') + '</td></tr>' +
@@ -996,6 +1080,20 @@ function isiOto() {
 function aturOto(nama, aktif, btn) {
   btn.disabled = true; btn.textContent = '…';
   panggil('aturOtomatis', nama, aktif).then(function (o) { OTO = o; document.getElementById('oto').innerHTML = isiOto(); toast(aktif ? 'Dinyalakan' : 'Dimatikan'); })
+    .catch(function (e) { btn.disabled = false; toast('Gagal: ' + (e && e.message || e)); });
+}
+function sinkronKalenderUI(btn) {
+  btn.disabled = true; btn.textContent = 'Menyinkronkan…';
+  panggil('sinkronSemuaKalender').then(function (n) { toast(n + ' event disinkronkan ke Google Calendar'); return muat(true); })
+    .catch(function (e) {
+      btn.disabled = false; btn.textContent = 'Coba lagi';
+      alert('Gagal sinkron: ' + (e && e.message || e) + '\n\nBila ini soal izin: buka editor Apps Script, pilih fungsi "sinkronSemuaKalender" di atas, klik Jalankan, lalu Izinkan akses Kalender. Setelah itu coba lagi di sini.');
+    });
+}
+function putusKalenderUI(btn) {
+  if (!confirm('Berhenti menyinkronkan ke Google Calendar? Jadwal yang sudah ada di kalender tidak dihapus.')) return;
+  btn.disabled = true;
+  panggil('putusKalender').then(function () { toast('Sinkron kalender diputus'); return muat(true); })
     .catch(function (e) { btn.disabled = false; toast('Gagal: ' + (e && e.message || e)); });
 }
 function tesPengingat(btn) { btn.disabled = true; panggil('kirimPengingatTes').then(function (em) { btn.disabled = false; toast('Email tes dikirim ke ' + em); }).catch(function (e) { btn.disabled = false; toast('Gagal: ' + (e && e.message || e)); }); }
@@ -1336,7 +1434,7 @@ function formEvent(id) {
   bukaForm(id ? 'Ubah ' + id : 'Event baru', F_EVENT, e, function (r) {
     var sama = D.event.filter(function (x) { return x.tanggal === r.tanggal && x.id_event !== r.id_event && x.status !== 'Batal'; });
     if (sama.length && r.status !== 'Batal' && !confirm('Tanggal ini sudah terisi: ' + sama.map(function (x) { return x.nama_event; }).join(', ') + '. Tetap simpan?')) return Promise.reject(new Error('dibatalkan'));
-    return panggil('saveRecord', 'EVENT', r).then(function (newId) { DETAIL = newId; });
+    return panggil('simpanEvent', r).then(function (hasil) { DETAIL = hasil.id; if (hasil.peringatan) alert(hasil.peringatan); });
   }, extra);
 }
 function formLaporan(idEvent) {
@@ -1426,7 +1524,7 @@ function hapusCrewUI(id) {
 }
 function hapus(tab, id) {
   if (!confirm('Hapus ' + id + '? Tidak bisa dibatalkan.')) return;
-  panggil('deleteRecord', tab, id).then(function () { tutupForm(); toast(id + ' dihapus'); if (tab === 'EVENT') DETAIL = null; return muat(true); })
+  (tab === 'EVENT' ? panggil('hapusEvent', id) : panggil('deleteRecord', tab, id)).then(function () { tutupForm(); toast(id + ' dihapus'); if (tab === 'EVENT') DETAIL = null; return muat(true); })
     .catch(function (e) { toast('Gagal: ' + (e && e.message || e)); });
 }
 

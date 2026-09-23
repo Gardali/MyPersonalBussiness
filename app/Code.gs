@@ -35,7 +35,7 @@ var PENGATURAN_BARU = [
 // Kolom baru di tab LAPORAN_EVENT, EVENT, INVENTARIS, dan KAS yang ditambahkan otomatis bila belum ada (di kolom paling kanan).
 var LAPORAN_KOLOM_BARU = ['sesi_terjual', 'lembar_tambahan', 'admin_qris', 'admin_pencairan', 'realisasi_penyusutan', 'realisasi_jepreto'];
 var EVENT_KOLOM_BARU = ['rab_penyusutan', 'rab_jepreto', 'rab_fee_crew', 'rab_transport', 'rab_konsumsi',
-  'dp_nominal', 'jatuh_tempo_dp', 'jatuh_tempo_pelunasan'];
+  'dp_nominal', 'jatuh_tempo_dp', 'jatuh_tempo_pelunasan', 'id_kalender'];
 var INVENTARIS_KOLOM_BARU = ['umur_manfaat_bulan'];
 var KAS_KOLOM_BARU = ['sumber'];
 // Pilihan dropdown baru yang ditambahkan otomatis ke tab PILIHAN bila belum ada.
@@ -65,7 +65,7 @@ function tambahKolom_(namaTab, kolomBaru) {
   kolomBaru.forEach(function (k) { if (head.indexOf(k) < 0) { sh.getRange(1, head.length + 1).setValue(k); head.push(k); } });
 }
 // Kolom yang harus disimpan sebagai teks (supaya 0 di depan nomor HP tidak hilang).
-var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'id_crew', 'id_kas', 'kontak', 'no_nota', 'no_rekening', 'foto',
+var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'id_crew', 'id_kas', 'id_kalender', 'kontak', 'no_nota', 'no_rekening', 'foto',
   'parameter_skema', 'jam_buka', 'jam_tutup', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai'];
 
 function doGet() {
@@ -199,6 +199,7 @@ function getData() {
     keputusan: readTab_('LOG_KEPUTUSAN'),
     crew: readTab_('CREW'),
     tugas: readTab_('TUGAS_CREW'),
+    kalender: kalenderAktif_(),
     hariIni: Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
   };
 }
@@ -308,7 +309,23 @@ function dealKeEvent(pipelineId) {
     catatan: 'Dari pipeline ' + p.id + ' (' + p.nama_klien + ')'
   });
   saveRecord('PIPELINE', { id: p.id, status: 'Deal', id_event: idEvent });
+  cobaSinkron_(idEvent);
   return idEvent;
+}
+
+/** Menyimpan event lalu menyamakan jadwalnya di Google Calendar. Gagal sinkron tidak membatalkan simpan. */
+function simpanEvent(rec) {
+  var id = saveRecord('EVENT', rec);
+  return { id: id, peringatan: cobaSinkron_(id) };
+}
+
+/** Menghapus event beserta jadwalnya di Google Calendar. */
+function hapusEvent(id) {
+  var e = readTab_('EVENT').filter(function (x) { return x.id_event === id; })[0];
+  if (e && e.id_kalender && kalenderAktif_()) {
+    try { var ce = kalender_().getEventById(e.id_kalender); if (ce) ce.deleteEvent(); } catch (err) { }
+  }
+  return deleteRecord('EVENT', id);
 }
 
 /** Menyimpan catatan berdasarkan kolom kunci selain kode (mis. sumber otomatis), membuat baru bila belum ada. */
@@ -465,6 +482,7 @@ function simpanTugasCrew(rec) {
   var t = readTab_('TUGAS_CREW').filter(function (x) { return x.id === id; })[0];
   var kas = t && t.id_kas ? readTab_('KAS').filter(function (k) { return k.id === t.id_kas; })[0] : null;
   if (kas) saveRecord('KAS', { id: kas.id, nominal: Number(t.fee) || 0 });
+  if (t) cobaSinkron_(t.id_event);
   return id;
 }
 
@@ -496,8 +514,108 @@ function batalBayarFeeCrew(id) {
 
 /** Menghapus penugasan beserta baris KAS pembayarannya (bila ada). */
 function hapusTugasCrew(id) {
+  var t = readTab_('TUGAS_CREW').filter(function (x) { return x.id === id; })[0];
   hapusKasTugas_(id);
-  return deleteRecord('TUGAS_CREW', id);
+  deleteRecord('TUGAS_CREW', id);
+  if (t) cobaSinkron_(t.id_event);
+  return true;
+}
+
+// ---------------------------------------------------------------- Google Calendar
+
+var KALENDER_NAMA = 'Posetive Photobooth';
+
+// KALENDER_AKTIF = '1' setelah dihubungkan dari menu Lainnya; KALENDER_ID tetap disimpan walau diputus, supaya kalender yang sama dipakai lagi.
+function kalenderAktif_() { return PropertiesService.getScriptProperties().getProperty('KALENDER_AKTIF') === '1'; }
+
+/** Kalender khusus Posetive di akun pemilik aplikasi; dibuat sekali lalu kodenya disimpan. */
+function kalender_() {
+  var props = PropertiesService.getScriptProperties(), id = props.getProperty('KALENDER_ID');
+  var cal = id ? CalendarApp.getCalendarById(id) : null;
+  if (!cal) {
+    cal = CalendarApp.createCalendar(KALENDER_NAMA, { color: CalendarApp.Color.RED });
+    props.setProperty('KALENDER_ID', cal.getId());
+  }
+  return cal;
+}
+
+/** "2026-09-26" + "08:30" → Date di zona waktu spreadsheet; null bila jam kosong. */
+function waktu_(tanggal, jam, tz) {
+  var m = String(jam || '').match(/(\d{1,2})[:.](\d{2})/);
+  if (!m) return null;
+  return Utilities.parseDate(tanggal + ' ' + ('0' + m[1]).slice(-2) + ':' + m[2], tz, 'yyyy-MM-dd HH:mm');
+}
+
+/**
+ * Menyamakan satu event ke Google Calendar: dibuat bila belum ada, diperbarui bila sudah, dihapus bila
+ * event batal. Tanpa jam buka → acara sepanjang hari. Tidak melakukan apa pun sebelum kalender dihubungkan.
+ */
+function sinkronKalender_(idEvent) {
+  if (!kalenderAktif_()) return;
+  var e = readTab_('EVENT').filter(function (x) { return x.id_event === idEvent; })[0];
+  if (!e) return;
+  var cal = kalender_(), tz = ss_().getSpreadsheetTimeZone(), ce = null;
+  if (e.id_kalender) { try { ce = cal.getEventById(e.id_kalender); } catch (err) { ce = null; } }
+  if (e.status === 'Batal' || !e.tanggal) {
+    if (ce) ce.deleteEvent();
+    if (e.id_kalender) saveRecord('EVENT', { id_event: idEvent, id_kalender: '' });
+    return;
+  }
+  var peng = {};
+  readTab_('PENGATURAN').forEach(function (r) { peng[r.kunci] = r.nilai; });
+  var mulai = waktu_(e.tanggal, e.jam_buka, tz), selesai = waktu_(e.tanggal, e.jam_tutup, tz);
+  if (mulai && !selesai) selesai = new Date(mulai.getTime() + (Number(peng.DURASI_TERCAKUP) || 6) * 36e5);
+  if (mulai && selesai <= mulai) selesai = new Date(selesai.getTime() + 864e5); // tutup lewat tengah malam
+
+  var p = e.id_pipeline ? readTab_('PIPELINE').filter(function (x) { return x.id === e.id_pipeline; })[0] : null;
+  var crew = {};
+  readTab_('CREW').forEach(function (c) { crew[c.id_crew] = c.nama_panggilan || c.nama_lengkap; });
+  var tim = readTab_('TUGAS_CREW').filter(function (t) { return t.id_event === idEvent; }).map(function (t) { return crew[t.id_crew] || t.id_crew; });
+  var baris = [
+    'Status: ' + (e.status || '-'),
+    'Model: ' + (e.model_pendapatan || '-') + (e.skema ? ' (' + e.skema + ')' : ''),
+    p ? 'Klien: ' + p.nama_klien + (p.kontak ? ' · WA ' + p.kontak : '') : '',
+    e.model_pendapatan === 'Kontrak Klien' && Number(e.nilai_kontrak) ? 'Nilai kontrak: ' + rupiah_(Number(e.nilai_kontrak)) : '',
+    'Crew: ' + (tim.length ? tim.join(', ') : (e.tim || 'belum ditugaskan')),
+    e.penanggung_jawab ? 'Penanggung jawab: ' + e.penanggung_jawab : '',
+    e.catatan ? '\nCatatan: ' + e.catatan : '',
+    '\n' + e.id_event + ' — diatur dari aplikasi Posetive; perubahan langsung di kalender akan tertimpa.'
+  ].filter(String);
+  var judul = e.nama_event + (e.status === 'Selesai' ? ' (selesai)' : '');
+  var lokasi = [e.lokasi, e.kota].filter(String).join(', ');
+
+  if (!ce) {
+    ce = mulai ? cal.createEvent(judul, mulai, selesai) : cal.createAllDayEvent(judul, Utilities.parseDate(e.tanggal, tz, 'yyyy-MM-dd'));
+    saveRecord('EVENT', { id_event: idEvent, id_kalender: ce.getId() });
+  } else {
+    ce.setTitle(judul);
+    if (mulai) ce.setTime(mulai, selesai); else ce.setAllDayDate(Utilities.parseDate(e.tanggal, tz, 'yyyy-MM-dd'));
+  }
+  ce.setLocation(lokasi);
+  ce.setDescription(baris.join('\n'));
+}
+
+/** Sinkron tanpa menggagalkan penyimpanan; mengembalikan pesan peringatan atau ''. */
+function cobaSinkron_(idEvent) {
+  try { sinkronKalender_(idEvent); return ''; } catch (err) { return 'Tersimpan, tapi gagal sinkron ke Google Calendar: ' + (err && err.message || err); }
+}
+
+/**
+ * Menghubungkan (membuat kalender bila perlu) lalu menyinkronkan semua event. Jalankan juga sekali dari
+ * editor Apps Script bila aplikasi web menolak dengan pesan izin, supaya Google meminta izin Kalender.
+ */
+function sinkronSemuaKalender() {
+  kalender_();
+  PropertiesService.getScriptProperties().setProperty('KALENDER_AKTIF', '1');
+  var n = 0;
+  readTab_('EVENT').forEach(function (e) { sinkronKalender_(e.id_event); n++; });
+  return n;
+}
+
+/** Memutus sinkron: kalender & jadwalnya dibiarkan di Google Calendar, aplikasi berhenti memperbaruinya. */
+function putusKalender() {
+  PropertiesService.getScriptProperties().setProperty('KALENDER_AKTIF', '0');
+  return true;
 }
 
 function hapusKasTugas_(id) {
