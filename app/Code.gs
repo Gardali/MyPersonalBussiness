@@ -18,7 +18,11 @@ var PENGATURAN_BARU = [
   ['STOK_MIN_KERTAS', 100, 'lembar', 'Peringatan bila stok kertas 4R di bawah angka ini'],
   ['STOK_MIN_BUKU', 5, 'buku', 'Peringatan bila stok Graduation Book di bawah angka ini'],
   ['TINTA_MIN', 0.2, 'persen', 'Peringatan bila level tinta terendah di bawah angka ini'],
-  ['CREW_DEFAULT', 2, 'orang', 'Jumlah crew default di kalkulator skema']
+  ['CREW_DEFAULT', 2, 'orang', 'Jumlah crew default di kalkulator skema'],
+  ['NAMA_USAHA', 'Posetive Photobooth', 'teks', 'Nama usaha di invoice & laporan'],
+  ['KONTAK_USAHA', '', 'teks', 'No. WA / email usaha di invoice'],
+  ['REKENING', '', 'teks', 'Rekening pembayaran di invoice, mis. BCA 123456 a.n. ...'],
+  ['NAMA_MANAJER', 'Garda Ali Rayhaan', 'teks', 'Nama penyusun laporan bulanan']
 ];
 // Kolom yang harus disimpan sebagai teks (supaya 0 di depan nomor HP tidak hilang).
 var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'kontak', 'no_nota', 'parameter_skema', 'jam_buka',
@@ -126,6 +130,8 @@ function getData() {
     kas: readTab_('KAS'),
     inventaris: readTab_('INVENTARIS'),
     mutasi: readTab_('MUTASI_STOK'),
+    pemakaian: readTab_('PEMAKAIAN_ALAT'),
+    keputusan: readTab_('LOG_KEPUTUSAN'),
     hariIni: Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
   };
 }
@@ -278,4 +284,153 @@ function simpanMutasi(rec, harga) {
       keterangan: 'Beli ' + rec.bahan + ' (' + rec.jumlah + ')', catatan: 'Otomatis dari stok ' + id });
   }
   return id;
+}
+
+// ---------------------------------------------------------------- checklist alat
+
+/** Mengganti seluruh checklist alat satu event. Kondisi akhir alat ikut diperbarui di INVENTARIS. */
+function simpanChecklist(idEvent, rows) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sh = sheet_('PEMAKAIAN_ALAT');
+    var values = sh.getDataRange().getValues();
+    var head = values[0].map(String);
+    var ci = head.indexOf('id_event');
+    for (var i = values.length - 1; i >= 1; i--) {
+      if (String(values[i][ci]) === String(idEvent)) sh.deleteRow(i + 1);
+    }
+    var out = rows.map(function (r) {
+      return head.map(function (h) { return h === 'id_event' ? idEvent : (r[h] == null ? '' : r[h]); });
+    });
+    if (out.length) {
+      var start = lastDataRow_(sh.getDataRange().getValues()) + 1;
+      sh.getRange(start, 1, out.length, head.length).setValues(out);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  rows.forEach(function (r) {
+    if (r.id_alat && r.dibawa === 'Ya' && r.kondisi_akhir) saveRecord('INVENTARIS', { id_alat: r.id_alat, kondisi: r.kondisi_akhir });
+  });
+  return idEvent;
+}
+
+// ---------------------------------------------------------------- folder, PDF, backup
+
+/** Folder kerja di samping file master (atau di My Drive bila tidak bisa). */
+function folder_(nama) {
+  var parent;
+  try {
+    var it = DriveApp.getFileById(ss_().getId()).getParents();
+    parent = it.hasNext() ? it.next() : DriveApp.getRootFolder();
+    var ada = parent.getFoldersByName(nama);
+    return ada.hasNext() ? ada.next() : parent.createFolder(nama);
+  } catch (e) {
+    var root = DriveApp.getRootFolder();
+    var f = root.getFoldersByName(nama);
+    return f.hasNext() ? f.next() : root.createFolder(nama);
+  }
+}
+
+function buatPdf_(html, nama, folderNama) {
+  var blob = Utilities.newBlob(html, 'text/html', nama + '.html').getAs('application/pdf').setName(nama + '.pdf');
+  return folder_(folderNama).createFile(blob).getUrl();
+}
+function buatLaporanPdf(html, bulan) { return buatPdf_(html, 'Laporan Posetive ' + bulan, 'Posetive - Laporan'); }
+function buatInvoice(html, nomor) { return buatPdf_(html, String(nomor).replace(/\//g, '-'), 'Posetive - Invoice'); }
+
+/** Salinan file master ke folder "Posetive - Backup"; hanya 8 salinan terbaru yang disimpan. */
+function backupSekarang() {
+  var tz = ss_().getSpreadsheetTimeZone();
+  var nama = 'Backup POSETIVE ' + Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HHmm');
+  var fol = folder_('Posetive - Backup');
+  var copy = DriveApp.getFileById(ss_().getId()).makeCopy(nama, fol);
+  var files = [];
+  var it = fol.getFiles();
+  while (it.hasNext()) {
+    var f = it.next();
+    if (f.getName().indexOf('Backup POSETIVE') === 0) files.push(f);
+  }
+  files.sort(function (a, b) { return b.getDateCreated() - a.getDateCreated(); });
+  files.slice(8).forEach(function (f) { f.setTrashed(true); });
+  return copy.getUrl();
+}
+
+// ---------------------------------------------------------------- pengingat email
+
+function addHari_(s, n) {
+  var p = s.split('-');
+  return new Date(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2]) + n)).toISOString().slice(0, 10);
+}
+
+function stok_(mutasi, bahan) {
+  var urut = { Masuk: 0, Keluar: 0, 'Hitung Fisik': 1 };
+  var rows = mutasi.filter(function (m) { return m.bahan === bahan; }).sort(function (a, b) {
+    return a.tanggal !== b.tanggal ? (a.tanggal < b.tanggal ? -1 : 1) : (urut[a.jenis] - urut[b.jenis]) || (a.id < b.id ? -1 : 1);
+  });
+  if (!rows.length) return null;
+  var n = 0;
+  rows.forEach(function (m) { var j = Number(m.jumlah) || 0; n = m.jenis === 'Hitung Fisik' ? j : m.jenis === 'Masuk' ? n + j : n - j; });
+  return n;
+}
+
+/** Daftar hal yang perlu diingat hari ini (HTML), atau '' bila tidak ada. */
+function isiPengingat_() {
+  var d = getData(), now = d.hariIni, besok = addHari_(now, 1), P = d.pengaturan, bag = [];
+  var li = function (arr) { return '<ul>' + arr.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul>'; };
+  var ev = d.event.filter(function (e) { return e.status === 'Terkonfirmasi' && (e.tanggal === now || e.tanggal === besok); });
+  if (ev.length) bag.push('<h3>Event hari ini & besok</h3>' + li(ev.map(function (e) {
+    return '<b>' + (e.tanggal === now ? 'HARI INI' : 'BESOK') + '</b> — ' + e.nama_event + (e.lokasi ? ' @ ' + e.lokasi : '') + (e.jam_buka ? ' (' + e.jam_buka + ')' : '');
+  })));
+  var fu = d.pipeline.filter(function (p) { return ['Deal', 'Kalah', 'Batal'].indexOf(p.status) < 0 && p.follow_up && p.follow_up <= now; });
+  if (fu.length) bag.push('<h3>Follow-up jatuh tempo</h3>' + li(fu.map(function (p) {
+    return p.nama_klien + (p.referensi ? ' (' + p.referensi + ')' : '') + ' — ' + (p.follow_up < now ? 'terlewat sejak ' + p.follow_up : 'hari ini') + (p.kontak ? ' · WA ' + p.kontak : '');
+  })));
+  var lewat = {};
+  d.event.forEach(function (e) { lewat[e.id_event] = e; });
+  var hilang = d.pemakaian.filter(function (a) { var e = lewat[a.id_event]; return e && e.tanggal < now && a.dibawa === 'Ya' && a.kembali !== 'Ya'; });
+  if (hilang.length) bag.push('<h3>Alat belum kembali</h3>' + li(hilang.map(function (a) { return a.nama_alat + ' — ' + a.id_event; })));
+  var tutup = d.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal && e.tanggal < now; });
+  if (tutup.length) bag.push('<h3>Event belum ditutup</h3>' + li(tutup.map(function (e) { return e.nama_event + ' (' + e.tanggal + ') — isi laporan'; })));
+  var k = stok_(d.mutasi, 'Kertas 4R');
+  if (k !== null && k < Number(P.STOK_MIN_KERTAS || 100)) bag.push('<h3>Stok</h3>' + li(['Kertas 4R tinggal ' + k + ' lembar']));
+  return bag.join('');
+}
+
+function kirim_(isi, paksa) {
+  if (!isi && !paksa) return false;
+  var tz = ss_().getSpreadsheetTimeZone();
+  MailApp.sendEmail({
+    to: Session.getEffectiveUser().getEmail(),
+    subject: 'Posetive — pengingat ' + Utilities.formatDate(new Date(), tz, 'dd/MM/yyyy'),
+    htmlBody: '<div style="font-family:Arial,sans-serif;font-size:14px">' + (isi || '<p>Tidak ada yang mendesak hari ini.</p>') +
+      '<p style="color:#888;font-size:12px">Dikirim otomatis oleh aplikasi Posetive.</p></div>'
+  });
+  return true;
+}
+/** Dipanggil pemicu harian. Email hanya dikirim bila ada yang perlu diingat. */
+function kirimPengingat() { kirim_(isiPengingat_(), false); }
+function kirimPengingatTes() { kirim_(isiPengingat_(), true); return Session.getEffectiveUser().getEmail(); }
+
+// ---------------------------------------------------------------- pemicu otomatis
+
+var PEMICU = { pengingat: 'kirimPengingat', backup: 'backupSekarang' };
+
+function statusOtomatis() {
+  var t = ScriptApp.getProjectTriggers().map(function (x) { return x.getHandlerFunction(); });
+  return { pengingat: t.indexOf(PEMICU.pengingat) >= 0, backup: t.indexOf(PEMICU.backup) >= 0, email: Session.getEffectiveUser().getEmail() };
+}
+
+/** Menyalakan/mematikan pengingat harian (07.00) atau backup mingguan (Minggu 21.00). */
+function aturOtomatis(nama, aktif) {
+  var fn = PEMICU[nama];
+  if (!fn) throw new Error('Tidak dikenal: ' + nama);
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === fn) ScriptApp.deleteTrigger(t); });
+  if (aktif) {
+    var b = ScriptApp.newTrigger(fn).timeBased();
+    if (nama === 'pengingat') b.everyDays(1).atHour(7).create();
+    else b.onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(21).create();
+  }
+  return statusOtomatis();
 }
