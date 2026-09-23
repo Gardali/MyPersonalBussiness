@@ -475,9 +475,10 @@ function vPipeline() {
   }).join('') + '</div>';
   h += '<div class="card">' + (list.length ? list.map(function (p) {
     var late = aktif(p) && p.follow_up && p.follow_up < now, harga = num(p.harga_deal || p.harga_penawaran);
-    var sub = esc(p.referensi || p.jenis_acara || '') + (p.tanggal_event ? ' · ' + tgl(p.tanggal_event) : '');
+    var acara = p.referensi || p.jenis_acara || 'Prospek';
+    var sub = esc(p.nama_klien || '—') + (p.referensi && p.jenis_acara ? ' · ' + esc(p.jenis_acara) : '') + (p.tanggal_event ? ' · ' + tgl(p.tanggal_event) : '');
     if (aktif(p) && p.follow_up) sub += '<br><span class="' + (late ? 'neg' : '') + '">Follow-up ' + tgl(p.follow_up) + (late ? ' · terlewat' : '') + '</span>';
-    return item({lead: '<div class="av">' + inisial(p.nama_klien) + '</div>', t: esc(p.nama_klien), s: sub, end: waBtn(p.kontak) + statusPill(p.status) + (function () { var e = aktif(p) ? estimasiPipeline(p) : null; return e ? '<div class="s" style="margin-top:3px">' + pillStatus(e.status) + ' ' + rpSingkat(e.laba) + '</div>' : (harga ? '<div class="s">' + rpSingkat(harga) + '</div>' : ''); })(), on: "formPipeline('" + p.id + "')"});
+    return item({lead: '<div class="av">' + inisial(acara) + '</div>', t: esc(acara), s: sub, end: waBtn(p.kontak) + statusPill(p.status) + (function () { var e = aktif(p) ? estimasiPipeline(p) : null; return e ? '<div class="s" style="margin-top:3px">' + pillStatus(e.status) + ' ' + rpSingkat(e.laba) + '</div>' : (harga ? '<div class="s">' + rpSingkat(harga) + '</div>' : ''); })(), on: "formPipeline('" + p.id + "')"});
   }).join('') : '<div class="empty">Tidak ada prospek di sini.</div>') + '</div>';
   var kalah = D.pipeline.filter(function (p) { return p.status === 'Kalah' || p.status === 'Batal'; });
   if (kalah.length) {
