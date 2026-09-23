@@ -308,11 +308,14 @@ function totalPenyusutanBulanan() { return sum(D.inventaris, function (x) { retu
 function hasilEvent(ev) {
   var kas = D.kas.filter(function (k) { return k.id_event === ev.id_event; });
   var lap = D.laporan.filter(function (l) { return l.id_event === ev.id_event; })[0] || null;
-  var h = {kas: kas, lap: lap, bl: biayaLembar()};
+  var terkunci = function (k) { return lap && lap[k] !== '' && lap[k] != null; };
+  // HPP terkunci di laporan (saat laporan disimpan / sebelum HPP diubah); event tanpa laporan memakai HPP terbaru.
+  var h = {kas: kas, lap: lap, bl: terkunci('realisasi_biaya_lembar') ? num(lap.realisasi_biaya_lembar) : biayaLembar(),
+    biayaBuku: terkunci('realisasi_biaya_buku') ? num(lap.realisasi_biaya_buku) : P('BIAYA_BUKU')};
   h.masuk = sum(kas.filter(bukanSetoran), function (k) { return k.nominal; });
   h.keluar = sum(kas.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
   h.tercetak = lap ? Math.max(0, num(lap.counter_akhir) - num(lap.counter_awal)) : 0;
-  h.bahan = h.tercetak * h.bl + (lap ? (num(lap.grad_book_terjual) + num(lap.buku_rusak)) * P('BIAYA_BUKU') : 0);
+  h.bahan = h.tercetak * h.bl + (lap ? (num(lap.grad_book_terjual) + num(lap.buku_rusak)) * h.biayaBuku : 0);
   var realisasiKategori = function (kat) { return sum(kas.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === kat; }), function (k) { return k.nominal; }); };
   h.rab = { penyusutan: num(ev.rab_penyusutan), jepreto: num(ev.rab_jepreto), feeCrew: num(ev.rab_fee_crew), transport: num(ev.rab_transport), konsumsi: num(ev.rab_konsumsi) };
   h.realisasi = {
@@ -526,10 +529,10 @@ function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', TIPIS: 'p
 // ---------------------------------------------------------------- tampilan
 function tampil(v) {
   VIEW = v; if (v !== 'event') DETAIL = null;
-  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === ((v === 'laporan' || v === 'crew' || v === 'inventaris') ? 'lainnya' : v)); });
+  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === ((v === 'laporan' || v === 'crew' || v === 'inventaris' || v === 'hpp') ? 'lainnya' : v)); });
   var el = document.getElementById('view');
   try {
-    el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok, lainnya: vLainnya, laporan: vLaporan, crew: vCrew, inventaris: vInventaris}[v]();
+    el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok, lainnya: vLainnya, laporan: vLaporan, crew: vCrew, inventaris: vInventaris, hpp: vHpp}[v]();
   } catch (err) {
     el.innerHTML = '<div class="pagetitle">Ada yang error</div>' + notice('bad', 'Halaman ini gagal ditampilkan: <b>' + esc(err && err.message || err) + '</b>. Kirim screenshot ini ke Claude.');
   }
@@ -1071,6 +1074,65 @@ function vInventaris() {
   }).join('') : '<div class="empty">Belum ada barang.</div>') + '</div>';
   return h;
 }
+// ---- HPP & harga jual
+/** Rincian HPP dari pengaturan p (fungsi kunci → angka); total lembar sama dengan biayaLembar(). */
+function rincianHpp(p) {
+  var kertas = p('HARGA_KERTAS') / (p('ISI_KERTAS') || 1), tinta = p('HARGA_TINTA') / (p('KAPASITAS_TINTA') || 1);
+  var sub = kertas + tinta, cad = sub * p('CADANGAN_GAGAL'), lembar = sub + cad;
+  return {kertas: kertas, tinta: tinta, sub: sub, cad: cad, lembar: lembar, buku: p('BIAYA_BUKU'),
+    produk: [['Foto 4R (1 sesi)', p('HARGA_4R'), lembar], ['Lembar tambahan', p('HARGA_LEMBAR_TAMBAHAN'), lembar],
+      ['Strip tambahan (per lembar)', p('HARGA_STRIP'), lembar], ['Graduation Book + 1 foto 4R', p('HARGA_BUKU'), p('BIAYA_BUKU') + lembar]]};
+}
+function tabelMargin(produk) {
+  return '<table><tr><td></td><td class="r" style="font-weight:600">Jual</td><td class="r" style="font-weight:600">HPP</td><td class="r" style="font-weight:600">Margin</td></tr>' +
+    produk.map(function (x) {
+      var m = x[1] - x[2];
+      return '<tr><td>' + x[0] + '</td><td class="r">' + (x[1] ? rp(x[1]) : '—') + '</td><td class="r">' + rp(x[2]) + '</td><td class="r ' + (x[1] ? cls(m) : '') + '">' +
+        (x[1] ? rp(m) + '<div class="meta">' + Math.round(m / x[1] * 100) + '%</div>' : '<span class="meta">belum diisi</span>') + '</td></tr>';
+    }).join('') + '</table>';
+}
+function vHpp() {
+  var r = rincianHpp(P), m4 = P('HARGA_4R') - r.lembar;
+  var h = '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button><div class="bar"><div class="pagetitle" style="margin:0">HPP & harga jual</div><button class="btn sm" onclick="formHpp()">Ubah angka</button></div>';
+  h += '<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><div class="k">HPP / lembar</div><div class="v">' + rp(r.lembar) + '</div></div>' +
+    '<div class="stat"><div class="k">HPP Grad Book</div><div class="v">' + rp(r.buku + r.lembar) + '</div></div>' +
+    '<div class="stat"><div class="k">Margin 4R</div><div class="v ' + cls(m4) + '">' + (P('HARGA_4R') ? Math.round(m4 / P('HARGA_4R') * 100) + '%' : '—') + '</div></div></div>';
+  h += '<div class="cols"><div class="col">';
+  h += sec('Rincian HPP per lembar', '<div class="card pad"><table>' +
+    '<tr><td>Kertas<div class="meta">' + rp(P('HARGA_KERTAS')) + ' ÷ ' + P('ISI_KERTAS') + ' lembar</div></td><td class="r">' + rp(r.kertas) + '</td></tr>' +
+    '<tr><td>Tinta<div class="meta">' + rp(P('HARGA_TINTA')) + ' ÷ ' + P('KAPASITAS_TINTA') + ' lembar</div></td><td class="r">' + rp(r.tinta) + '</td></tr>' +
+    '<tr><td>Cadangan cetak gagal<div class="meta">' + Math.round(P('CADANGAN_GAGAL') * 1000) / 10 + '% × ' + rp(r.sub) + '</div></td><td class="r">' + rp(r.cad) + '</td></tr>' +
+    '<tr class="total"><td>HPP per lembar cetak</td><td class="r">' + rp(r.lembar) + '</td></tr>' +
+    '<tr><td>Graduation Book<div class="meta">biaya cetak buku, belum termasuk foto</div></td><td class="r">' + rp(r.buku) + '</td></tr></table></div>' +
+    '<div class="meta" style="margin-top:8px">Kapasitas tinta paling berpengaruh ke HPP. Perbarui dengan data nyata setelah satu set tinta habis (jumlah lembar tercetak sejak isi ulang).</div>');
+  h += '</div><div class="col">';
+  h += sec('Margin per produk', '<div class="card pad">' + tabelMargin(r.produk) + '</div>' +
+    '<div class="meta" style="margin-top:8px">Berlaku untuk kalkulator skema, RAB, dan event yang belum dilaporkan. Event yang sudah ada laporannya tetap memakai HPP saat laporan disimpan.</div>');
+  return h + '</div></div>';
+}
+var F_HPP = [
+  {g: 'Bahan cetak'},
+  {n: 'HARGA_KERTAS', l: 'Harga kertas 4R per pack (Rp)', t: 'num', wajib: 1}, {n: 'ISI_KERTAS', l: 'Isi per pack (lembar)', t: 'num', wajib: 1},
+  {n: 'HARGA_TINTA', l: 'Harga tinta per set (Rp)', t: 'num', wajib: 1}, {n: 'KAPASITAS_TINTA', l: 'Kapasitas tinta per set (lembar)', t: 'num', wajib: 1},
+  {n: 'CADANGAN_GAGAL', l: 'Cadangan cetak gagal (%)', t: 'pct', wajib: 1}, {n: 'BIAYA_BUKU', l: 'Biaya cetak Graduation Book (Rp/buku)', t: 'num', wajib: 1},
+  {g: 'Harga jual'},
+  {n: 'HARGA_4R', l: 'Foto 4R per sesi (Rp)', t: 'num', wajib: 1}, {n: 'HARGA_LEMBAR_TAMBAHAN', l: 'Lembar tambahan (Rp)', t: 'num', wajib: 1},
+  {n: 'HARGA_STRIP', l: 'Strip tambahan per lembar (Rp)', t: 'num', wajib: 1}, {n: 'HARGA_BUKU', l: 'Graduation Book + 1 foto (Rp)', t: 'num', wajib: 1}
+];
+function formHpp() {
+  var rec = {};
+  F_HPP.forEach(function (f) { if (f.n) rec[f.n] = P(f.n); });
+  bukaForm('Ubah HPP & harga jual', F_HPP, rec, function (r) {
+    var ubah = {};
+    F_HPP.forEach(function (f) { if (f.n && num(r[f.n]) !== P(f.n)) ubah[f.n] = r[f.n]; });
+    return Object.keys(ubah).length ? panggil('simpanPengaturanBanyak', ubah) : Promise.resolve();
+  }, '<div class="meta">Tersimpan ke tab PENGATURAN. Laporan event lama dikunci dulu dengan HPP sebelumnya, jadi labanya tidak ikut berubah.</div>', function (r) {
+    var el = document.getElementById('preview'); if (!el) return;
+    var x = rincianHpp(function (k) { return num(r[k]); });
+    el.innerHTML = '<div class="card pad" style="background:var(--soft);box-shadow:none"><div class="meta">Pratinjau</div><div style="font-weight:700;margin:2px 0 8px">HPP ' + rp(x.lembar) + '/lembar' +
+      (x.lembar !== biayaLembar() ? ' <span class="meta">(sekarang ' + rp(biayaLembar()) + ')</span>' : '') + '</div>' + tabelMargin(x.produk) + '</div>';
+  });
+}
 function simpanTargetEvent(btn) {
   var n = Math.round(Number(document.getElementById('inv_target').value));
   if (!(n >= 1)) { toast('Target minimal 1 event per bulan'); return; }
@@ -1105,7 +1167,8 @@ function vLainnya() {
     '<div class="bar" style="margin:0"><select class="plain" id="lap_bulan">' + bulanList.map(function (b) { return '<option value="' + b + '"' + (b === LAP.bulan ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select>' +
     '<button class="btn sm" onclick="LAP.bulan=document.getElementById(\'lap_bulan\').value;tampil(\'laporan\')">Buka laporan</button></div></div>');
   h += sec('Crew', '<div class="card pad"><div class="meta" style="margin-bottom:10px">Data tim (domisili, kendaraan, rekening, masa kontrak) dan fee yang belum dibayar.</div><button class="btn sm" onclick="tampil(\'crew\')">Kelola crew</button></div>');
-  h += sec('Inventaris', '<div class="card pad"><div class="meta" style="margin-bottom:10px">Alat & aset milik atau pinjaman ke Posetive, beserta penyusutannya (' + rpSingkat(totalPenyusutanBulanan()) + '/bulan).</div><button class="btn sm" onclick="tampil(\'inventaris\')">Kelola inventaris</button></div>');
+  h += sec('HPP & harga jual', '<div class="card pad"><div class="meta" style="margin-bottom:10px">HPP per lembar ' + rp(biayaLembar()) + ' · Graduation Book ' + rp(P('BIAYA_BUKU') + biayaLembar()) + '. Rincian kertas, tinta, cadangan gagal, dan margin tiap produk.</div><button class="btn sm" onclick="tampil(\'hpp\')">Lihat & ubah HPP</button></div>');
+  h += sec('Inventaris','<div class="card pad"><div class="meta" style="margin-bottom:10px">Alat & aset milik atau pinjaman ke Posetive, beserta penyusutannya (' + rpSingkat(totalPenyusutanBulanan()) + '/bulan).</div><button class="btn sm" onclick="tampil(\'inventaris\')">Kelola inventaris</button></div>');
   h += sec('Google Calendar', '<div class="card pad"><div class="meta" style="margin-bottom:10px">' + (D.kalender ?
       '<span class="pill p-ok">Terhubung</span> Event otomatis masuk ke kalender <b>Posetive Photobooth</b> di Google Calendar setiap kali disimpan (jam, lokasi, klien, crew). Event batal dihapus dari kalender.' :
       'Sambungkan supaya setiap event otomatis masuk ke Google Calendar (kalender baru "Posetive Photobooth") dan muncul sebagai notifikasi di HP.') + '</div>' +
@@ -1505,8 +1568,10 @@ function formLaporan(idEvent) {
     r.id_event = idEvent;
     r.realisasi_penyusutan = totalPenyusutanBulanan() / targetEventBulan();
     r.realisasi_jepreto = P('JEPRETO_BULAN') / targetEventBulan();
+    r.realisasi_biaya_lembar = biayaLembar();
+    r.realisasi_biaya_buku = P('BIAYA_BUKU');
     return panggil('simpanLaporan', r);
-  }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto ikut terkunci sesuai kondisi Inventaris saat ini — perubahan Inventaris berikutnya tidak akan mengubah angka event ini lagi. Admin QRIS & admin pencairan otomatis tercatat sebagai transaksi Kas Keluar (sudah termasuk di "Biaya langsung"), tidak perlu dicatat manual lagi di Kas.</div>');
+  }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto, serta HPP bahan per lembar & per buku, ikut terkunci sesuai kondisi Inventaris & PENGATURAN saat ini — perubahan berikutnya tidak akan mengubah angka event ini lagi. Admin QRIS & admin pencairan otomatis tercatat sebagai transaksi Kas Keluar (sudah termasuk di "Biaya langsung"), tidak perlu dicatat manual lagi di Kas.</div>');
 }
 function formKas(id, idEvent, isian) {
   var k = id ? cari(D.kas, 'id', id) : Object.assign({id_event: idEvent || ''}, isian);
