@@ -247,18 +247,13 @@ function totalPenyusutanBulanan() { return sum(D.inventaris, function (x) { retu
 function hasilEvent(ev) {
   var kas = D.kas.filter(function (k) { return k.id_event === ev.id_event; });
   var lap = D.laporan.filter(function (l) { return l.id_event === ev.id_event; })[0] || null;
-  var h = {kas: kas, lap: lap, bl: biayaLembar(), alokasi: alokasiEvent()};
+  var h = {kas: kas, lap: lap, bl: biayaLembar()};
   h.masuk = sum(kas.filter(bukanSetoran), function (k) { return k.nominal; });
   h.keluar = sum(kas.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
   h.tercetak = lap ? Math.max(0, num(lap.counter_akhir) - num(lap.counter_awal)) : 0;
   h.bahan = h.tercetak * h.bl + (lap ? (num(lap.grad_book_terjual) + num(lap.buku_rusak)) * P('BIAYA_BUKU') : 0);
   h.adminQris = lap ? num(lap.admin_qris) : 0;
   h.adminPencairan = lap ? num(lap.admin_pencairan) : 0;
-  h.labaKotor = h.masuk - h.keluar - h.bahan - h.adminQris - h.adminPencairan;
-  h.labaBersih = h.labaKotor - h.alokasi;
-  h.untungLembar = P('HARGA_4R') - h.bl;
-  h.bepLapangan = h.untungLembar > 0 ? Math.ceil((h.keluar) / h.untungLembar) : null;
-  h.bepTotal = h.untungLembar > 0 ? Math.ceil((h.keluar + h.alokasi) / h.untungLembar) : null;
   var realisasiKategori = function (kat) { return sum(kas.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === kat; }), function (k) { return k.nominal; }); };
   h.rab = { penyusutan: num(ev.rab_penyusutan), jepreto: num(ev.rab_jepreto), feeCrew: num(ev.rab_fee_crew), transport: num(ev.rab_transport), konsumsi: num(ev.rab_konsumsi) };
   h.realisasi = {
@@ -266,6 +261,12 @@ function hasilEvent(ev) {
     jepreto: (lap && lap.realisasi_jepreto !== '' && lap.realisasi_jepreto != null) ? num(lap.realisasi_jepreto) : P('JEPRETO_BULAN') / (P('EVENT_BULAN') || 1),
     feeCrew: realisasiKategori('Fee Crew'), transport: realisasiKategori('Transport'), konsumsi: realisasiKategori('Konsumsi')
   };
+  h.alokasi = h.realisasi.penyusutan + h.realisasi.jepreto;
+  h.labaKotor = h.masuk - h.keluar - h.bahan - h.adminQris - h.adminPencairan;
+  h.labaBersih = h.labaKotor - h.alokasi;
+  h.untungLembar = P('HARGA_4R') - h.bl;
+  h.bepLapangan = h.untungLembar > 0 ? Math.ceil((h.keluar) / h.untungLembar) : null;
+  h.bepTotal = h.untungLembar > 0 ? Math.ceil((h.keluar + h.alokasi) / h.untungLembar) : null;
   if (lap) {
     var adaSplit = lap.sesi_terjual !== '' && lap.sesi_terjual != null;
     h.sesiTerjual = adaSplit ? num(lap.sesi_terjual) : num(lap.foto_4r_terjual);
