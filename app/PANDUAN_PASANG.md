@@ -48,7 +48,10 @@ Versi: Versi baru → Terapkan**. URL tidak berubah.
 3. Kalender baru **Posetive Photobooth** muncul di Google Calendar. Tiap event yang disimpan otomatis
    masuk/diperbarui di sana; event Batal atau dihapus ikut hilang dari kalender. Ubah jadwal lewat
    aplikasi, bukan langsung di kalender (perubahan di kalender akan tertimpa).
-4. Supaya crew atau bos ikut melihat: di Google Calendar, kalender Posetive Photobooth → ⋮ →
+4. **Crew diundang otomatis**: isi kolom **Email** di data crew (Lainnya → Crew). Crew yang ditugaskan di
+   event mendatang otomatis masuk sebagai tamu, jadwalnya muncul di Google Calendar HP-nya. Kalau crew
+   dilepas dari event, undangannya dicabut. Tamu lain yang Anda tambahkan manual (mis. bos) tidak disentuh.
+5. Supaya bos bisa melihat semua jadwal: di Google Calendar, kalender Posetive Photobooth → ⋮ →
    **Setelan dan berbagi** → **Bagikan dengan orang tertentu**.
 
 ## Aturan pakai

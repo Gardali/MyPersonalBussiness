@@ -382,6 +382,41 @@ function feeBelumDibayar(sudahLewat) {
   });
 }
 
+// ---- crew bentrok
+function menit(jam) { var m = String(jam || '').match(/(\d{1,2})[:.](\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
+/** [mulai, selesai] dalam menit dari tengah malam; null bila jam buka kosong. Tanpa jam tutup → + DURASI_TERCAKUP. */
+function rentangEvent(e) {
+  var a = menit(e.jam_buka); if (a === null) return null;
+  var b = menit(e.jam_tutup); if (b === null) b = a + Pd('DURASI_TERCAKUP', 6) * 60;
+  return [a, b <= a ? b + 1440 : b];
+}
+/** Dua event dianggap bentrok bila tanggalnya sama dan jamnya tumpang tindih (atau salah satu belum ada jam). */
+function eventTumpang(e1, e2) {
+  if (!e1.tanggal || e1.tanggal !== e2.tanggal) return false;
+  var a = rentangEvent(e1), b = rentangEvent(e2);
+  return !a || !b || (a[0] < b[1] && b[0] < a[1]);
+}
+/** Event lain (tidak batal) tempat crew ini sudah bertugas yang bentrok dengan event e. */
+function bentrokCrew(idCrew, e) {
+  return D.tugas.filter(function (t) { return t.id_crew === idCrew && t.id_event !== e.id_event; })
+    .map(function (t) { return cari(D.event, 'id_event', t.id_event); })
+    .filter(function (x) { return x && x.status !== 'Batal' && eventTumpang(x, e); });
+}
+/** Semua crew yang bentrok di event mendatang, satu baris per crew per tanggal. */
+function semuaCrewBentrok() {
+  var out = {}, now = D.hariIni;
+  D.tugas.forEach(function (t) {
+    var e = cari(D.event, 'id_event', t.id_event);
+    if (!e || e.status === 'Batal' || e.tanggal < now) return;
+    var lain = bentrokCrew(t.id_crew, e);
+    if (!lain.length) return;
+    var k = t.id_crew + '|' + e.tanggal, o = out[k] = out[k] || {id_crew: t.id_crew, tanggal: e.tanggal, ev: {}};
+    [e].concat(lain).forEach(function (x) { o.ev[x.id_event] = x; });
+  });
+  return Object.keys(out).map(function (k) { var o = out[k]; o.ev = Object.keys(o.ev).map(function (id) { return o.ev[id]; }); return o; })
+    .sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : 1; });
+}
+
 function saldoKas() { return sum(D.kas, function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
 function saldoPosetive() { return sum(D.kas.filter(function (k) { return !k.id_event; }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
 function saldoEvent() { return sum(D.kas.filter(function (k) { return k.id_event; }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
@@ -584,6 +619,9 @@ function vBeranda() {
   D.inventaris.filter(function (x) { return ['Perlu Perbaikan', 'Rusak', 'Hilang'].indexOf(x.kondisi) >= 0; }).forEach(function (x) { n += '<div onclick="formInventaris(\'' + x.id_alat + '\')" style="cursor:pointer">' + notice(x.kondisi === 'Perlu Perbaikan' ? '' : 'bad', '<b>' + esc(x.nama) + '</b>: ' + esc(x.kondisi).toLowerCase() + (x.pemilik && x.pemilik !== 'Posetive' ? ' · milik ' + esc(x.pemilik) : '') + '.') + '</div>'; });
   peringatanStok().forEach(function (w) { n += '<div onclick="tampil(\'stok\')" style="cursor:pointer">' + notice(w.j, w.h) + '</div>'; });
   bentrok().forEach(function (b) { n += notice('bad', '<b>Jadwal bentrok ' + tgl(b.tanggal) + '</b> — ' + b.ev.map(function (e) { return esc(e.nama_event); }).join(' & ')); });
+  semuaCrewBentrok().forEach(function (b) {
+    n += '<div onclick="bukaEvent(\'' + b.ev[0].id_event + '\')" style="cursor:pointer">' + notice('bad', '<b>' + esc(namaCrew(b.id_crew)) + ' bentrok ' + tgl(b.tanggal) + '</b> — ditugaskan di ' + b.ev.map(function (e) { return esc(e.nama_event) + (e.jam_buka ? ' (' + esc(e.jam_buka) + ')' : ''); }).join(' & ') + '.') + '</div>';
+  });
   tagihanMendesak().forEach(function (x) {
     n += '<div onclick="bukaEvent(\'' + x.e.id_event + '\')" style="cursor:pointer">' + notice(x.t.sisaHari < 0 ? 'bad' : '', '<b>Tagih ' + (x.t.tahap === 'DP' ? 'DP' : 'pelunasan') + ' ' + esc(x.e.nama_event) + '</b> — ' + rp(x.t.kurang) + ', ' + teksJatuhTempo(x.t) + '. ' + waBtn(kontakEvent(x.e))) + '</div>';
   });
@@ -761,8 +799,9 @@ function vDetailEvent() {
   var tugas = D.tugas.filter(function (t) { return t.id_event === e.id_event; });
   var totalFee = sum(tugas, function (t) { return t.fee; }), belumFee = tugas.filter(function (t) { return !feeLunas(t); });
   h += sec('Crew bertugas', '<div class="card">' + (tugas.length ? tugas.map(function (t) {
-    var lunas = feeLunas(t), nm = namaCrew(t.id_crew);
-    return item({lead: '<div class="av">' + inisial(nm) + '</div>', t: esc(nm), s: 'Fee ' + rp(t.fee) + (t.catatan ? ' · ' + esc(t.catatan) : ''),
+    var lunas = feeLunas(t), nm = namaCrew(t.id_crew), bt = e.status === 'Batal' ? [] : bentrokCrew(t.id_crew, e);
+    return item({lead: '<div class="av">' + inisial(nm) + '</div>', t: esc(nm) + (bt.length ? ' <span class="pill p-bad">Bentrok</span>' : ''),
+      s: (bt.length ? '<span class="neg">Juga di ' + bt.map(function (x) { return esc(x.nama_event); }).join(', ') + '</span><br>' : '') + 'Fee ' + rp(t.fee) + (t.catatan ? ' · ' + esc(t.catatan) : ''),
       end: lunas ? '<span class="pill p-ok">Dibayar</span>' : '<button class="btn sm" onclick="event.stopPropagation();formBayarFee([\'' + t.id + '\'])">Bayar</button>',
       on: "formTugas('" + t.id + "')"});
   }).join('') : '<div class="empty">Belum ada crew yang ditugaskan.</div>') + '</div><div class="meta" style="margin-top:8px">' +
@@ -1343,6 +1382,7 @@ var F_KAS = [
 var F_CREW = [
   {n: '_foto', l: 'Foto profil', t: 'file'},
   {n: 'nama_lengkap', l: 'Nama lengkap', wajib: 1}, {n: 'nama_panggilan', l: 'Nama panggilan'},
+  {n: 'email', l: 'Email (Gmail) — untuk undangan Google Calendar', t: 'email'},
   {n: 'domisili', l: 'Domisili'}, {n: 'kendaraan', l: 'Punya kendaraan?', t: 'sel', o: pil('Ya/Tidak')},
   {n: 'role', l: 'Role', t: 'sel', o: pil('Role Crew')},
   {g: 'Kontrak'}, {n: 'tanggal_mulai_kontrak', l: 'Mulai kontrak', t: 'date'}, {n: 'tanggal_akhir_kontrak', l: 'Akhir kontrak', t: 'date'},
@@ -1365,7 +1405,7 @@ function bukaForm(judul, fields, rec, onSave, extra, preview) {
     else if (f.t === 'bukti') inp = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' + (/^https?:\/\//.test(v) ? '<a class="btn sm ghost" href="' + esc(v) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">Lihat nota</a>' : '') +
       '<input type="file" accept="image/png,image/jpeg,application/pdf" onchange="pilihBukti(this)"><span id="bukti_nama" class="meta"></span></div>';
     else {
-      var type = {date: 'date', time: 'time', num: 'number', pct: 'number', tel: 'tel'}[f.t] || 'text';
+      var type = {date: 'date', time: 'time', num: 'number', pct: 'number', tel: 'tel', email: 'email'}[f.t] || 'text';
       inp = '<input name="' + f.n + '" type="' + type + '"' + (type === 'number' ? ' inputmode="decimal" step="any"' : '') + ' value="' + esc(v) + '">';
     }
     h += '<div class="f' + (f.t === 'area' || f.t === 'file' || f.t === 'bukti' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
@@ -1434,6 +1474,8 @@ function formEvent(id) {
   bukaForm(id ? 'Ubah ' + id : 'Event baru', F_EVENT, e, function (r) {
     var sama = D.event.filter(function (x) { return x.tanggal === r.tanggal && x.id_event !== r.id_event && x.status !== 'Batal'; });
     if (sama.length && r.status !== 'Batal' && !confirm('Tanggal ini sudah terisi: ' + sama.map(function (x) { return x.nama_event; }).join(', ') + '. Tetap simpan?')) return Promise.reject(new Error('dibatalkan'));
+    var crewBt = r.id_event && r.status !== 'Batal' ? D.tugas.filter(function (t) { return t.id_event === r.id_event && bentrokCrew(t.id_crew, r).length; }) : [];
+    if (crewBt.length && !confirm('Crew bentrok dengan jadwal baru ini: ' + crewBt.map(function (t) { return namaCrew(t.id_crew) + ' (di ' + bentrokCrew(t.id_crew, r)[0].nama_event + ')'; }).join(', ') + '. Tetap simpan?')) return Promise.reject(new Error('dibatalkan'));
     return panggil('simpanEvent', r).then(function (hasil) { DETAIL = hasil.id; if (hasil.peringatan) alert(hasil.peringatan); });
   }, extra);
 }
@@ -1472,14 +1514,24 @@ function formCrew(id) {
   var extra = id ? '<button class="btn danger" type="button" onclick="hapusCrewUI(\'' + id + '\')">Hapus</button>' : '';
   bukaForm(id ? (c.nama_panggilan || c.nama_lengkap || id) : 'Crew baru', F_CREW, c, function (r) {
     delete r._foto;
+    var emailBerubah = String(r.email || '').trim().toLowerCase() !== String(c.email || '').trim().toLowerCase();
     return panggil('saveRecord', 'CREW', r).then(function (idBaru) {
       return FOTO_BARU ? panggil('simpanFotoCrew', idBaru, FOTO_BARU.base64, FOTO_BARU.mime, FOTO_BARU.nama).then(function () { return idBaru; }) : idBaru;
+    }).then(function (idBaru) {
+      // Undangan kalender di event mendatang ikut disesuaikan; gagal di sini tidak membatalkan simpan.
+      return id && emailBerubah && D.kalender ? panggil('sinkronCrew', idBaru).catch(function () { }) : idBaru;
     });
   }, extra);
   if (c.foto) panggil('getFotoCrew', id).then(function (dataUri) { var img = document.getElementById('foto_prev'); if (img && dataUri) { img.src = dataUri; img.style.visibility = 'visible'; } });
 }
 var F_TUGAS = [
-  {n: 'id_crew', l: 'Crew', t: 'sel', wajib: 1, o: function () { return D.crew.map(function (c) { return [c.id_crew, (c.nama_panggilan || c.nama_lengkap) + (c.role ? ' · ' + c.role : '')]; }); }},
+  {n: 'id_crew', l: 'Crew', t: 'sel', wajib: 1, o: function () {
+    var e = cari(D.event, 'id_event', FORM.rec.id_event) || {};
+    return D.crew.map(function (c) {
+      var bt = bentrokCrew(c.id_crew, e);
+      return [c.id_crew, (c.nama_panggilan || c.nama_lengkap) + (c.role ? ' · ' + c.role : '') + (bt.length ? ' — sudah di ' + bt[0].nama_event : '')];
+    });
+  }},
   {n: 'fee', l: 'Fee (Rp)', t: 'num', wajib: 1, def: function () { return P('FEE_CREW'); }},
   {n: 'catatan', l: 'Catatan (mis. lembur, jadi PJ)', t: 'area'}
 ];
@@ -1494,6 +1546,8 @@ function formTugas(id, idEvent) {
   bukaForm(id ? 'Tugas ' + namaCrew(t.id_crew) : 'Tugaskan crew', F_TUGAS, t, function (r) {
     var dobel = D.tugas.filter(function (x) { return x.id_event === r.id_event && x.id_crew === r.id_crew && x.id !== r.id; });
     if (dobel.length) return Promise.reject(new Error(namaCrew(r.id_crew) + ' sudah ditugaskan di event ini'));
+    var ev = cari(D.event, 'id_event', r.id_event), bt = ev ? bentrokCrew(r.id_crew, ev) : [];
+    if (bt.length && !confirm(namaCrew(r.id_crew) + ' sudah bertugas di ' + bt.map(function (x) { return x.nama_event + (x.jam_buka ? ' (' + x.jam_buka + '–' + (x.jam_tutup || '?') + ')' : ''); }).join(', ') + ' pada ' + tgl(ev.tanggal) + '. Tetap tugaskan?')) return Promise.reject(new Error('dibatalkan'));
     return panggil('simpanTugasCrew', r);
   }, extra + (id && feeLunas(t) ? '<div class="meta">Fee sudah dibayar. Mengubah fee ikut mengubah nominal di Kas.</div>' : ''));
 }

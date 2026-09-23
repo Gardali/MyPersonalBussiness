@@ -38,6 +38,7 @@ var EVENT_KOLOM_BARU = ['rab_penyusutan', 'rab_jepreto', 'rab_fee_crew', 'rab_tr
   'dp_nominal', 'jatuh_tempo_dp', 'jatuh_tempo_pelunasan', 'id_kalender'];
 var INVENTARIS_KOLOM_BARU = ['umur_manfaat_bulan'];
 var KAS_KOLOM_BARU = ['sumber'];
+var CREW_KOLOM_BARU = ['email'];
 // Pilihan dropdown baru yang ditambahkan otomatis ke tab PILIHAN bila belum ada.
 var PILIHAN_BARU = { 'Kategori Kas': ['Admin QRIS', 'Admin Pencairan QRIS'] };
 
@@ -138,6 +139,7 @@ function siapkan_() {
     shC.getRange('H2:H1000').setNumberFormat('@');
     shC.getRange('J2:K1000').setNumberFormat('yyyy-mm-dd');
   }
+  tambahKolom_('CREW', CREW_KOLOM_BARU);
 
   if (!ss.getSheetByName('TUGAS_CREW')) {
     var shT = ss.insertSheet('TUGAS_CREW');
@@ -471,6 +473,14 @@ function getFotoCrew(idCrew) {
 function hapusCrew(id) {
   var c = readTab_('CREW').filter(function (x) { return x.id_crew === id; })[0];
   if (c && c.foto) { try { DriveApp.getFileById(c.foto).setTrashed(true); } catch (e) { } }
+  var email = c && emailBersih_(c.email);
+  if (email && kalenderAktif_()) {
+    var ev = {};
+    readTab_('EVENT').forEach(function (e) { ev[e.id_event] = e; });
+    readTab_('TUGAS_CREW').filter(function (t) { return t.id_crew === id && ev[t.id_event] && ev[t.id_event].id_kalender; }).forEach(function (t) {
+      try { var ce = kalender_().getEventById(ev[t.id_event].id_kalender); if (ce) ce.removeGuest(email); } catch (e) { }
+    });
+  }
   return deleteRecord('CREW', id);
 }
 
@@ -568,9 +578,10 @@ function sinkronKalender_(idEvent) {
   if (mulai && selesai <= mulai) selesai = new Date(selesai.getTime() + 864e5); // tutup lewat tengah malam
 
   var p = e.id_pipeline ? readTab_('PIPELINE').filter(function (x) { return x.id === e.id_pipeline; })[0] : null;
-  var crew = {};
-  readTab_('CREW').forEach(function (c) { crew[c.id_crew] = c.nama_panggilan || c.nama_lengkap; });
-  var tim = readTab_('TUGAS_CREW').filter(function (t) { return t.id_event === idEvent; }).map(function (t) { return crew[t.id_crew] || t.id_crew; });
+  var crew = {}, emailCrew = {};
+  readTab_('CREW').forEach(function (c) { crew[c.id_crew] = c; var m = emailBersih_(c.email); if (m) emailCrew[m] = true; });
+  var tugas = readTab_('TUGAS_CREW').filter(function (t) { return t.id_event === idEvent; });
+  var tim = tugas.map(function (t) { var c = crew[t.id_crew]; return c ? c.nama_panggilan || c.nama_lengkap : t.id_crew; });
   var baris = [
     'Status: ' + (e.status || '-'),
     'Model: ' + (e.model_pendapatan || '-') + (e.skema ? ' (' + e.skema + ')' : ''),
@@ -593,6 +604,33 @@ function sinkronKalender_(idEvent) {
   }
   ce.setLocation(lokasi);
   ce.setDescription(baris.join('\n'));
+
+  // Crew yang ditugaskan & punya email diundang; crew yang tidak lagi bertugas dikeluarkan. Tamu lain
+  // (mis. owner yang ditambahkan manual) tidak disentuh. Event yang sudah lewat dibiarkan.
+  if (e.tanggal < Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd')) return;
+  var mau = {}, ada = {};
+  tugas.forEach(function (t) { var m = crew[t.id_crew] && emailBersih_(crew[t.id_crew].email); if (m) mau[m] = true; });
+  ce.getGuestList().forEach(function (g) {
+    var m = String(g.getEmail()).toLowerCase();
+    ada[m] = true;
+    if (emailCrew[m] && !mau[m]) ce.removeGuest(m);
+  });
+  Object.keys(mau).forEach(function (m) { if (!ada[m]) ce.addGuest(m); });
+}
+
+function emailBersih_(s) {
+  var m = String(s || '').trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m) ? m : '';
+}
+
+/** Setelah email crew diubah: samakan undangan di semua event mendatang tempat crew itu bertugas. */
+function sinkronCrew(idCrew) {
+  if (!kalenderAktif_()) return 0;
+  var now = Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd'), ev = {}, ids = {};
+  readTab_('EVENT').forEach(function (e) { ev[e.id_event] = e; });
+  readTab_('TUGAS_CREW').forEach(function (t) { var e = ev[t.id_event]; if (t.id_crew === idCrew && e && e.tanggal >= now) ids[t.id_event] = true; });
+  Object.keys(ids).forEach(function (id) { cobaSinkron_(id); });
+  return Object.keys(ids).length;
 }
 
 /** Sinkron tanpa menggagalkan penyimpanan; mengembalikan pesan peringatan atau ''. */

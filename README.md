@@ -15,3 +15,4 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 4. Checklist alat per event, laporan bulanan (PDF), pengingat Gmail harian, invoice/kuitansi PDF, backup mingguan — selesai.
 5. Penugasan & pembayaran fee crew per event (tab TUGAS_CREW, otomatis tercatat di KAS) dan tahap tagihan klien DP → pelunasan dengan jatuh tempo — selesai.
 6. Kalender bulanan di Beranda (event, jatuh tempo tagihan, follow-up) dan sinkron otomatis ke Google Calendar — selesai.
+7. Undangan Google Calendar otomatis untuk crew yang ditugaskan (kolom email di CREW) dan peringatan crew bentrok jadwal — selesai.
