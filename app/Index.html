@@ -324,7 +324,12 @@ function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', TIPIS: 'p
 function tampil(v) {
   VIEW = v; if (v !== 'event') DETAIL = null;
   document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
-  document.getElementById('view').innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok}[v]();
+  var el = document.getElementById('view');
+  try {
+    el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok}[v]();
+  } catch (err) {
+    el.innerHTML = '<div class="pagetitle">Ada yang error</div>' + notice('bad', 'Halaman ini gagal ditampilkan: <b>' + esc(err && err.message || err) + '</b>. Kirim screenshot ini ke Claude.');
+  }
   window.scrollTo(0, 0);
 }
 function addHari(s, n) { var d = new Date(Date.parse(s) + n * 864e5); return d.toISOString().slice(0, 10); }
@@ -513,6 +518,7 @@ function vKas() {
 
 
 function vStok() {
+  if (D.serverLama) return '<div class="pagetitle">Stok</div>' + notice('bad', '<b>Code.gs di Apps Script masih versi lama.</b> Halaman Stok butuh Code.gs terbaru (281 baris). Tempel ulang Code.gs, simpan, lalu Terapkan → Kelola deployment → Versi baru.');
   var h = '<div class="bar"><div class="pagetitle" style="margin:0">Stok</div><div style="display:flex;gap:8px"><button class="btn sm ghost" onclick="formMutasi(null,\'Hitung Fisik\')">Hitung fisik</button><button class="btn sm" onclick="formMutasi(null,\'Masuk\')">+ Beli</button></div></div>';
   var tk = tintaTerakhir();
   var kartu = BAHAN.map(function (b) {
@@ -763,7 +769,9 @@ function hapus(tab, id) {
 // ---------------------------------------------------------------- mulai
 function muat(diam) {
   if (!diam) document.getElementById('view').innerHTML = '<div id="loading">Memuat data…</div>';
-  return panggil('getData').then(function (d) { D = d; tampil(VIEW); })
+  return panggil('getData').then(function (d) {
+    D = d; D.serverLama = !d.mutasi; D.mutasi = d.mutasi || []; tampil(VIEW);
+  })
     .catch(function (e) { document.getElementById('view').innerHTML = notice('bad', 'Gagal memuat: ' + esc(e && e.message || e)); });
 }
 document.getElementById('nav').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b && b.dataset.v) { DETAIL = null; tampil(b.dataset.v); } });
