@@ -665,6 +665,7 @@ function salinChecklistTerakhir() {
 function clSet(i, k, v) { CL.rows[i][k] = v; if (k === 'dibawa' && v !== 'Ya') CL.rows[i].kembali = ''; renderChecklist(); }
 function clSemuaKembali() { CL.rows.forEach(function (r) { if (r.dibawa === 'Ya') r.kembali = 'Ya'; }); renderChecklist(); }
 function clTambah() { var n = prompt('Nama alat / set (mis. Set kabel & adapter)'); if (n) { CL.rows.push({id_alat: '', nama_alat: n, dibawa: 'Ya', kembali: '', kondisi_akhir: 'Baik', catatan: ''}); renderChecklist(); } }
+function clHapus(i) { if (confirm('Keluarkan "' + CL.rows[i].nama_alat + '" dari daftar checklist ini?')) { CL.rows.splice(i, 1); renderChecklist(); } }
 function renderChecklist() {
   var bawa = CL.rows.filter(function (r) { return r.dibawa === 'Ya'; }), kembali = bawa.filter(function (r) { return r.kembali === 'Ya'; });
   var h = '<div class="grab"></div><h2>Checklist alat · ' + esc(CL.id) + '</h2>' +
@@ -675,7 +676,8 @@ function renderChecklist() {
     return '<div class="it" style="flex-wrap:wrap"><div class="mid" style="min-width:140px"><div class="t">' + esc(r.nama_alat) + milik + '</div></div>' +
       '<label class="chk"><input type="checkbox" ' + (r.dibawa === 'Ya' ? 'checked' : '') + ' onchange="clSet(' + i + ',\'dibawa\',this.checked?\'Ya\':\'Tidak\')">Bawa</label>' +
       '<label class="chk"><input type="checkbox" ' + (r.kembali === 'Ya' ? 'checked' : '') + (r.dibawa === 'Ya' ? '' : ' disabled') + ' onchange="clSet(' + i + ',\'kembali\',this.checked?\'Ya\':\'\')">Kembali</label>' +
-      (r.dibawa === 'Ya' ? '<select class="plain" style="padding:5px 8px" onchange="clSet(' + i + ',\'kondisi_akhir\',this.value)">' + (D.pilihan.Kondisi || ['Baik', 'Perlu Perbaikan', 'Rusak', 'Hilang']).map(function (k) { return '<option' + (k === r.kondisi_akhir ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select>' : '') + '</div>';
+      (r.dibawa === 'Ya' ? '<select class="plain" style="padding:5px 8px" onchange="clSet(' + i + ',\'kondisi_akhir\',this.value)">' + (D.pilihan.Kondisi || ['Baik', 'Perlu Perbaikan', 'Rusak', 'Hilang']).map(function (k) { return '<option' + (k === r.kondisi_akhir ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select>' : '') +
+      '<button class="btn sm ghost" type="button" title="Keluarkan dari daftar" onclick="clHapus(' + i + ')" style="padding:4px 10px">✕</button></div>';
   }).join('') + '</div>';
   h += '<div class="btns"><button class="btn" type="button" style="flex:1" onclick="simpanChecklistUI(this)">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()">Batal</button></div>';
   var panel = document.getElementById('panel'), top = panel.scrollTop;
