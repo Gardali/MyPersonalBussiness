@@ -22,13 +22,13 @@ body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Plus Jakarta 
 button{font:inherit;cursor:pointer}
 main{max-width:640px;margin:0 auto;padding:20px 16px}
 .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
-.top .hi{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.25}
+.top .hi{font-size:clamp(19px,6vw,24px);font-weight:700;letter-spacing:-.02em;line-height:1.25}
 .top .date{color:var(--muted);font-size:13px;margin-top:2px}
 .iconbtn{width:38px;height:38px;border-radius:50%;border:0;background:var(--card);box-shadow:var(--shadow);color:var(--ink);display:grid;place-items:center}
 .iconbtn svg{width:18px;height:18px}
 .hero{margin:6px 0 18px}
 .hero .k{color:var(--muted);font-size:13px}
-.hero .v{font-size:36px;font-weight:700;letter-spacing:-.03em;line-height:1.15;font-variant-numeric:tabular-nums}
+.hero .v{font-size:clamp(28px,9vw,40px);font-weight:700;letter-spacing:-.03em;line-height:1.15;font-variant-numeric:tabular-nums}
 .hero .note{font-size:13px;color:var(--muted);margin-top:4px}
 .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:22px}
 .quick button{border:0;background:var(--card);box-shadow:var(--shadow);border-radius:14px;padding:12px 6px;color:var(--ink);font-size:13px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:6px}
@@ -79,7 +79,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}
 td{padding:9px 0;border-top:1px solid var(--line)}tr:first-child td{border-top:0}
 td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;padding-left:10px}
 tr.total td{font-weight:700}
-.big{font-size:28px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.big{font-size:clamp(22px,7vw,30px);font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .meta{color:var(--muted);font-size:13px}
 .back{border:0;background:none;color:var(--muted);padding:0;margin:0 0 12px;font-size:14px;font-weight:600}
 select.plain{padding:8px 12px;border-radius:999px;border:0;box-shadow:var(--shadow);background:var(--card);color:var(--ink);font:inherit;font-size:13px;font-weight:600}
@@ -109,6 +109,16 @@ nav button[data-v=lainnya]{display:none}
 .chk input{width:20px;height:20px;accent-color:var(--accent)}
 .lap h1{font-size:20px;margin:0}.lap h3{font-size:14px;margin:18px 0 6px;color:var(--accent);text-transform:uppercase;letter-spacing:.05em}.lap table td{padding:6px 0}
 .cols,.col{display:block}
+@media (min-width:700px) and (max-width:899px){
+  main{max-width:900px;padding:24px 28px}
+  .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 20px;align-items:start}
+  .stats.four{grid-template-columns:repeat(4,1fr)}
+}
+@media (max-width:359px){
+  main{padding:16px 12px}
+  .quick button{font-size:12px;padding:10px 4px}
+  .card{padding:4px 12px}
+}
 .head2{display:block}
 @media (min-width:900px){
   body{padding-bottom:0;padding-left:232px;font-size:15px}
@@ -559,7 +569,7 @@ function vStok() {
 var KALK = {sesi: 30, crew: '', harga: ''};
 function bukaKalkulator() {
   var h = '<div class="grab"></div><h2>Kalkulator skema</h2><div class="meta" style="margin-bottom:12px">Bandingkan semua skema untuk perkiraan jumlah sesi yang sama. Angka harga & biaya dari tab PENGATURAN.</div>' +
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 10px">' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:0 10px">' +
     '<div class="f"><label>Perkiraan sesi</label><input id="k_sesi" type="number" inputmode="numeric" value="' + esc(KALK.sesi) + '"></div>' +
     '<div class="f"><label>Jumlah crew</label><input id="k_crew" type="number" inputmode="numeric" placeholder="' + Pd('CREW_DEFAULT', 2) + '" value="' + esc(KALK.crew) + '"></div>' +
     '<div class="f"><label>Harga kontrak (Rp)</label><input id="k_harga" type="number" inputmode="numeric" placeholder="opsional" value="' + esc(KALK.harga) + '"></div></div>' +
