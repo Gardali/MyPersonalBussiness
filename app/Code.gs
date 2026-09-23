@@ -11,11 +11,14 @@ var TABS = {
   KAS: { id: 'id', prefix: 'KS-', pad: 4 },
   INVENTARIS: { id: 'id_alat', prefix: 'ALT-', pad: 3 },
   MUTASI_STOK: { id: 'id', prefix: 'MS-', pad: 4 },
-  CREW: { id: 'id_crew', prefix: 'CR-', pad: 3 }
+  CREW: { id: 'id_crew', prefix: 'CR-', pad: 3 },
+  TUGAS_CREW: { id: 'id', prefix: 'TC-', pad: 4 }
 };
 var MUTASI_HEAD = ['id', 'tanggal', 'bahan', 'jenis', 'jumlah', 'id_event', 'sumber', 'catatan'];
 var CREW_HEAD = ['id_crew', 'foto', 'nama_lengkap', 'nama_panggilan', 'domisili', 'kendaraan', 'bank', 'no_rekening',
   'role', 'tanggal_mulai_kontrak', 'tanggal_akhir_kontrak', 'catatan'];
+// Penugasan crew per event. id_kas terisi setelah fee dibayar (baris KAS "Fee Crew" yang dibuat otomatis).
+var TUGAS_HEAD = ['id', 'id_event', 'id_crew', 'fee', 'id_kas', 'catatan'];
 // Pengaturan yang ditambahkan otomatis bila belum ada di tab PENGATURAN.
 var PENGATURAN_BARU = [
   ['STOK_MIN_KERTAS', 100, 'lembar', 'Peringatan bila stok kertas 4R di bawah angka ini'],
@@ -31,7 +34,8 @@ var PENGATURAN_BARU = [
 ];
 // Kolom baru di tab LAPORAN_EVENT, EVENT, INVENTARIS, dan KAS yang ditambahkan otomatis bila belum ada (di kolom paling kanan).
 var LAPORAN_KOLOM_BARU = ['sesi_terjual', 'lembar_tambahan', 'admin_qris', 'admin_pencairan', 'realisasi_penyusutan', 'realisasi_jepreto'];
-var EVENT_KOLOM_BARU = ['rab_penyusutan', 'rab_jepreto', 'rab_fee_crew', 'rab_transport', 'rab_konsumsi'];
+var EVENT_KOLOM_BARU = ['rab_penyusutan', 'rab_jepreto', 'rab_fee_crew', 'rab_transport', 'rab_konsumsi',
+  'dp_nominal', 'jatuh_tempo_dp', 'jatuh_tempo_pelunasan'];
 var INVENTARIS_KOLOM_BARU = ['umur_manfaat_bulan'];
 var KAS_KOLOM_BARU = ['sumber'];
 // Pilihan dropdown baru yang ditambahkan otomatis ke tab PILIHAN bila belum ada.
@@ -61,7 +65,7 @@ function tambahKolom_(namaTab, kolomBaru) {
   kolomBaru.forEach(function (k) { if (head.indexOf(k) < 0) { sh.getRange(1, head.length + 1).setValue(k); head.push(k); } });
 }
 // Kolom yang harus disimpan sebagai teks (supaya 0 di depan nomor HP tidak hilang).
-var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'id_crew', 'kontak', 'no_nota', 'no_rekening', 'foto',
+var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'id_crew', 'id_kas', 'kontak', 'no_nota', 'no_rekening', 'foto',
   'parameter_skema', 'jam_buka', 'jam_tutup', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai'];
 
 function doGet() {
@@ -81,7 +85,7 @@ function sheet_(name) {
 }
 
 function isDateCol_(h) {
-  return h.indexOf('tanggal') === 0 || h === 'follow_up';
+  return h.indexOf('tanggal') === 0 || h.indexOf('jatuh_tempo') === 0 || h === 'follow_up';
 }
 
 /** Membaca satu tab menjadi daftar objek {judul_kolom: nilai}. Baris kosong dilewati. */
@@ -135,6 +139,15 @@ function siapkan_() {
     shC.getRange('J2:K1000').setNumberFormat('yyyy-mm-dd');
   }
 
+  if (!ss.getSheetByName('TUGAS_CREW')) {
+    var shT = ss.insertSheet('TUGAS_CREW');
+    shT.appendRow(TUGAS_HEAD);
+    shT.getRange(1, 1, 1, TUGAS_HEAD.length).setFontWeight('bold').setBackground('#1F3A5F').setFontColor('#FFFFFF');
+    shT.setFrozenRows(1);
+    shT.getRange('A2:C1000').setNumberFormat('@');
+    shT.getRange('E2:E1000').setNumberFormat('@');
+  }
+
   if (ss.getSheetByName('MUTASI_STOK')) return;
   var sh = ss.insertSheet('MUTASI_STOK');
   sh.appendRow(MUTASI_HEAD);
@@ -185,6 +198,7 @@ function getData() {
     pemakaian: readTab_('PEMAKAIAN_ALAT'),
     keputusan: readTab_('LOG_KEPUTUSAN'),
     crew: readTab_('CREW'),
+    tugas: readTab_('TUGAS_CREW'),
     hariIni: Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
   };
 }
@@ -443,6 +457,54 @@ function hapusCrew(id) {
   return deleteRecord('CREW', id);
 }
 
+// ---------------------------------------------------------------- fee crew
+
+/** Menyimpan penugasan crew. Bila fee-nya sudah dibayar, nominal di KAS ikut disamakan. */
+function simpanTugasCrew(rec) {
+  var id = saveRecord('TUGAS_CREW', rec);
+  var t = readTab_('TUGAS_CREW').filter(function (x) { return x.id === id; })[0];
+  var kas = t && t.id_kas ? readTab_('KAS').filter(function (k) { return k.id === t.id_kas; })[0] : null;
+  if (kas) saveRecord('KAS', { id: kas.id, nominal: Number(t.fee) || 0 });
+  return id;
+}
+
+/**
+ * Membayar fee satu atau beberapa penugasan: tiap penugasan menjadi satu baris KAS Keluar "Fee Crew"
+ * di event-nya (ikut masuk realisasi RAB fee crew), lalu kode kasnya dicatat di penugasan.
+ */
+function bayarFeeCrew(ids, bayar) {
+  var tugas = readTab_('TUGAS_CREW'), crew = {};
+  readTab_('CREW').forEach(function (c) { crew[c.id_crew] = c; });
+  ids.forEach(function (id) {
+    var t = tugas.filter(function (x) { return x.id === id; })[0];
+    if (!t) throw new Error('Penugasan ' + id + ' tidak ditemukan.');
+    var c = crew[t.id_crew], nama = c ? (c.nama_panggilan || c.nama_lengkap) : t.id_crew;
+    var idKas = saveBy_('KAS', 'sumber', 'TUGAS:' + id, { tanggal: bayar.tanggal, jenis: 'Keluar', kategori: 'Fee Crew',
+      nominal: Number(t.fee) || 0, id_event: t.id_event, metode: bayar.metode || '', keterangan: 'Fee crew ' + nama,
+      catatan: 'Otomatis dari penugasan ' + id });
+    saveRecord('TUGAS_CREW', { id: id, id_kas: idKas });
+  });
+  return ids.length;
+}
+
+/** Membatalkan pembayaran fee: baris KAS-nya dihapus, penugasan kembali "belum dibayar". */
+function batalBayarFeeCrew(id) {
+  hapusKasTugas_(id);
+  saveRecord('TUGAS_CREW', { id: id, id_kas: '' });
+  return id;
+}
+
+/** Menghapus penugasan beserta baris KAS pembayarannya (bila ada). */
+function hapusTugasCrew(id) {
+  hapusKasTugas_(id);
+  return deleteRecord('TUGAS_CREW', id);
+}
+
+function hapusKasTugas_(id) {
+  readTab_('KAS').filter(function (k) { return String(k.sumber) === 'TUGAS:' + id; })
+    .forEach(function (k) { deleteRecord('KAS', k.id); });
+}
+
 // ---------------------------------------------------------------- folder, PDF, backup
 
 /** Folder kerja di samping file master (atau di My Drive bila tidak bisa). */
@@ -534,9 +596,54 @@ function isiPengingat_() {
   if (hilang.length) bag.push('<h3>Alat belum kembali</h3>' + li(hilang.map(function (a) { return a.nama_alat + ' — ' + a.id_event; })));
   var tutup = d.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal && e.tanggal < now; });
   if (tutup.length) bag.push('<h3>Event belum ditutup</h3>' + li(tutup.map(function (e) { return e.nama_event + ' (' + e.tanggal + ') — isi laporan'; })));
+  var tagih = tagihanJatuhTempo_(d, addHari_(now, 3));
+  if (tagih.length) bag.push('<h3>Tagihan klien</h3>' + li(tagih.map(function (t) {
+    return t.e.nama_event + ' — ' + t.tahap + ' ' + rupiah_(t.kurang) + ', ' + (t.jatuh < now ? 'terlambat sejak ' + t.jatuh : t.jatuh === now ? 'jatuh tempo hari ini' : 'jatuh tempo ' + t.jatuh);
+  })));
+  var fee = feeBelumDibayar_(d, now);
+  if (fee.length) bag.push('<h3>Fee crew belum dibayar</h3>' + li(fee));
   var k = stok_(d.mutasi, 'Kertas 4R');
   if (k !== null && k < Number(P.STOK_MIN_KERTAS || 100)) bag.push('<h3>Stok</h3>' + li(['Kertas 4R tinggal ' + k + ' lembar']));
   return bag.join('');
+}
+
+function rupiah_(n) { return 'Rp' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+
+/** Tagihan kontrak klien yang belum lunas dan jatuh tempo paling lambat `batas` (logika sama dengan tagihan() di Index.html). */
+function tagihanJatuhTempo_(d, batas) {
+  var masuk = {};
+  d.kas.forEach(function (k) {
+    if (k.id_event && k.jenis === 'Masuk' && k.kategori !== 'Setoran Owner') masuk[k.id_event] = (masuk[k.id_event] || 0) + (Number(k.nominal) || 0);
+  });
+  var out = [];
+  d.event.forEach(function (e) {
+    var kontrak = Number(e.nilai_kontrak) || 0;
+    if (e.model_pendapatan !== 'Kontrak Klien' || !kontrak || e.status === 'Batal') return;
+    var bayar = masuk[e.id_event] || 0, dp = Math.min(Number(e.dp_nominal) || 0, kontrak);
+    if (bayar >= kontrak) return;
+    var isDp = dp > 0 && bayar < dp;
+    var jatuh = isDp ? e.jatuh_tempo_dp : (e.jatuh_tempo_pelunasan || e.tanggal);
+    if (jatuh && jatuh <= batas) out.push({ e: e, tahap: isDp ? 'DP' : 'pelunasan', kurang: (isDp ? dp : kontrak) - bayar, jatuh: jatuh });
+  });
+  return out.sort(function (a, b) { return a.jatuh < b.jatuh ? -1 : 1; });
+}
+
+/** Fee crew dari event yang sudah lewat tapi belum dibayar, dikelompokkan per crew. */
+function feeBelumDibayar_(d, now) {
+  var ev = {}, kas = {}, crew = {}, per = {};
+  d.event.forEach(function (e) { ev[e.id_event] = e; });
+  d.kas.forEach(function (k) { kas[k.id] = true; });
+  d.crew.forEach(function (c) { crew[c.id_crew] = c; });
+  d.tugas.forEach(function (t) {
+    var e = ev[t.id_event];
+    if (!e || e.status === 'Batal' || !(e.tanggal < now) || (t.id_kas && kas[t.id_kas])) return;
+    var p = per[t.id_crew] = per[t.id_crew] || { n: 0, fee: 0 };
+    p.n++; p.fee += Number(t.fee) || 0;
+  });
+  return Object.keys(per).map(function (id) {
+    var c = crew[id];
+    return (c ? c.nama_panggilan || c.nama_lengkap : id) + ' — ' + rupiah_(per[id].fee) + ' (' + per[id].n + ' event)';
+  });
 }
 
 function kirim_(isi, paksa) {

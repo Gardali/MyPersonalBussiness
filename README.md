@@ -13,3 +13,4 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 2. Aplikasi Tahap 1: Beranda, Pipeline, Event + laporan event, Kas — selesai.
 3. Kalkulator skema kerja sama + stok bahan (kertas, Graduation Book, tinta) — selesai.
 4. Checklist alat per event, laporan bulanan (PDF), pengingat Gmail harian, invoice/kuitansi PDF, backup mingguan — selesai.
+5. Penugasan & pembayaran fee crew per event (tab TUGAS_CREW, otomatis tercatat di KAS) dan tahap tagihan klien DP → pelunasan dengan jatuh tempo — selesai.
