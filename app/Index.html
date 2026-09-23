@@ -235,17 +235,22 @@ function hasilEvent(ev) {
   h.keluar = sum(kas.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
   h.tercetak = lap ? Math.max(0, num(lap.counter_akhir) - num(lap.counter_awal)) : 0;
   h.bahan = h.tercetak * h.bl + (lap ? (num(lap.grad_book_terjual) + num(lap.buku_rusak)) * P('BIAYA_BUKU') : 0);
-  h.labaKotor = h.masuk - h.keluar - h.bahan;
+  h.adminQris = lap ? num(lap.admin_qris) : 0;
+  h.adminPencairan = lap ? num(lap.admin_pencairan) : 0;
+  h.labaKotor = h.masuk - h.keluar - h.bahan - h.adminQris - h.adminPencairan;
   h.labaBersih = h.labaKotor - h.alokasi;
   h.untungLembar = P('HARGA_4R') - h.bl;
   h.bepLapangan = h.untungLembar > 0 ? Math.ceil((h.keluar) / h.untungLembar) : null;
   h.bepTotal = h.untungLembar > 0 ? Math.ceil((h.keluar + h.alokasi) / h.untungLembar) : null;
   if (lap) {
-    h.omzet = num(lap.foto_4r_terjual) * P('HARGA_4R') + num(lap.grad_book_terjual) * P('HARGA_BUKU') +
+    var adaSplit = lap.sesi_terjual !== '' && lap.sesi_terjual != null;
+    h.sesiTerjual = adaSplit ? num(lap.sesi_terjual) : num(lap.foto_4r_terjual);
+    h.lembarTambahan = adaSplit ? num(lap.lembar_tambahan) : 0;
+    h.omzet = h.sesiTerjual * P('HARGA_4R') + h.lembarTambahan * P('HARGA_LEMBAR_TAMBAHAN') + num(lap.grad_book_terjual) * P('HARGA_BUKU') +
       num(lap.strip_terjual) * P('HARGA_STRIP') - num(lap.grup_potongan) * P('POTONGAN_GRUP');
     h.diterima = num(lap.tunai_dihitung) - num(lap.modal_kembalian) + num(lap.qris_transfer);
     h.selisihKas = h.diterima - h.omzet;
-    h.lembarTerjual = num(lap.foto_4r_terjual) + num(lap.grad_book_terjual) + Math.ceil(num(lap.strip_terjual) * (P('LEMBAR_PER_STRIP') || 1));
+    h.lembarTerjual = h.sesiTerjual + h.lembarTambahan + num(lap.grad_book_terjual) + Math.ceil(num(lap.strip_terjual) * (P('LEMBAR_PER_STRIP') || 1));
     h.selisihLembar = h.tercetak - (h.lembarTerjual + num(lap.lembar_uji_bonus) + num(lap.lembar_gagal));
   }
   if (ev.model_pendapatan === 'Kontrak Klien' && num(ev.nilai_kontrak) > 0) h.piutang = num(ev.nilai_kontrak) - h.masuk;
@@ -496,6 +501,8 @@ function vDetailEvent() {
     '<tr><td>Pemasukan</td><td class="r">' + rp(r.masuk) + '</td></tr>' +
     '<tr><td>Biaya langsung</td><td class="r">−' + rp(r.keluar) + '</td></tr>' +
     '<tr><td>Bahan · ' + r.tercetak + ' lbr × ' + rp(r.bl) + '</td><td class="r">−' + rp(r.bahan) + '</td></tr>' +
+    (r.adminQris ? '<tr><td>Admin QRIS</td><td class="r">−' + rp(r.adminQris) + '</td></tr>' : '') +
+    (r.adminPencairan ? '<tr><td>Admin transfer pencairan</td><td class="r">−' + rp(r.adminPencairan) + '</td></tr>' : '') +
     '<tr><td>Alokasi per event</td><td class="r">−' + rp(r.alokasi) + '</td></tr></table>';
   if (r.piutang !== undefined) hk += '<div class="meta" style="margin-top:8px">Nilai kontrak ' + rp(e.nilai_kontrak) + ' · belum dibayar <b class="' + (r.piutang > 0 ? 'neg' : '') + '">' + rp(r.piutang) + '</b></div>';
   hk += '</div>';
@@ -513,7 +520,7 @@ function vDetailEvent() {
     var lp = '<div class="card pad"><table>' +
       '<tr><td>Jam aktual</td><td class="r">' + esc(lap.jam_buka_aktual || '—') + '–' + esc(lap.jam_tutup_aktual || '—') + '</td></tr>' +
       '<tr><td>Transaksi</td><td class="r">' + num(lap.jumlah_transaksi) + '</td></tr>' +
-      '<tr><td>4R · Grad Book · Strip</td><td class="r">' + num(lap.foto_4r_terjual) + ' · ' + num(lap.grad_book_terjual) + ' · ' + num(lap.strip_terjual) + '</td></tr>' +
+      '<tr><td>Sesi · Lembar tambahan · Grad Book · Strip</td><td class="r">' + r.sesiTerjual + ' · ' + r.lembarTambahan + ' · ' + num(lap.grad_book_terjual) + ' · ' + num(lap.strip_terjual) + '</td></tr>' +
       '<tr><td>Tercetak (counter)</td><td class="r">' + r.tercetak + '</td></tr>' +
       '<tr><td>Terjual + uji + gagal</td><td class="r">' + r.lembarTerjual + ' + ' + num(lap.lembar_uji_bonus) + ' + ' + num(lap.lembar_gagal) + '</td></tr>' +
       '<tr class="total"><td>Selisih lembar</td><td class="r ' + (r.selisihLembar ? 'neg' : 'pos') + '">' + (r.selisihLembar ? r.selisihLembar + ' · periksa' : 'Cocok') + '</td></tr>' +
@@ -870,6 +877,7 @@ function dataLaporanEventXlsx(e) {
   kv([
     ['Pemasukan', r.masuk], ['Biaya langsung', -r.keluar],
     ['Bahan (' + r.tercetak + ' lembar × ' + Math.round(r.bl) + ')', -r.bahan],
+    ['Admin QRIS', -r.adminQris], ['Admin transfer pencairan', -r.adminPencairan],
     ['Alokasi per event', -r.alokasi], ['Laba kotor', r.labaKotor], ['Laba bersih', r.labaBersih]
   ]);
   if (r.piutang !== undefined) kv([['Nilai kontrak', num(e.nilai_kontrak)], ['Piutang', r.piutang]]);
@@ -878,7 +886,7 @@ function dataLaporanEventXlsx(e) {
     rows.push(['LAPORAN PRODUKSI']);
     kv([
       ['Jam buka–tutup aktual', (lap.jam_buka_aktual || '') + '–' + (lap.jam_tutup_aktual || '')],
-      ['Jumlah transaksi', num(lap.jumlah_transaksi)], ['Foto 4R terjual', num(lap.foto_4r_terjual)],
+      ['Jumlah transaksi', num(lap.jumlah_transaksi)], ['Sesi terjual', r.sesiTerjual], ['Lembar tambahan', r.lembarTambahan],
       ['Graduation Book terjual', num(lap.grad_book_terjual)], ['Strip terjual', num(lap.strip_terjual)],
       ['Counter awal', num(lap.counter_awal)], ['Counter akhir', num(lap.counter_akhir)], ['Tercetak', r.tercetak],
       ['Lembar uji/bonus', num(lap.lembar_uji_bonus)], ['Lembar gagal', num(lap.lembar_gagal)], ['Selisih lembar', r.selisihLembar || 0],
@@ -973,13 +981,15 @@ var F_LAPORAN = [
   {g: 'Waktu'}, {n: 'jam_buka_aktual', l: 'Jam buka aktual', t: 'time'}, {n: 'jam_tutup_aktual', l: 'Jam tutup aktual', t: 'time'},
   {n: 'jam_ramai', l: 'Jam paling ramai'}, {n: 'antrean_terpanjang', l: 'Antrean terpanjang (orang)', t: 'num'},
   {n: 'downtime_menit', l: 'Total berhenti (menit)', t: 'num'},
-  {g: 'Penjualan'}, {n: 'jumlah_transaksi', l: 'Jumlah transaksi', t: 'num'}, {n: 'foto_4r_terjual', l: 'Foto 4R terjual', t: 'num'},
+  {g: 'Penjualan'}, {n: 'jumlah_transaksi', l: 'Jumlah transaksi', t: 'num'},
+  {n: 'sesi_terjual', l: 'Sesi terjual (1 sesi = 1 lembar)', t: 'num'}, {n: 'lembar_tambahan', l: 'Lembar tambahan (di luar sesi)', t: 'num'},
   {n: 'grad_book_terjual', l: 'Graduation Book terjual', t: 'num'}, {n: 'strip_terjual', l: 'Strip tambahan (lembar)', t: 'num'},
   {n: 'grup_potongan', l: 'Grup dapat potongan', t: 'num'}, {n: 'softfile_terkirim', l: 'Softfile terkirim', t: 'num'},
   {g: 'Printer'}, {n: 'counter_awal', l: 'Counter awal', t: 'num'}, {n: 'counter_akhir', l: 'Counter akhir', t: 'num'},
   {n: 'lembar_uji_bonus', l: 'Lembar uji / bonus', t: 'num'}, {n: 'lembar_gagal', l: 'Lembar gagal', t: 'num'},
   {g: 'Uang'}, {n: 'tunai_dihitung', l: 'Tunai dihitung saat tutup (Rp)', t: 'num'}, {n: 'modal_kembalian', l: 'Modal kembalian (Rp)', t: 'num'},
   {n: 'qris_transfer', l: 'QRIS / transfer (Rp)', t: 'num'},
+  {n: 'admin_qris', l: 'Potongan admin QRIS, total (Rp)', t: 'num'}, {n: 'admin_pencairan', l: 'Admin transfer pencairan QRIS (Rp)', t: 'num'},
   {g: 'Stok'}, {n: 'stok_kertas_awal', l: 'Kertas awal (lembar)', t: 'num'}, {n: 'stok_kertas_akhir_fisik', l: 'Kertas akhir, hitung fisik', t: 'num'},
   {n: 'stok_buku_awal', l: 'Graduation Book awal', t: 'num'}, {n: 'buku_rusak', l: 'Buku rusak', t: 'num'},
   {n: 'tinta_terendah_persen', l: 'Level tinta terendah (%)', t: 'pct'},

@@ -25,8 +25,11 @@ var PENGATURAN_BARU = [
   ['NAMA_USAHA', 'Posetive Photobooth', 'teks', 'Nama usaha di invoice & laporan'],
   ['KONTAK_USAHA', '', 'teks', 'No. WA / email usaha di invoice'],
   ['REKENING', '', 'teks', 'Rekening pembayaran di invoice, mis. BCA 123456 a.n. ...'],
-  ['NAMA_MANAJER', 'Garda Ali Rayhaan', 'teks', 'Nama penyusun laporan bulanan']
+  ['NAMA_MANAJER', 'Garda Ali Rayhaan', 'teks', 'Nama penyusun laporan bulanan'],
+  ['HARGA_LEMBAR_TAMBAHAN', 0, 'Rp', 'Harga tiap lembar cetak tambahan di luar sesi (1 sesi = 1 lembar, dihitung dari HARGA_4R)']
 ];
+// Kolom baru di tab LAPORAN_EVENT yang ditambahkan otomatis bila belum ada (ditaruh di kolom paling kanan).
+var LAPORAN_KOLOM_BARU = ['sesi_terjual', 'lembar_tambahan', 'admin_qris', 'admin_pencairan'];
 // Kolom yang harus disimpan sebagai teks (supaya 0 di depan nomor HP tidak hilang).
 var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'id_crew', 'kontak', 'no_nota', 'no_rekening', 'foto',
   'parameter_skema', 'jam_buka', 'jam_tutup', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai'];
@@ -85,6 +88,12 @@ function siapkan_() {
   var peng = sheet_('PENGATURAN');
   var ada = peng.getDataRange().getValues().map(function (r) { return String(r[0]); });
   PENGATURAN_BARU.forEach(function (r) { if (ada.indexOf(r[0]) < 0) peng.appendRow(r); });
+
+  var lapSheet = ss.getSheetByName('LAPORAN_EVENT');
+  if (lapSheet) {
+    var lapHead = lapSheet.getRange(1, 1, 1, lapSheet.getLastColumn()).getValues()[0].map(String);
+    LAPORAN_KOLOM_BARU.forEach(function (k) { if (lapHead.indexOf(k) < 0) { lapSheet.getRange(1, lapHead.length + 1).setValue(k); lapHead.push(k); } });
+  }
 
   if (!ss.getSheetByName('CREW')) {
     var shC = ss.insertSheet('CREW');
