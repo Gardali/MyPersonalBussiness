@@ -9,8 +9,17 @@ var TABS = {
   EVENT: { id: 'id_event', prefix: 'EV-', pad: 3 },
   LAPORAN_EVENT: { id: 'id_event' },
   KAS: { id: 'id', prefix: 'KS-', pad: 4 },
-  INVENTARIS: { id: 'id_alat', prefix: 'ALT-', pad: 3 }
+  INVENTARIS: { id: 'id_alat', prefix: 'ALT-', pad: 3 },
+  MUTASI_STOK: { id: 'id', prefix: 'MS-', pad: 4 }
 };
+var MUTASI_HEAD = ['id', 'tanggal', 'bahan', 'jenis', 'jumlah', 'id_event', 'sumber', 'catatan'];
+// Pengaturan yang ditambahkan otomatis bila belum ada di tab PENGATURAN.
+var PENGATURAN_BARU = [
+  ['STOK_MIN_KERTAS', 100, 'lembar', 'Peringatan bila stok kertas 4R di bawah angka ini'],
+  ['STOK_MIN_BUKU', 5, 'buku', 'Peringatan bila stok Graduation Book di bawah angka ini'],
+  ['TINTA_MIN', 0.2, 'persen', 'Peringatan bila level tinta terendah di bawah angka ini'],
+  ['CREW_DEFAULT', 2, 'orang', 'Jumlah crew default di kalkulator skema']
+];
 // Kolom yang harus disimpan sebagai teks (supaya 0 di depan nomor HP tidak hilang).
 var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'kontak', 'no_nota', 'parameter_skema', 'jam_buka',
   'jam_tutup', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai'];
@@ -60,8 +69,44 @@ function readTab_(name) {
   return out;
 }
 
+/**
+ * Menyiapkan struktur baru tanpa menyentuh data lama: tab MUTASI_STOK (diisi stok awal dari laporan
+ * event terakhir) dan baris PENGATURAN baru.
+ */
+function siapkan_() {
+  var ss = ss_();
+  var peng = sheet_('PENGATURAN');
+  var ada = peng.getDataRange().getValues().map(function (r) { return String(r[0]); });
+  PENGATURAN_BARU.forEach(function (r) { if (ada.indexOf(r[0]) < 0) peng.appendRow(r); });
+
+  if (ss.getSheetByName('MUTASI_STOK')) return;
+  var sh = ss.insertSheet('MUTASI_STOK');
+  sh.appendRow(MUTASI_HEAD);
+  sh.getRange(1, 1, 1, MUTASI_HEAD.length).setFontWeight('bold').setBackground('#1F3A5F').setFontColor('#FFFFFF');
+  sh.setFrozenRows(1);
+  sh.getRange('B2:B1000').setNumberFormat('yyyy-mm-dd');
+  sh.getRange('A2:A1000').setNumberFormat('@');
+  // Stok awal = hitungan fisik di laporan event terakhir.
+  var ev = {};
+  readTab_('EVENT').forEach(function (e) { ev[e.id_event] = e; });
+  var lap = readTab_('LAPORAN_EVENT').filter(function (l) { return ev[l.id_event]; })
+    .sort(function (a, b) { return ev[a.id_event].tanggal < ev[b.id_event].tanggal ? -1 : 1; }).pop();
+  if (!lap) return;
+  var tgl = ev[lap.id_event].tanggal;
+  if (lap.stok_kertas_akhir_fisik !== '') {
+    saveRecord('MUTASI_STOK', { tanggal: tgl, bahan: 'Kertas 4R', jenis: 'Hitung Fisik', jumlah: Number(lap.stok_kertas_akhir_fisik),
+      id_event: lap.id_event, sumber: 'AWAL', catatan: 'CEK: stok awal diambil dari hitung fisik laporan ' + lap.id_event + '. Hitung ulang & koreksi bila perlu.' });
+  }
+  if (lap.stok_buku_awal !== '') {
+    saveRecord('MUTASI_STOK', { tanggal: tgl, bahan: 'Graduation Book', jenis: 'Hitung Fisik',
+      jumlah: Number(lap.stok_buku_awal) - Number(lap.grad_book_terjual || 0) - Number(lap.buku_rusak || 0),
+      id_event: lap.id_event, sumber: 'AWAL', catatan: 'Stok awal dari laporan ' + lap.id_event });
+  }
+}
+
 /** Semua data yang dibutuhkan aplikasi, dalam satu panggilan. */
 function getData() {
+  siapkan_();
   var pengaturan = {};
   readTab_('PENGATURAN').forEach(function (r) { pengaturan[r.kunci] = r.nilai; });
 
@@ -80,6 +125,7 @@ function getData() {
     laporan: readTab_('LAPORAN_EVENT'),
     kas: readTab_('KAS'),
     inventaris: readTab_('INVENTARIS'),
+    mutasi: readTab_('MUTASI_STOK'),
     hariIni: Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
   };
 }
@@ -190,4 +236,46 @@ function dealKeEvent(pipelineId) {
   });
   saveRecord('PIPELINE', { id: p.id, status: 'Deal', id_event: idEvent });
   return idEvent;
+}
+
+/** Menyimpan catatan berdasarkan kolom kunci selain kode (mis. sumber otomatis), membuat baru bila belum ada. */
+function saveBy_(tab, col, val, rec) {
+  var hit = readTab_(tab).filter(function (r) { return String(r[col]) === String(val); })[0];
+  rec[col] = val;
+  if (hit) rec[TABS[tab].id] = hit[TABS[tab].id];
+  return saveRecord(tab, rec);
+}
+
+/**
+ * Menyimpan laporan event lalu memperbarui stok otomatis: kertas keluar = lembar tercetak (counter),
+ * buku keluar = terjual + rusak, dan hitung fisik kertas bila diisi.
+ */
+function simpanLaporan(rec) {
+  saveRecord('LAPORAN_EVENT', rec);
+  var ev = readTab_('EVENT').filter(function (e) { return e.id_event === rec.id_event; })[0];
+  var tgl = ev && ev.tanggal ? ev.tanggal : Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+  var n = function (v) { return Number(v) || 0; };
+  var kertas = Math.max(0, n(rec.counter_akhir) - n(rec.counter_awal));
+  var buku = n(rec.grad_book_terjual) + n(rec.buku_rusak);
+  var base = { tanggal: tgl, id_event: rec.id_event };
+  saveBy_('MUTASI_STOK', 'sumber', 'LAPORAN:' + rec.id_event + ':KERTAS',
+    Object.assign({}, base, { bahan: 'Kertas 4R', jenis: 'Keluar', jumlah: kertas, catatan: 'Otomatis dari laporan (counter printer)' }));
+  saveBy_('MUTASI_STOK', 'sumber', 'LAPORAN:' + rec.id_event + ':BUKU',
+    Object.assign({}, base, { bahan: 'Graduation Book', jenis: 'Keluar', jumlah: buku, catatan: 'Otomatis dari laporan (terjual + rusak)' }));
+  if (rec.stok_kertas_akhir_fisik !== '' && rec.stok_kertas_akhir_fisik != null) {
+    saveBy_('MUTASI_STOK', 'sumber', 'LAPORAN:' + rec.id_event + ':FISIK',
+      Object.assign({}, base, { bahan: 'Kertas 4R', jenis: 'Hitung Fisik', jumlah: n(rec.stok_kertas_akhir_fisik), catatan: 'Hitung fisik akhir event' }));
+  }
+  return rec.id_event;
+}
+
+/** Mencatat mutasi stok. Pembelian (Masuk) dengan harga ikut dicatat di KAS sebagai Media Cetak. */
+function simpanMutasi(rec, harga) {
+  var baru = !rec.id;
+  var id = saveRecord('MUTASI_STOK', rec);
+  if (baru && rec.jenis === 'Masuk' && Number(harga) > 0) {
+    saveRecord('KAS', { tanggal: rec.tanggal, jenis: 'Keluar', kategori: 'Media Cetak', nominal: Number(harga),
+      keterangan: 'Beli ' + rec.bahan + ' (' + rec.jumlah + ')', catatan: 'Otomatis dari stok ' + id });
+  }
+  return id;
 }

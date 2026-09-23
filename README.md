@@ -11,4 +11,5 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 ## Tahap
 1. Database master — selesai (milik posetivestudio@gmail.com).
 2. Aplikasi Tahap 1: Beranda, Pipeline, Event + laporan event, Kas — selesai.
-3. Tahap 2: Inventaris & pemakaian alat per event.
+3. Kalkulator skema kerja sama + stok bahan (kertas, Graduation Book, tinta) — selesai.
+4. Berikutnya: checklist alat per event, laporan bulanan untuk owner.

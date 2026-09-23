@@ -151,10 +151,12 @@ var IC = {
   refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>',
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
-  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>'
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>',
+  box: '<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7M12 11v10"/>',
+  calc: '<rect x="5" y="3" width="14" height="18" rx="3"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/>'
 };
 function ikon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC[n] + '</svg>'; }
-document.getElementById('nav').innerHTML = '<div class="brand">Posetive<small>Photobooth</small></div>' + [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas']]
+document.getElementById('nav').innerHTML = '<div class="brand">Posetive<small>Photobooth</small></div>' + [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas'], ['stok', 'box', 'Stok']]
   .map(function (x) { return '<button data-v="' + x[0] + '"' + (x[0] === 'beranda' ? ' class="on"' : '') + '>' + ikon(x[1]) + x[2] + '</button>'; }).join('');
 
 // ---------------------------------------------------------------- utilitas
@@ -231,11 +233,98 @@ function bentrok() {
   return Object.keys(per).filter(function (t) { return per[t].length > 1; }).map(function (t) { return {tanggal: t, ev: per[t]}; });
 }
 
+
+function Pd(k, def) { var v = D.pengaturan[k]; return v === undefined || v === '' ? def : num(v); }
+
+// ---- stok
+var BAHAN = ['Kertas 4R', 'Graduation Book'];
+function stok(bahan, sampai) {
+  var urut = {Masuk: 0, Keluar: 0, 'Hitung Fisik': 1};
+  var rows = (D.mutasi || []).filter(function (m) { return m.bahan === bahan && (!sampai || m.tanggal <= sampai); })
+    .sort(function (a, b) { return a.tanggal !== b.tanggal ? (a.tanggal < b.tanggal ? -1 : 1) : (urut[a.jenis] - urut[b.jenis]) || (a.id < b.id ? -1 : 1); });
+  var n = 0, ada = rows.length > 0;
+  rows.forEach(function (m) { var j = num(m.jumlah); if (m.jenis === 'Hitung Fisik') n = j; else if (m.jenis === 'Masuk') n += j; else n -= j; });
+  return ada ? n : null;
+}
+function tintaTerakhir() {
+  var ev = {}; D.event.forEach(function (e) { ev[e.id_event] = e; });
+  var l = D.laporan.filter(function (x) { return x.tinta_terendah_persen !== '' && x.tinta_terendah_persen != null && ev[x.id_event]; })
+    .sort(function (a, b) { return ev[a.id_event].tanggal < ev[b.id_event].tanggal ? -1 : 1; }).pop();
+  return l ? {level: num(l.tinta_terendah_persen), tanggal: ev[l.id_event].tanggal, id_event: l.id_event} : null;
+}
+function kebutuhanEvent(e) {
+  var p = e.id_pipeline ? cari(D.pipeline, 'id', e.id_pipeline) : null;
+  return p && num(p.estimasi_sesi) ? num(p.estimasi_sesi) : Pd('STOK_MIN_KERTAS', 100);
+}
+function peringatanStok() {
+  var out = [], now = D.hariIni;
+  var k = stok('Kertas 4R'), b = stok('Graduation Book'), t = tintaTerakhir();
+  var next = D.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal >= now; }).sort(function (a, c) { return a.tanggal < c.tanggal ? -1 : 1; })[0];
+  if (k === null) out.push({j: '', h: '<b>Stok kertas belum pernah dihitung.</b> Buka menu Stok → Hitung fisik.'});
+  else if (next && k < kebutuhanEvent(next)) out.push({j: 'bad', h: '<b>Kertas 4R tinggal ' + k + ' lembar</b> — kurang untuk ' + esc(next.nama_event) + ' (' + tgl(next.tanggal) + ', perkiraan ' + kebutuhanEvent(next) + ' lembar).'});
+  else if (k < Pd('STOK_MIN_KERTAS', 100)) out.push({j: '', h: '<b>Kertas 4R tinggal ' + k + ' lembar</b> (minimum ' + Pd('STOK_MIN_KERTAS', 100) + ').'});
+  if (b !== null && b < Pd('STOK_MIN_BUKU', 5)) out.push({j: '', h: '<b>Graduation Book tinggal ' + b + '</b> (minimum ' + Pd('STOK_MIN_BUKU', 5) + ').'});
+  if (t && t.level <= Pd('TINTA_MIN', 0.2)) out.push({j: 'bad', h: '<b>Tinta terendah ' + Math.round(t.level * 100) + '%</b> — siapkan isi ulang sebelum event berikutnya.'});
+  return out;
+}
+
+// ---- kalkulator skema
+var SKEMA_SEMUA = ['Kontrak Klien', 'Open Booth Mandiri', 'A. Berjenjang', 'B. Persentase Omzet', 'C. Di Atas Impas', 'D. Fee Tetap', 'E. Voucher Prabayar', 'F. Bundling Peserta'];
+function tarifJenjang(sesi) {
+  var r = 0;
+  String(D.pengaturan.SKEMA_A_JENJANG || '').split(';').forEach(function (p) { var x = p.split(':'); if (x.length === 2 && sesi >= num(x[0])) r = num(x[1]); });
+  return r;
+}
+/** o: {skema, sesi, param, harga, crew}. skema = salah satu SKEMA_SEMUA. */
+function hitungSkema(o) {
+  var sesi = Math.max(0, num(o.sesi)), param = o.param === '' || o.param == null ? null : num(o.param), jual = P('HARGA_4R');
+  var r = {skema: o.skema, sesi: sesi, pendapatan: 0, panitia: 0, ket: ''};
+  switch (o.skema) {
+    case 'Kontrak Klien': r.pendapatan = num(o.harga); r.ket = 'Harga kontrak'; break;
+    case 'Open Booth Mandiri': r.pendapatan = sesi * jual; r.panitia = param || 0; r.ket = 'Sewa lapak ' + rp(r.panitia); break;
+    case 'A. Berjenjang': r.pendapatan = sesi * jual; r.panitia = sesi * tarifJenjang(sesi); r.ket = rp(tarifJenjang(sesi)) + '/sesi ke panitia'; break;
+    case 'B. Persentase Omzet': var pc = param === null ? P('SKEMA_B_PERSEN') : (param > 1 ? param / 100 : param);
+      r.pendapatan = sesi * jual; r.panitia = r.pendapatan * pc; r.ket = Math.round(pc * 100) + '% omzet ke panitia'; break;
+    case 'C. Di Atas Impas': r.pendapatan = sesi * jual; r.panitia = Math.max(0, sesi - P('SKEMA_C_BATAS')) * P('SKEMA_C_BAGIAN');
+      r.ket = rp(P('SKEMA_C_BAGIAN')) + '/sesi di atas ' + P('SKEMA_C_BATAS') + ' sesi'; break;
+    case 'D. Fee Tetap': r.pendapatan = sesi * jual; r.panitia = param === null ? P('SKEMA_D_FEE') : param; r.ket = 'Fee tetap ' + rp(r.panitia); break;
+    case 'E. Voucher Prabayar': var v = Math.max(param === null ? 0 : param, P('SKEMA_E_MIN'));
+      r.pendapatan = v * P('SKEMA_E_HARGA'); r.ket = v + ' voucher × ' + rp(P('SKEMA_E_HARGA')); break;
+    case 'F. Bundling Peserta': var q = Math.max(param === null ? 0 : param, P('SKEMA_F_MIN'));
+      r.pendapatan = q * P('SKEMA_F_HARGA'); r.ket = q + ' peserta × ' + rp(P('SKEMA_F_HARGA')); break;
+  }
+  var crew = o.crew === '' || o.crew == null ? Pd('CREW_DEFAULT', 2) : num(o.crew);
+  r.bahan = sesi * biayaLembar();
+  r.lapangan = crew * (P('FEE_CREW') + P('KONSUMSI_ORANG')) + P('TRANSPORT_STD');
+  r.alokasi = alokasiEvent();
+  r.labaLapangan = r.pendapatan - r.panitia - r.bahan - r.lapangan;
+  r.laba = r.labaLapangan - r.alokasi;
+  r.status = r.laba >= 0 ? 'AMAN' : r.labaLapangan >= 0 ? 'TIPIS' : 'RUGI';
+  r.crew = crew;
+  if (['Kontrak Klien', 'E. Voucher Prabayar', 'F. Bundling Peserta'].indexOf(o.skema) < 0 && !o.tanpaImpas) {
+    r.impas = null;
+    for (var s2 = 0; s2 <= 1000; s2++) { if (hitungSkema(Object.assign({}, o, {sesi: s2, tanpaImpas: 1})).laba >= 0) { r.impas = s2; break; } }
+  }
+  return r;
+}
+function skemaDari(rec) {
+  if (rec.model_pendapatan === 'Kontrak Klien') return 'Kontrak Klien';
+  if (rec.model_pendapatan === 'Open Booth Mandiri') return 'Open Booth Mandiri';
+  if (rec.model_pendapatan === 'Kerja Sama Panitia' && rec.skema) return rec.skema;
+  return null;
+}
+function estimasiPipeline(p) {
+  var sk = skemaDari(p); if (!sk) return null;
+  if (sk === 'Kontrak Klien' ? !num(p.harga_deal || p.harga_penawaran) : !num(p.estimasi_sesi)) return null;
+  return hitungSkema({skema: sk, sesi: p.estimasi_sesi, param: p.parameter_skema, harga: p.harga_deal || p.harga_penawaran});
+}
+function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', TIPIS: 'p-warn', RUGI: 'p-bad'}[st] + '">' + st + '</span>'; }
+
 // ---------------------------------------------------------------- tampilan
 function tampil(v) {
   VIEW = v; if (v !== 'event') DETAIL = null;
   document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
-  document.getElementById('view').innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas}[v]();
+  document.getElementById('view').innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok}[v]();
   window.scrollTo(0, 0);
 }
 function addHari(s, n) { var d = new Date(Date.parse(s) + n * 864e5); return d.toISOString().slice(0, 10); }
@@ -255,6 +344,7 @@ function vBeranda() {
   h += '<div class="quick"><button onclick="formKas()"><span>' + ikon('wallet') + '</span>Catat kas</button><button onclick="formPipeline()"><span>' + ikon('user') + '</span>Prospek</button><button onclick="formEvent()"><span>' + ikon('cal') + '</span>Event</button></div></div><div class="cols"><div class="col">';
 
   var n = '';
+  peringatanStok().forEach(function (w) { n += '<div onclick="tampil(\'stok\')" style="cursor:pointer">' + notice(w.j, w.h) + '</div>'; });
   bentrok().forEach(function (b) { n += notice('bad', '<b>Jadwal bentrok ' + tgl(b.tanggal) + '</b> — ' + b.ev.map(function (e) { return esc(e.nama_event); }).join(' & ')); });
   D.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal && e.tanggal < now; }).forEach(function (e) {
     n += '<div onclick="bukaEvent(\'' + e.id_event + '\')" style="cursor:pointer">' + notice('', '<b>' + esc(e.nama_event) + ' (' + tgl(e.tanggal) + ')</b> sudah lewat — isi laporan & tutup event.') + '</div>';
@@ -281,6 +371,12 @@ function vBeranda() {
     '<div class="stat"><div class="k">Hasil operasional</div><div class="v ' + cls(masukBln - keluarBln) + '">' + rpSingkat(masukBln - keluarBln) + '</div></div>' +
     '<div class="stat"><div class="k">Belanja alat</div><div class="v">' + rpSingkat(alatBln) + '</div></div></div>');
 
+  var tk = tintaTerakhir(), sk = stok('Kertas 4R'), sb = stok('Graduation Book');
+  h += sec('Stok', '<div class="stats" style="grid-template-columns:repeat(3,1fr);margin:0;cursor:pointer" onclick="tampil(\'stok\')">' +
+    '<div class="stat"><div class="k">Kertas 4R</div><div class="v ' + (sk !== null && sk < Pd('STOK_MIN_KERTAS', 100) ? 'neg' : '') + '">' + (sk === null ? '—' : sk) + '</div></div>' +
+    '<div class="stat"><div class="k">Grad Book</div><div class="v ' + (sb !== null && sb < Pd('STOK_MIN_BUKU', 5) ? 'neg' : '') + '">' + (sb === null ? '—' : sb) + '</div></div>' +
+    '<div class="stat"><div class="k">Tinta</div><div class="v ' + (tk && tk.level <= Pd('TINTA_MIN', 0.2) ? 'neg' : '') + '">' + (tk ? Math.round(tk.level * 100) + '%' : '—') + '</div></div></div>');
+
   var selesai = D.event.filter(function (e) { return e.status === 'Selesai'; }).sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : -1; });
   if (selesai.length) h += sec('Hasil event terakhir', '<div class="card">' + selesai.slice(0, 3).map(function (e) {
     var r = hasilEvent(e);
@@ -300,7 +396,7 @@ function vPipeline() {
     return f === 'Semua' || (f === 'Aktif' && aktif(p)) || (f === 'Deal' && p.status === 'Deal') || (f === 'Kalah/Batal' && (p.status === 'Kalah' || p.status === 'Batal'));
   }).sort(function (a, b) { return String(a.follow_up || '9') < String(b.follow_up || '9') ? -1 : 1; });
   var nilai = sum(D.pipeline.filter(aktif), function (p) { return p.harga_deal || p.harga_penawaran; });
-  var h = '<div class="bar" style="margin-bottom:6px"><div class="pagetitle" style="margin:0">Pipeline</div><button class="btn sm" onclick="formPipeline()">+ Prospek</button></div>';
+  var h = '<div class="bar" style="margin-bottom:6px"><div class="pagetitle" style="margin:0">Pipeline</div><div style="display:flex;gap:8px"><button class="btn sm ghost" onclick="bukaKalkulator()">Kalkulator</button><button class="btn sm" onclick="formPipeline()">+ Prospek</button></div></div>';
   h += '<div class="meta" style="margin-bottom:14px">' + D.pipeline.filter(aktif).length + ' prospek aktif' + (nilai ? ' · nilai ' + rp(nilai) : '') + '</div>';
   h += '<div class="chips" style="margin-bottom:14px">' + ['Aktif', 'Deal', 'Kalah/Batal', 'Semua'].map(function (c) {
     return '<button class="chip ' + (c === f ? 'on' : '') + '" onclick="FILTER.pipeline=\'' + c + '\';tampil(\'pipeline\')">' + c + '</button>';
@@ -309,7 +405,7 @@ function vPipeline() {
     var late = aktif(p) && p.follow_up && p.follow_up < now, harga = num(p.harga_deal || p.harga_penawaran);
     var sub = esc(p.referensi || p.jenis_acara || '') + (p.tanggal_event ? ' · ' + tgl(p.tanggal_event) : '');
     if (aktif(p) && p.follow_up) sub += '<br><span class="' + (late ? 'neg' : '') + '">Follow-up ' + tgl(p.follow_up) + (late ? ' · terlewat' : '') + '</span>';
-    return item({lead: '<div class="av">' + inisial(p.nama_klien) + '</div>', t: esc(p.nama_klien), s: sub, end: statusPill(p.status) + (harga ? '<div class="s">' + rpSingkat(harga) + '</div>' : ''), on: "formPipeline('" + p.id + "')"});
+    return item({lead: '<div class="av">' + inisial(p.nama_klien) + '</div>', t: esc(p.nama_klien), s: sub, end: statusPill(p.status) + (function () { var e = aktif(p) ? estimasiPipeline(p) : null; return e ? '<div class="s" style="margin-top:3px">' + pillStatus(e.status) + ' ' + rpSingkat(e.laba) + '</div>' : (harga ? '<div class="s">' + rpSingkat(harga) + '</div>' : ''); })(), on: "formPipeline('" + p.id + "')"});
   }).join('') : '<div class="empty">Tidak ada prospek di sini.</div>') + '</div>';
   var kalah = D.pipeline.filter(function (p) { return p.status === 'Kalah' || p.status === 'Batal'; });
   if (kalah.length) {
@@ -415,6 +511,93 @@ function vKas() {
   return h;
 }
 
+
+function vStok() {
+  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Stok</div><div style="display:flex;gap:8px"><button class="btn sm ghost" onclick="formMutasi(null,\'Hitung Fisik\')">Hitung fisik</button><button class="btn sm" onclick="formMutasi(null,\'Masuk\')">+ Beli</button></div></div>';
+  var tk = tintaTerakhir();
+  var kartu = BAHAN.map(function (b) {
+    var n = stok(b), min = b === 'Kertas 4R' ? Pd('STOK_MIN_KERTAS', 100) : Pd('STOK_MIN_BUKU', 5), sat = b === 'Kertas 4R' ? 'lembar' : 'buku';
+    var pakai = D.mutasi.filter(function (m) { return m.bahan === b && m.jenis === 'Keluar' && m.id_event; });
+    var rata = pakai.length ? Math.round(sum(pakai, function (m) { return m.jumlah; }) / pakai.length) : null;
+    return '<div class="card pad"><div class="meta">' + esc(b) + '</div><div class="big ' + (n !== null && n < min ? 'neg' : '') + '">' + (n === null ? '—' : n) + ' <span class="meta" style="font-size:14px">' + sat + '</span></div>' +
+      '<div class="meta">Minimum ' + min + (b === 'Kertas 4R' && n !== null ? ' · ≈ ' + (n / (P('ISI_KERTAS') || 100)).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' pack' : '') + (rata !== null ? ' · rata-rata ' + rata + '/event' : '') + '</div></div>';
+  });
+  var tinta = '<div class="card pad"><div class="meta">Tinta Epson 057 (warna terendah)</div><div class="big ' + (tk && tk.level <= Pd('TINTA_MIN', 0.2) ? 'neg' : '') + '">' + (tk ? Math.round(tk.level * 100) + '%' : '—') + '</div>' +
+    '<div class="meta">' + (tk ? 'Dari laporan ' + esc(tk.id_event) + ' (' + tgl(tk.tanggal) + ') · ≈ ' + Math.round(tk.level * P('KAPASITAS_TINTA')) + ' lembar lagi' : 'Isi "level tinta terendah" di laporan event') + '</div></div>';
+  h += '<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">' + kartu.join('') + tinta + '</div>';
+  var cekAwal = D.mutasi.filter(function (m) { return String(m.catatan || '').indexOf('CEK:') === 0; });
+  cekAwal.forEach(function (m) { h += notice('', esc(m.bahan) + ': ' + esc(m.catatan.slice(4).trim())); });
+  var list = D.mutasi.slice().sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : (a.id < b.id ? 1 : -1); });
+  h += sec('Riwayat', '<div class="card">' + (list.length ? list.map(function (m) {
+    var tanda = m.jenis === 'Masuk' ? '+' : m.jenis === 'Keluar' ? '−' : '=';
+    return item({lead: '<div class="ic ' + (m.jenis === 'Masuk' ? 'in' : '') + '">' + ikon(m.jenis === 'Masuk' ? 'down' : m.jenis === 'Keluar' ? 'up' : 'box') + '</div>',
+      t: esc(m.bahan) + ' · ' + esc(m.jenis), s: tgl(m.tanggal) + (m.id_event ? ' · ' + esc(m.id_event) : '') + (m.catatan ? ' · ' + esc(String(m.catatan).replace(/^CEK:\s*/, '')) : ''),
+      end: tanda + num(m.jumlah), on: "formMutasi('" + m.id + "')"});
+  }).join('') : '<div class="empty">Belum ada catatan stok.</div>') + '</div>');
+  return h;
+}
+
+var KALK = {sesi: 30, crew: '', harga: ''};
+function bukaKalkulator() {
+  var h = '<div class="grab"></div><h2>Kalkulator skema</h2><div class="meta" style="margin-bottom:12px">Bandingkan semua skema untuk perkiraan jumlah sesi yang sama. Angka harga & biaya dari tab PENGATURAN.</div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 10px">' +
+    '<div class="f"><label>Perkiraan sesi</label><input id="k_sesi" type="number" inputmode="numeric" value="' + esc(KALK.sesi) + '"></div>' +
+    '<div class="f"><label>Jumlah crew</label><input id="k_crew" type="number" inputmode="numeric" placeholder="' + Pd('CREW_DEFAULT', 2) + '" value="' + esc(KALK.crew) + '"></div>' +
+    '<div class="f"><label>Harga kontrak (Rp)</label><input id="k_harga" type="number" inputmode="numeric" placeholder="opsional" value="' + esc(KALK.harga) + '"></div></div>' +
+    '<div id="k_hasil"></div><div class="btns"><button class="btn ghost" type="button" onclick="tutupForm()" style="flex:1">Tutup</button></div>';
+  document.getElementById('panel').innerHTML = h;
+  document.getElementById('sheet').classList.add('open');
+  ['k_sesi', 'k_crew', 'k_harga'].forEach(function (id) { document.getElementById(id).addEventListener('input', hitungKalkulator); });
+  hitungKalkulator();
+}
+function hitungKalkulator() {
+  KALK = {sesi: document.getElementById('k_sesi').value, crew: document.getElementById('k_crew').value, harga: document.getElementById('k_harga').value};
+  var rows = SKEMA_SEMUA.filter(function (sk) { return sk !== 'Kontrak Klien' || num(KALK.harga) > 0; })
+    .map(function (sk) { return hitungSkema({skema: sk, sesi: KALK.sesi, crew: KALK.crew, harga: KALK.harga}); })
+    .sort(function (a, b) { return b.laba - a.laba; });
+  var r0 = rows[0] || {};
+  var h = '<div class="meta" style="margin:4px 0 8px">Biaya tetap per event: bahan ' + rp(biayaLembar()) + '/sesi · lapangan ' + rp(r0.lapangan) + ' (' + r0.crew + ' crew + transport) · alokasi ' + rp(r0.alokasi) + '</div><div class="card">';
+  h += rows.map(function (r) {
+    return item({t: esc(r.skema), s: esc(r.ket) + ' · omzet ' + rpSingkat(r.pendapatan) + (r.panitia ? ' · panitia ' + rpSingkat(r.panitia) : '') + (r.impas !== undefined ? ' · impas ' + (r.impas === null ? '>1000' : r.impas) + ' sesi' : ''),
+      end: '<span class="' + cls(r.laba) + '">' + rp(r.laba) + '</span><div class="s" style="margin-top:3px">' + pillStatus(r.status) + '</div>'});
+  }).join('') + '</div><div class="meta" style="margin-top:8px"><b>AMAN</b> = untung setelah alokasi Jepreto & penyusutan. <b>TIPIS</b> = biaya lapangan tertutup, alokasi belum. <b>RUGI</b> = biaya lapangan pun tidak tertutup.</div>';
+  document.getElementById('k_hasil').innerHTML = h;
+}
+
+function previewPipeline(r) {
+  var sk = skemaDari(r), el = document.getElementById('preview'); if (!el) return;
+  if (!sk) { el.innerHTML = '<div class="meta">Pilih model pendapatan (dan skema) untuk melihat perkiraan laba.</div>'; return; }
+  if (sk === 'Kontrak Klien' ? !num(r.harga_deal || r.harga_penawaran) : !num(r.estimasi_sesi)) { el.innerHTML = '<div class="meta">Isi ' + (sk === 'Kontrak Klien' ? 'harga penawaran/deal' : 'estimasi sesi') + ' untuk melihat perkiraan laba.</div>'; return; }
+  var e = hitungSkema({skema: sk, sesi: r.estimasi_sesi, param: r.parameter_skema, harga: r.harga_deal || r.harga_penawaran});
+  el.innerHTML = '<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center"><div class="meta">Perkiraan laba · ' + esc(sk) + '</div>' + pillStatus(e.status) + '</div>' +
+    '<div class="big ' + cls(e.laba) + '" style="font-size:24px">' + rp(e.laba) + '</div><table>' +
+    '<tr><td>Omzet' + (e.ket ? ' <span class="meta">(' + esc(e.ket) + ')</span>' : '') + '</td><td class="r">' + rp(e.pendapatan) + '</td></tr>' +
+    (e.panitia ? '<tr><td>Ke panitia</td><td class="r">−' + rp(e.panitia) + '</td></tr>' : '') +
+    '<tr><td>Bahan (' + e.sesi + ' sesi)</td><td class="r">−' + rp(e.bahan) + '</td></tr>' +
+    '<tr><td>Lapangan (' + e.crew + ' crew + transport)</td><td class="r">−' + rp(e.lapangan) + '</td></tr>' +
+    '<tr><td>Alokasi Jepreto + penyusutan</td><td class="r">−' + rp(e.alokasi) + '</td></tr></table>' +
+    (e.impas !== undefined ? '<div class="meta" style="margin-top:6px">Impas di ' + (e.impas === null ? 'lebih dari 1000' : e.impas) + ' sesi.</div>' : '') + '</div>';
+}
+
+var F_MUTASI = [
+  {n: 'tanggal', l: 'Tanggal', t: 'date', def: 'today', wajib: 1},
+  {n: 'bahan', l: 'Bahan', t: 'sel', o: function () { return BAHAN.map(function (b) { return [b, b]; }); }, def: 'Kertas 4R', wajib: 1},
+  {n: 'jenis', l: 'Jenis', t: 'sel', o: function () { return [['Masuk', 'Masuk (beli)'], ['Keluar', 'Keluar (pakai/rusak)'], ['Hitung Fisik', 'Hitung fisik (set stok)']]; }, wajib: 1},
+  {n: 'jumlah', l: 'Jumlah (lembar / buku). Kertas: 1 pack = 100 lembar', t: 'num', wajib: 1},
+  {n: '_harga', l: 'Harga beli total (Rp) — otomatis dicatat di Kas', t: 'num', show: function (r) { return r.jenis === 'Masuk' && !r.id; }},
+  {n: 'id_event', l: 'Event terkait', t: 'sel', o: pilEvent},
+  {n: 'catatan', l: 'Catatan', t: 'area'}
+];
+function formMutasi(id, jenis) {
+  var m = id ? cari(D.mutasi, 'id', id) : {jenis: jenis};
+  var extra = id ? '<button class="btn danger" type="button" onclick="hapus(\'MUTASI_STOK\',\'' + id + '\')">Hapus</button>' : '';
+  if (m && String(m.sumber || '').indexOf('LAPORAN:') === 0) extra = '<div class="meta">Dibuat otomatis dari laporan ' + esc(m.id_event) + '. Ubah laporannya, bukan catatan ini.</div>';
+  bukaForm(id ? 'Stok ' + id : (jenis === 'Hitung Fisik' ? 'Hitung fisik stok' : 'Catat stok'), F_MUTASI, m, function (r) {
+    var harga = r._harga; delete r._harga;
+    return panggil('simpanMutasi', r, harga || 0);
+  }, extra);
+}
+
 // ---------------------------------------------------------------- formulir
 var FORM = null;
 function pil(k) { return function () { return (D.pilihan[k] || []).map(function (v) { return [v, v]; }); }; }
@@ -472,8 +655,8 @@ var F_KAS = [
   {n: 'metode', l: 'Metode', t: 'sel', o: pil('Metode')}, {n: 'no_nota', l: 'No. nota / bukti'}, {n: 'catatan', l: 'Catatan', t: 'area'}
 ];
 
-function bukaForm(judul, fields, rec, onSave, extra) {
-  FORM = {fields: fields, rec: Object.assign({}, rec), onSave: onSave};
+function bukaForm(judul, fields, rec, onSave, extra, preview) {
+  FORM = {fields: fields, rec: Object.assign({}, rec), onSave: onSave, preview: preview};
   fields.forEach(function (f) { if (f.n && FORM.rec[f.n] === undefined && f.def) FORM.rec[f.n] = f.def === 'today' ? D.hariIni : f.def; });
   var h = '<div class="grab"></div><h2>' + esc(judul) + '</h2><form id="frm" onsubmit="simpanForm();return false">';
   fields.forEach(function (f, i) {
@@ -489,10 +672,13 @@ function bukaForm(judul, fields, rec, onSave, extra) {
     }
     h += '<div class="f' + (f.t === 'area' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
   });
+  if (FORM.preview) h += '<div id="preview" class="f wide" style="margin-top:10px"></div>';
   h += '<div class="btns"><button class="btn" type="submit" style="flex:1">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()">Batal</button></div>' + (extra ? '<div class="btns">' + extra + '</div>' : '') + '</form>';
   document.getElementById('panel').innerHTML = h;
   document.getElementById('sheet').classList.add('open');
-  document.getElementById('frm').addEventListener('change', aturTampil); aturTampil();
+  document.getElementById('frm').addEventListener('change', aturTampil);
+  if (preview) document.getElementById('frm').addEventListener('input', function () { FORM.preview(bacaForm()); });
+  aturTampil();
 }
 function bacaForm() {
   var frm = document.getElementById('frm'), r = Object.assign({}, FORM.rec);
@@ -508,10 +694,11 @@ function bacaForm() {
 }
 function aturTampil() {
   var r = bacaForm();
-  document.querySelectorAll('#frm .f').forEach(function (div) {
+  document.querySelectorAll('#frm .f[data-i]').forEach(function (div) {
     var f = FORM.fields[Number(div.dataset.i)];
     div.style.display = f.show && !f.show(r) ? 'none' : '';
   });
+  if (FORM.preview) FORM.preview(r);
 }
 function tutupForm() { document.getElementById('sheet').classList.remove('open'); FORM = null; }
 document.getElementById('sheet').addEventListener('click', function (e) { if (e.target.id === 'sheet') tutupForm(); });
@@ -535,7 +722,7 @@ function formPipeline(id) {
   if (id && !p.id_event && p.status !== 'Kalah' && p.status !== 'Batal') extra += '<button class="btn ghost" type="button" onclick="jadiEvent(\'' + id + '\')">Deal → buat event</button>';
   if (p.id_event) extra += '<button class="btn ghost" type="button" onclick="tutupForm();bukaEvent(\'' + p.id_event + '\')">Lihat ' + esc(p.id_event) + '</button>';
   if (id) extra += '<button class="btn danger" type="button" onclick="hapus(\'PIPELINE\',\'' + id + '\')">Hapus</button>';
-  bukaForm(id ? 'Prospek ' + id : 'Prospek baru', F_PIPELINE, p, function (r) { return panggil('saveRecord', 'PIPELINE', r); }, extra);
+  bukaForm(id ? 'Prospek ' + id : 'Prospek baru', F_PIPELINE, p, function (r) { return panggil('saveRecord', 'PIPELINE', r); }, extra, previewPipeline);
 }
 function jadiEvent(id) {
   var r = bacaForm(); delete r._row;
@@ -553,12 +740,14 @@ function formEvent(id) {
   }, extra);
 }
 function formLaporan(idEvent) {
-  var l = cari(D.laporan, 'id_event', idEvent) || {id_event: idEvent};
-  if (!l.stok_kertas_awal) {
-    var prev = D.laporan.filter(function (x) { return x.id_event !== idEvent && x.stok_kertas_akhir_fisik !== ''; }).pop();
-    if (prev && !cari(D.laporan, 'id_event', idEvent)) l.stok_kertas_awal = prev.stok_kertas_akhir_fisik;
+  var ada = cari(D.laporan, 'id_event', idEvent), l = ada || {id_event: idEvent};
+  if (!ada) {
+    var k = stok('Kertas 4R'), b = stok('Graduation Book');
+    if (k !== null) l.stok_kertas_awal = k;
+    if (b !== null) l.stok_buku_awal = b;
   }
-  bukaForm('Laporan ' + idEvent, F_LAPORAN, l, function (r) { r.id_event = idEvent; return panggil('saveRecord', 'LAPORAN_EVENT', r); });
+  bukaForm('Laporan ' + idEvent, F_LAPORAN, l, function (r) { r.id_event = idEvent; return panggil('simpanLaporan', r); },
+    '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual.</div>');
 }
 function formKas(id, idEvent) {
   var k = id ? cari(D.kas, 'id', id) : {id_event: idEvent || ''};
