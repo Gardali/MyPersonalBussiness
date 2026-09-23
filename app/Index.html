@@ -242,6 +242,12 @@ function hasilEvent(ev) {
   h.untungLembar = P('HARGA_4R') - h.bl;
   h.bepLapangan = h.untungLembar > 0 ? Math.ceil((h.keluar) / h.untungLembar) : null;
   h.bepTotal = h.untungLembar > 0 ? Math.ceil((h.keluar + h.alokasi) / h.untungLembar) : null;
+  var realisasiKategori = function (kat) { return sum(kas.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === kat; }), function (k) { return k.nominal; }); };
+  h.rab = { penyusutan: num(ev.rab_penyusutan), jepreto: num(ev.rab_jepreto), feeCrew: num(ev.rab_fee_crew), transport: num(ev.rab_transport), konsumsi: num(ev.rab_konsumsi) };
+  h.realisasi = {
+    penyusutan: P('PENYUSUTAN_BULAN') / (P('EVENT_BULAN') || 1), jepreto: P('JEPRETO_BULAN') / (P('EVENT_BULAN') || 1),
+    feeCrew: realisasiKategori('Fee Crew'), transport: realisasiKategori('Transport'), konsumsi: realisasiKategori('Konsumsi')
+  };
   if (lap) {
     var adaSplit = lap.sesi_terjual !== '' && lap.sesi_terjual != null;
     h.sesiTerjual = adaSplit ? num(lap.sesi_terjual) : num(lap.foto_4r_terjual);
@@ -532,6 +538,19 @@ function vDetailEvent() {
     lp += '</div>';
     if (Math.abs(r.omzet - r.masuk) > 0) lp += '<div style="margin-top:8px">' + notice('', 'Omzet laporan ' + rp(r.omzet) + ' ≠ pemasukan di Kas ' + rp(r.masuk) + '. Pastikan penjualan sudah dicatat.') + '</div>';
     h += sec('Laporan produksi', lp);
+  }
+  var rabBaris = [['Penyusutan', r.rab.penyusutan, r.realisasi.penyusutan], ['Langganan Jepreto', r.rab.jepreto, r.realisasi.jepreto],
+    ['Fee crew', r.rab.feeCrew, r.realisasi.feeCrew], ['Transport', r.rab.transport, r.realisasi.transport], ['Konsumsi', r.rab.konsumsi, r.realisasi.konsumsi]];
+  if (rabBaris.some(function (x) { return x[1]; })) {
+    var rabTotal = 0, realTotal = 0;
+    var rb = '<div class="card pad"><table><tr><td></td><td class="r" style="font-weight:600">RAB</td><td class="r" style="font-weight:600">Realisasi</td><td class="r" style="font-weight:600">Selisih</td></tr>' +
+      rabBaris.map(function (x) {
+        rabTotal += x[1]; realTotal += x[2];
+        var s = x[2] - x[1];
+        return '<tr><td>' + x[0] + '</td><td class="r">' + rp(x[1]) + '</td><td class="r">' + rp(x[2]) + '</td><td class="r ' + (s > 0 ? 'neg' : s < 0 ? 'pos' : '') + '">' + (s ? rp(s) : '—') + '</td></tr>';
+      }).join('') +
+      '<tr class="total"><td>Total</td><td class="r">' + rp(rabTotal) + '</td><td class="r">' + rp(realTotal) + '</td><td class="r ' + (realTotal > rabTotal ? 'neg' : realTotal < rabTotal ? 'pos' : '') + '">' + (realTotal !== rabTotal ? rp(realTotal - rabTotal) : '—') + '</td></tr></table></div>';
+    h += sec('RAB vs Realisasi', rb);
   }
   h += '</div><div class="col">';
   var alat = D.pemakaian.filter(function (a) { return a.id_event === e.id_event && a.dibawa === 'Ya'; }), blm = alat.filter(function (a) { return a.kembali !== 'Ya'; });
@@ -882,6 +901,14 @@ function dataLaporanEventXlsx(e) {
   ]);
   if (r.piutang !== undefined) kv([['Nilai kontrak', num(e.nilai_kontrak)], ['Piutang', r.piutang]]);
   rows.push([]);
+  if (r.rab.penyusutan || r.rab.jepreto || r.rab.feeCrew || r.rab.transport || r.rab.konsumsi) {
+    rows.push(['RAB VS REALISASI']);
+    rows.push(['Kategori', 'RAB', 'Realisasi']);
+    [['Penyusutan', r.rab.penyusutan, r.realisasi.penyusutan], ['Langganan Jepreto', r.rab.jepreto, r.realisasi.jepreto],
+      ['Fee crew', r.rab.feeCrew, r.realisasi.feeCrew], ['Transport', r.rab.transport, r.realisasi.transport], ['Konsumsi', r.rab.konsumsi, r.realisasi.konsumsi]]
+      .forEach(function (x) { rows.push(x); });
+    rows.push([]);
+  }
   if (lap) {
     rows.push(['LAPORAN PRODUKSI']);
     kv([
@@ -975,7 +1002,11 @@ var F_EVENT = [
   {n: 'parameter_skema', l: 'Parameter skema', show: function (r) { return r.model_pendapatan === 'Kerja Sama Panitia'; }},
   {n: 'nilai_kontrak', l: 'Nilai kontrak (Rp)', t: 'num', show: function (r) { return r.model_pendapatan === 'Kontrak Klien'; }},
   {n: 'jumlah_crew', l: 'Jumlah crew', t: 'num'}, {n: 'penanggung_jawab', l: 'Penanggung jawab'}, {n: 'tim', l: 'Tim'},
-  {n: 'folder_drive', l: 'Folder Drive'}, {n: 'catatan', l: 'Catatan', t: 'area'}
+  {n: 'folder_drive', l: 'Folder Drive'},
+  {g: 'RAB (Rencana Anggaran Biaya)'},
+  {n: 'rab_penyusutan', l: 'Alokasi penyusutan (Rp)', t: 'num'}, {n: 'rab_jepreto', l: 'Alokasi langganan Jepreto (Rp)', t: 'num'},
+  {n: 'rab_fee_crew', l: 'Fee crew (Rp)', t: 'num'}, {n: 'rab_transport', l: 'Transport (Rp)', t: 'num'}, {n: 'rab_konsumsi', l: 'Konsumsi (Rp)', t: 'num'},
+  {n: 'catatan', l: 'Catatan', t: 'area'}
 ];
 var F_LAPORAN = [
   {g: 'Waktu'}, {n: 'jam_buka_aktual', l: 'Jam buka aktual', t: 'time'}, {n: 'jam_tutup_aktual', l: 'Jam tutup aktual', t: 'time'},
