@@ -252,8 +252,6 @@ function hasilEvent(ev) {
   h.keluar = sum(kas.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
   h.tercetak = lap ? Math.max(0, num(lap.counter_akhir) - num(lap.counter_awal)) : 0;
   h.bahan = h.tercetak * h.bl + (lap ? (num(lap.grad_book_terjual) + num(lap.buku_rusak)) * P('BIAYA_BUKU') : 0);
-  h.adminQris = lap ? num(lap.admin_qris) : 0;
-  h.adminPencairan = lap ? num(lap.admin_pencairan) : 0;
   var realisasiKategori = function (kat) { return sum(kas.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === kat; }), function (k) { return k.nominal; }); };
   h.rab = { penyusutan: num(ev.rab_penyusutan), jepreto: num(ev.rab_jepreto), feeCrew: num(ev.rab_fee_crew), transport: num(ev.rab_transport), konsumsi: num(ev.rab_konsumsi) };
   h.realisasi = {
@@ -262,7 +260,7 @@ function hasilEvent(ev) {
     feeCrew: realisasiKategori('Fee Crew'), transport: realisasiKategori('Transport'), konsumsi: realisasiKategori('Konsumsi')
   };
   h.alokasi = h.realisasi.penyusutan + h.realisasi.jepreto;
-  h.labaKotor = h.masuk - h.keluar - h.bahan - h.adminQris - h.adminPencairan;
+  h.labaKotor = h.masuk - h.keluar - h.bahan;
   h.labaBersih = h.labaKotor - h.alokasi;
   h.untungLembar = P('HARGA_4R') - h.bl;
   h.bepLapangan = h.untungLembar > 0 ? Math.ceil((h.keluar) / h.untungLembar) : null;
@@ -527,8 +525,6 @@ function vDetailEvent() {
     '<tr><td>Pemasukan</td><td class="r">' + rp(r.masuk) + '</td></tr>' +
     '<tr><td>Biaya langsung</td><td class="r">−' + rp(r.keluar) + '</td></tr>' +
     '<tr><td>Bahan · ' + r.tercetak + ' lbr × ' + rp(r.bl) + '</td><td class="r">−' + rp(r.bahan) + '</td></tr>' +
-    (r.adminQris ? '<tr><td>Admin QRIS</td><td class="r">−' + rp(r.adminQris) + '</td></tr>' : '') +
-    (r.adminPencairan ? '<tr><td>Admin transfer pencairan</td><td class="r">−' + rp(r.adminPencairan) + '</td></tr>' : '') +
     '<tr><td>Alokasi per event</td><td class="r">−' + rp(r.alokasi) + '</td></tr></table>';
   if (r.piutang !== undefined) hk += '<div class="meta" style="margin-top:8px">Nilai kontrak ' + rp(e.nilai_kontrak) + ' · belum dibayar <b class="' + (r.piutang > 0 ? 'neg' : '') + '">' + rp(r.piutang) + '</b></div>';
   hk += '</div>';
@@ -956,7 +952,6 @@ function dataLaporanEventXlsx(e) {
   kv([
     ['Pemasukan', r.masuk], ['Biaya langsung', -r.keluar],
     ['Bahan (' + r.tercetak + ' lembar × ' + Math.round(r.bl) + ')', -r.bahan],
-    ['Admin QRIS', -r.adminQris], ['Admin transfer pencairan', -r.adminPencairan],
     ['Alokasi per event', -r.alokasi], ['Laba kotor', r.labaKotor], ['Laba bersih', r.labaBersih]
   ]);
   if (r.piutang !== undefined) kv([['Nilai kontrak', num(e.nilai_kontrak)], ['Piutang', r.piutang]]);
@@ -1081,7 +1076,8 @@ var F_LAPORAN = [
   {n: 'lembar_uji_bonus', l: 'Lembar uji / bonus', t: 'num'}, {n: 'lembar_gagal', l: 'Lembar gagal', t: 'num'},
   {g: 'Uang'}, {n: 'tunai_dihitung', l: 'Tunai dihitung saat tutup (Rp)', t: 'num'}, {n: 'modal_kembalian', l: 'Modal kembalian (Rp)', t: 'num'},
   {n: 'qris_transfer', l: 'QRIS / transfer (Rp)', t: 'num'},
-  {n: 'admin_qris', l: 'Potongan admin QRIS, total (Rp)', t: 'num'}, {n: 'admin_pencairan', l: 'Admin transfer pencairan QRIS (Rp)', t: 'num'},
+  {n: 'admin_qris', l: 'Potongan admin QRIS, total (Rp) — otomatis dicatat sebagai Kas Keluar', t: 'num'},
+  {n: 'admin_pencairan', l: 'Admin transfer pencairan QRIS (Rp) — otomatis dicatat sebagai Kas Keluar', t: 'num'},
   {g: 'Stok'}, {n: 'stok_kertas_awal', l: 'Kertas awal (lembar)', t: 'num'}, {n: 'stok_kertas_akhir_fisik', l: 'Kertas akhir, hitung fisik', t: 'num'},
   {n: 'stok_buku_awal', l: 'Graduation Book awal', t: 'num'}, {n: 'buku_rusak', l: 'Buku rusak', t: 'num'},
   {n: 'tinta_terendah_persen', l: 'Level tinta terendah (%)', t: 'pct'},
@@ -1203,12 +1199,13 @@ function formLaporan(idEvent) {
     r.realisasi_penyusutan = totalPenyusutanBulanan() / (P('EVENT_BULAN') || 1);
     r.realisasi_jepreto = P('JEPRETO_BULAN') / (P('EVENT_BULAN') || 1);
     return panggil('simpanLaporan', r);
-  }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto ikut terkunci sesuai kondisi Inventaris saat ini — perubahan Inventaris berikutnya tidak akan mengubah angka event ini lagi.</div>');
+  }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto ikut terkunci sesuai kondisi Inventaris saat ini — perubahan Inventaris berikutnya tidak akan mengubah angka event ini lagi. Admin QRIS & admin pencairan otomatis tercatat sebagai transaksi Kas Keluar (sudah termasuk di "Biaya langsung"), tidak perlu dicatat manual lagi di Kas.</div>');
 }
 function formKas(id, idEvent) {
   var k = id ? cari(D.kas, 'id', id) : {id_event: idEvent || ''};
   NOTA_BARU = null;
   var extra = id ? '<button class="btn danger" type="button" onclick="hapus(\'KAS\',\'' + id + '\')">Hapus</button>' : '';
+  if (k && String(k.sumber || '').indexOf('LAPORAN:') === 0) extra = '<div class="meta">Dibuat otomatis dari laporan ' + esc(k.id_event) + ' (admin QRIS/pencairan). Ubah laporannya, bukan catatan ini.</div>';
   bukaForm(id ? 'Kas ' + id : 'Catat kas', F_KAS, k, function (r) {
     return panggil('saveRecord', 'KAS', r).then(function (idBaru) {
       if (!NOTA_BARU) return idBaru;

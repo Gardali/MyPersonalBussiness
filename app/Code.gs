@@ -29,10 +29,29 @@ var PENGATURAN_BARU = [
   ['HARGA_LEMBAR_TAMBAHAN', 0, 'Rp', 'Harga tiap lembar cetak tambahan di luar sesi (1 sesi = 1 lembar, dihitung dari HARGA_4R)'],
   ['PENYUSUTAN_HARGA_MIN', 250000, 'Rp', 'Barang Inventaris (kategori Aset, milik Posetive) di bawah harga ini tidak dihitung penyusutan']
 ];
-// Kolom baru di tab LAPORAN_EVENT, EVENT, dan INVENTARIS yang ditambahkan otomatis bila belum ada (di kolom paling kanan).
+// Kolom baru di tab LAPORAN_EVENT, EVENT, INVENTARIS, dan KAS yang ditambahkan otomatis bila belum ada (di kolom paling kanan).
 var LAPORAN_KOLOM_BARU = ['sesi_terjual', 'lembar_tambahan', 'admin_qris', 'admin_pencairan', 'realisasi_penyusutan', 'realisasi_jepreto'];
 var EVENT_KOLOM_BARU = ['rab_penyusutan', 'rab_jepreto', 'rab_fee_crew', 'rab_transport', 'rab_konsumsi'];
 var INVENTARIS_KOLOM_BARU = ['umur_manfaat_bulan'];
+var KAS_KOLOM_BARU = ['sumber'];
+// Pilihan dropdown baru yang ditambahkan otomatis ke tab PILIHAN bila belum ada.
+var PILIHAN_BARU = { 'Kategori Kas': ['Admin QRIS', 'Admin Pencairan QRIS'] };
+
+/** Menambahkan nilai dropdown baru ke kolom PILIHAN yang sudah ada, di bawah nilai lama (tidak menyentuh nilai lama). */
+function tambahPilihan_() {
+  var sh = ss_().getSheetByName('PILIHAN');
+  if (!sh) return;
+  var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  Object.keys(PILIHAN_BARU).forEach(function (nama) {
+    var col = head.indexOf(nama) + 1;
+    if (!col) return;
+    var tinggi = Math.max(1, sh.getLastRow() - 1);
+    var ada = sh.getRange(2, col, tinggi, 1).getValues().map(function (r) { return String(r[0]); });
+    PILIHAN_BARU[nama].forEach(function (v) {
+      if (ada.indexOf(v) < 0) { var baris = ada.filter(function (x) { return x !== ''; }).length + 2; sh.getRange(baris, col).setValue(v); ada.push(v); }
+    });
+  });
+}
 
 /** Menambahkan kolom baru ke tab yang sudah ada, tanpa menyentuh kolom/data lama. */
 function tambahKolom_(namaTab, kolomBaru) {
@@ -103,6 +122,8 @@ function siapkan_() {
   tambahKolom_('LAPORAN_EVENT', LAPORAN_KOLOM_BARU);
   tambahKolom_('EVENT', EVENT_KOLOM_BARU);
   tambahKolom_('INVENTARIS', INVENTARIS_KOLOM_BARU);
+  tambahKolom_('KAS', KAS_KOLOM_BARU);
+  tambahPilihan_();
 
   if (!ss.getSheetByName('CREW')) {
     var shC = ss.insertSheet('CREW');
@@ -304,7 +325,44 @@ function simpanLaporan(rec) {
     saveBy_('MUTASI_STOK', 'sumber', 'LAPORAN:' + rec.id_event + ':FISIK',
       Object.assign({}, base, { bahan: 'Kertas 4R', jenis: 'Hitung Fisik', jumlah: n(rec.stok_kertas_akhir_fisik), catatan: 'Hitung fisik akhir event' }));
   }
+  sinkronAdminKas_(rec, tgl);
   return rec.id_event;
+}
+
+// Potongan admin dari laporan yang otomatis disinkronkan ke tab KAS sebagai transaksi Keluar sungguhan.
+var ADMIN_KAS = [
+  { kolom: 'admin_qris', kategori: 'Admin QRIS', tag: 'ADMINQRIS' },
+  { kolom: 'admin_pencairan', kategori: 'Admin Pencairan QRIS', tag: 'ADMINPENCAIRAN' }
+];
+/** Menyamakan baris KAS "Keluar" untuk admin QRIS & admin pencairan sesuai laporan; baris dihapus otomatis bila angkanya dikosongkan. */
+function sinkronAdminKas_(rec, tgl) {
+  ADMIN_KAS.forEach(function (x) {
+    var sumber = 'LAPORAN:' + rec.id_event + ':' + x.tag;
+    var nominal = Number(rec[x.kolom]) || 0;
+    if (nominal > 0) {
+      saveBy_('KAS', 'sumber', sumber, { tanggal: tgl, jenis: 'Keluar', kategori: x.kategori, nominal: nominal,
+        id_event: rec.id_event, keterangan: x.kategori, catatan: 'Otomatis dari laporan ' + rec.id_event });
+    } else {
+      var ada = readTab_('KAS').filter(function (k) { return String(k.sumber) === sumber; })[0];
+      if (ada) deleteRecord('KAS', ada.id);
+    }
+  });
+}
+/**
+ * Migrasi satu kali: sinkronkan admin QRIS & admin pencairan dari semua laporan yang sudah ada ke tab
+ * KAS. Jalankan manual sekali dari editor Apps Script (pilih fungsi ini → Jalankan) setelah menempel
+ * ulang Code.gs ini, supaya laporan lama yang sudah terisi admin_qris/admin_pencairan ikut tercatat.
+ */
+function migrasiAdminKas() {
+  var ev = {};
+  readTab_('EVENT').forEach(function (e) { ev[e.id_event] = e; });
+  var lap = readTab_('LAPORAN_EVENT'), tz = ss_().getSpreadsheetTimeZone();
+  lap.forEach(function (l) {
+    var e = ev[l.id_event];
+    var tgl = e && e.tanggal ? e.tanggal : Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    sinkronAdminKas_(l, tgl);
+  });
+  return lap.length + ' laporan disinkronkan ke KAS.';
 }
 
 /** Mencatat mutasi stok. Pembelian (Masuk) dengan harga ikut dicatat di KAS sebagai Media Cetak. */
