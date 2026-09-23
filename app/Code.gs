@@ -10,9 +10,12 @@ var TABS = {
   LAPORAN_EVENT: { id: 'id_event' },
   KAS: { id: 'id', prefix: 'KS-', pad: 4 },
   INVENTARIS: { id: 'id_alat', prefix: 'ALT-', pad: 3 },
-  MUTASI_STOK: { id: 'id', prefix: 'MS-', pad: 4 }
+  MUTASI_STOK: { id: 'id', prefix: 'MS-', pad: 4 },
+  CREW: { id: 'id_crew', prefix: 'CR-', pad: 3 }
 };
 var MUTASI_HEAD = ['id', 'tanggal', 'bahan', 'jenis', 'jumlah', 'id_event', 'sumber', 'catatan'];
+var CREW_HEAD = ['id_crew', 'foto', 'nama_lengkap', 'nama_panggilan', 'domisili', 'kendaraan', 'bank', 'no_rekening',
+  'role', 'tanggal_mulai_kontrak', 'tanggal_akhir_kontrak', 'catatan'];
 // Pengaturan yang ditambahkan otomatis bila belum ada di tab PENGATURAN.
 var PENGATURAN_BARU = [
   ['STOK_MIN_KERTAS', 100, 'lembar', 'Peringatan bila stok kertas 4R di bawah angka ini'],
@@ -25,8 +28,8 @@ var PENGATURAN_BARU = [
   ['NAMA_MANAJER', 'Garda Ali Rayhaan', 'teks', 'Nama penyusun laporan bulanan']
 ];
 // Kolom yang harus disimpan sebagai teks (supaya 0 di depan nomor HP tidak hilang).
-var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'kontak', 'no_nota', 'parameter_skema', 'jam_buka',
-  'jam_tutup', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai'];
+var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'id_crew', 'kontak', 'no_nota', 'no_rekening', 'foto',
+  'parameter_skema', 'jam_buka', 'jam_tutup', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai'];
 
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
@@ -83,6 +86,16 @@ function siapkan_() {
   var ada = peng.getDataRange().getValues().map(function (r) { return String(r[0]); });
   PENGATURAN_BARU.forEach(function (r) { if (ada.indexOf(r[0]) < 0) peng.appendRow(r); });
 
+  if (!ss.getSheetByName('CREW')) {
+    var shC = ss.insertSheet('CREW');
+    shC.appendRow(CREW_HEAD);
+    shC.getRange(1, 1, 1, CREW_HEAD.length).setFontWeight('bold').setBackground('#1F3A5F').setFontColor('#FFFFFF');
+    shC.setFrozenRows(1);
+    shC.getRange('A2:A1000').setNumberFormat('@');
+    shC.getRange('H2:H1000').setNumberFormat('@');
+    shC.getRange('J2:K1000').setNumberFormat('yyyy-mm-dd');
+  }
+
   if (ss.getSheetByName('MUTASI_STOK')) return;
   var sh = ss.insertSheet('MUTASI_STOK');
   sh.appendRow(MUTASI_HEAD);
@@ -132,6 +145,7 @@ function getData() {
     mutasi: readTab_('MUTASI_STOK'),
     pemakaian: readTab_('PEMAKAIAN_ALAT'),
     keputusan: readTab_('LOG_KEPUTUSAN'),
+    crew: readTab_('CREW'),
     hariIni: Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
   };
 }
@@ -314,6 +328,35 @@ function simpanChecklist(idEvent, rows) {
     if (r.id_alat && r.dibawa === 'Ya' && r.kondisi_akhir) saveRecord('INVENTARIS', { id_alat: r.id_alat, kondisi: r.kondisi_akhir });
   });
   return idEvent;
+}
+
+// ---------------------------------------------------------------- crew
+
+/** Menyimpan foto profil crew ke folder Drive privat (tidak dibagikan), lalu mengaitkannya ke data crew. */
+function simpanFotoCrew(idCrew, base64, mime, namaFile) {
+  var lama = readTab_('CREW').filter(function (c) { return c.id_crew === idCrew; })[0];
+  if (lama && lama.foto) { try { DriveApp.getFileById(lama.foto).setTrashed(true); } catch (e) { } }
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64), mime, namaFile || idCrew);
+  var file = folder_('Posetive - Foto Crew').createFile(blob);
+  saveRecord('CREW', { id_crew: idCrew, foto: file.getId() });
+  return file.getId();
+}
+
+/** Foto profil crew sebagai data URI (base64), atau null bila belum ada foto. */
+function getFotoCrew(idCrew) {
+  var c = readTab_('CREW').filter(function (x) { return x.id_crew === idCrew; })[0];
+  if (!c || !c.foto) return null;
+  try {
+    var blob = DriveApp.getFileById(c.foto).getBlob();
+    return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+  } catch (e) { return null; }
+}
+
+/** Menghapus data crew sekaligus foto profilnya di Drive. */
+function hapusCrew(id) {
+  var c = readTab_('CREW').filter(function (x) { return x.id_crew === id; })[0];
+  if (c && c.foto) { try { DriveApp.getFileById(c.foto).setTrashed(true); } catch (e) { } }
+  return deleteRecord('CREW', id);
 }
 
 // ---------------------------------------------------------------- folder, PDF, backup
