@@ -26,11 +26,13 @@ var PENGATURAN_BARU = [
   ['KONTAK_USAHA', '', 'teks', 'No. WA / email usaha di invoice'],
   ['REKENING', '', 'teks', 'Rekening pembayaran di invoice, mis. BCA 123456 a.n. ...'],
   ['NAMA_MANAJER', 'Garda Ali Rayhaan', 'teks', 'Nama penyusun laporan bulanan'],
-  ['HARGA_LEMBAR_TAMBAHAN', 0, 'Rp', 'Harga tiap lembar cetak tambahan di luar sesi (1 sesi = 1 lembar, dihitung dari HARGA_4R)']
+  ['HARGA_LEMBAR_TAMBAHAN', 0, 'Rp', 'Harga tiap lembar cetak tambahan di luar sesi (1 sesi = 1 lembar, dihitung dari HARGA_4R)'],
+  ['PENYUSUTAN_HARGA_MIN', 250000, 'Rp', 'Barang Inventaris (kategori Aset, milik Posetive) di bawah harga ini tidak dihitung penyusutan']
 ];
-// Kolom baru di tab LAPORAN_EVENT dan EVENT yang ditambahkan otomatis bila belum ada (di kolom paling kanan).
-var LAPORAN_KOLOM_BARU = ['sesi_terjual', 'lembar_tambahan', 'admin_qris', 'admin_pencairan'];
+// Kolom baru di tab LAPORAN_EVENT, EVENT, dan INVENTARIS yang ditambahkan otomatis bila belum ada (di kolom paling kanan).
+var LAPORAN_KOLOM_BARU = ['sesi_terjual', 'lembar_tambahan', 'admin_qris', 'admin_pencairan', 'realisasi_penyusutan', 'realisasi_jepreto'];
 var EVENT_KOLOM_BARU = ['rab_penyusutan', 'rab_jepreto', 'rab_fee_crew', 'rab_transport', 'rab_konsumsi'];
+var INVENTARIS_KOLOM_BARU = ['umur_manfaat_bulan'];
 
 /** Menambahkan kolom baru ke tab yang sudah ada, tanpa menyentuh kolom/data lama. */
 function tambahKolom_(namaTab, kolomBaru) {
@@ -100,6 +102,7 @@ function siapkan_() {
 
   tambahKolom_('LAPORAN_EVENT', LAPORAN_KOLOM_BARU);
   tambahKolom_('EVENT', EVENT_KOLOM_BARU);
+  tambahKolom_('INVENTARIS', INVENTARIS_KOLOM_BARU);
 
   if (!ss.getSheetByName('CREW')) {
     var shC = ss.insertSheet('CREW');

@@ -158,7 +158,7 @@ nav button[data-v=lainnya]{display:none}
 <div id="toast"></div>
 
 <script>
-var D = null, VIEW = 'beranda', FILTER = {pipeline: 'Aktif', kas: '', kasSumber: ''}, DETAIL = null;
+var D = null, VIEW = 'beranda', FILTER = {pipeline: 'Aktif', kas: '', kasSumber: '', inventaris: ''}, DETAIL = null;
 var NAMA = 'Garda', CEK_SEMUA = false;
 
 // ---------------------------------------------------------------- ikon
@@ -224,8 +224,25 @@ function statusPill(s) { var c = {Deal: 'p-ok', Selesai: 'p-ok', Kalah: 'p-bad',
 // ---------------------------------------------------------------- perhitungan
 function P(k) { return num(D.pengaturan[k]); }
 function biayaLembar() { return (P('HARGA_KERTAS') / (P('ISI_KERTAS') || 1) + P('HARGA_TINTA') / (P('KAPASITAS_TINTA') || 1)) * (1 + P('CADANGAN_GAGAL')); }
-function alokasiEvent() { return (P('JEPRETO_BULAN') + P('PENYUSUTAN_BULAN')) / (P('EVENT_BULAN') || 1); }
+function alokasiEvent() { return (P('JEPRETO_BULAN') + totalPenyusutanBulanan()) / (P('EVENT_BULAN') || 1); }
 function bukanSetoran(k) { return k.jenis === 'Masuk' && k.kategori !== 'Setoran Owner'; }
+
+// ---- penyusutan inventaris
+function bulanAntara(a, b) {
+  var pa = String(a).split('-'), pb = String(b).split('-');
+  var m = (Number(pb[0]) - Number(pa[0])) * 12 + (Number(pb[1]) - Number(pa[1])) - (Number(pb[2]) < Number(pa[2]) ? 1 : 0);
+  return Math.max(0, m);
+}
+/** Penyusutan garis lurus: hanya barang kategori Aset, milik Posetive, harga ≥ PENYUSUTAN_HARGA_MIN, dan umur manfaat terisi. */
+function itemPenyusutan(x) {
+  var layak = x.kategori === 'Aset' && (!x.pemilik || x.pemilik === 'Posetive') && num(x.nilai_beli) >= Pd('PENYUSUTAN_HARGA_MIN', 250000);
+  if (!layak) return {layak: false, bulanan: 0};
+  if (!num(x.umur_manfaat_bulan)) return {layak: true, butuhUmur: true, bulanan: 0};
+  var nilai = num(x.nilai_beli), umur = num(x.umur_manfaat_bulan), elapsed = x.tanggal_masuk ? bulanAntara(x.tanggal_masuk, D.hariIni) : 0;
+  var aktif = elapsed < umur, perBulan = nilai / umur;
+  return {layak: true, bulanan: aktif ? perBulan : 0, aktif: aktif, elapsed: elapsed, umur: umur, nilaiBuku: Math.max(0, nilai - perBulan * Math.min(elapsed, umur))};
+}
+function totalPenyusutanBulanan() { return sum(D.inventaris, function (x) { return itemPenyusutan(x).bulanan; }); }
 
 function hasilEvent(ev) {
   var kas = D.kas.filter(function (k) { return k.id_event === ev.id_event; });
@@ -245,7 +262,8 @@ function hasilEvent(ev) {
   var realisasiKategori = function (kat) { return sum(kas.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === kat; }), function (k) { return k.nominal; }); };
   h.rab = { penyusutan: num(ev.rab_penyusutan), jepreto: num(ev.rab_jepreto), feeCrew: num(ev.rab_fee_crew), transport: num(ev.rab_transport), konsumsi: num(ev.rab_konsumsi) };
   h.realisasi = {
-    penyusutan: P('PENYUSUTAN_BULAN') / (P('EVENT_BULAN') || 1), jepreto: P('JEPRETO_BULAN') / (P('EVENT_BULAN') || 1),
+    penyusutan: (lap && lap.realisasi_penyusutan !== '' && lap.realisasi_penyusutan != null) ? num(lap.realisasi_penyusutan) : totalPenyusutanBulanan() / (P('EVENT_BULAN') || 1),
+    jepreto: (lap && lap.realisasi_jepreto !== '' && lap.realisasi_jepreto != null) ? num(lap.realisasi_jepreto) : P('JEPRETO_BULAN') / (P('EVENT_BULAN') || 1),
     feeCrew: realisasiKategori('Fee Crew'), transport: realisasiKategori('Transport'), konsumsi: realisasiKategori('Konsumsi')
   };
   if (lap) {
@@ -370,10 +388,10 @@ function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', TIPIS: 'p
 // ---------------------------------------------------------------- tampilan
 function tampil(v) {
   VIEW = v; if (v !== 'event') DETAIL = null;
-  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === ((v === 'laporan' || v === 'crew') ? 'lainnya' : v)); });
+  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === ((v === 'laporan' || v === 'crew' || v === 'inventaris') ? 'lainnya' : v)); });
   var el = document.getElementById('view');
   try {
-    el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok, lainnya: vLainnya, laporan: vLaporan, crew: vCrew}[v]();
+    el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok, lainnya: vLainnya, laporan: vLaporan, crew: vCrew, inventaris: vInventaris}[v]();
   } catch (err) {
     el.innerHTML = '<div class="pagetitle">Ada yang error</div>' + notice('bad', 'Halaman ini gagal ditampilkan: <b>' + esc(err && err.message || err) + '</b>. Kirim screenshot ini ke Claude.');
   }
@@ -397,7 +415,7 @@ function vBeranda() {
 
   var n = '';
   alatBelumKembali().forEach(function (a) { n += '<div onclick="bukaEvent(\'' + a.id_event + '\')" style="cursor:pointer">' + notice('bad', '<b>' + esc(a.nama_alat) + ' belum kembali</b> dari ' + esc(namaEvent(a.id_event)) + (a.pemilik && a.pemilik !== 'Posetive' ? ' · milik ' + esc(a.pemilik) : '') + '.') + '</div>'; });
-  D.inventaris.filter(function (x) { return ['Perlu Perbaikan', 'Rusak', 'Hilang'].indexOf(x.kondisi) >= 0; }).forEach(function (x) { n += notice(x.kondisi === 'Perlu Perbaikan' ? '' : 'bad', '<b>' + esc(x.nama) + '</b>: ' + esc(x.kondisi).toLowerCase() + (x.pemilik && x.pemilik !== 'Posetive' ? ' · milik ' + esc(x.pemilik) : '') + '.'); });
+  D.inventaris.filter(function (x) { return ['Perlu Perbaikan', 'Rusak', 'Hilang'].indexOf(x.kondisi) >= 0; }).forEach(function (x) { n += '<div onclick="formInventaris(\'' + x.id_alat + '\')" style="cursor:pointer">' + notice(x.kondisi === 'Perlu Perbaikan' ? '' : 'bad', '<b>' + esc(x.nama) + '</b>: ' + esc(x.kondisi).toLowerCase() + (x.pemilik && x.pemilik !== 'Posetive' ? ' · milik ' + esc(x.pemilik) : '') + '.') + '</div>'; });
   peringatanStok().forEach(function (w) { n += '<div onclick="tampil(\'stok\')" style="cursor:pointer">' + notice(w.j, w.h) + '</div>'; });
   bentrok().forEach(function (b) { n += notice('bad', '<b>Jadwal bentrok ' + tgl(b.tanggal) + '</b> — ' + b.ev.map(function (e) { return esc(e.nama_event); }).join(' & ')); });
   D.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal && e.tanggal < now; }).forEach(function (e) {
@@ -550,7 +568,7 @@ function vDetailEvent() {
         return '<tr><td>' + x[0] + '</td><td class="r">' + rp(x[1]) + '</td><td class="r">' + rp(x[2]) + '</td><td class="r ' + (s > 0 ? 'neg' : s < 0 ? 'pos' : '') + '">' + (s ? rp(s) : '—') + '</td></tr>';
       }).join('') +
       '<tr class="total"><td>Total</td><td class="r">' + rp(rabTotal) + '</td><td class="r">' + rp(realTotal) + '</td><td class="r ' + (realTotal > rabTotal ? 'neg' : realTotal < rabTotal ? 'pos' : '') + '">' + (realTotal !== rabTotal ? rp(realTotal - rabTotal) : '—') + '</td></tr></table></div>';
-    h += sec('RAB vs Realisasi', rb);
+    h += sec('RAB vs Realisasi', rb + '<div class="meta" style="margin-top:8px">' + (lap ? 'Penyusutan & Jepreto terkunci sesuai kondisi Inventaris saat laporan disimpan.' : 'Penyusutan & Jepreto masih perkiraan langsung dari Inventaris — terkunci setelah laporan diisi.') + '</div>');
   }
   h += '</div><div class="col">';
   var alat = D.pemakaian.filter(function (a) { return a.id_event === e.id_event && a.dibawa === 'Ya'; }), blm = alat.filter(function (a) { return a.kembali !== 'Ya'; });
@@ -765,6 +783,45 @@ function vCrew() {
   }).join('') : '<div class="empty">Belum ada data crew.</div>') + '</div>';
   return h;
 }
+function vInventaris() {
+  var f = FILTER.inventaris, list = D.inventaris.filter(function (x) { return !f || x.kategori === f; })
+    .slice().sort(function (a, b) { return String(a.nama).localeCompare(String(b.nama)); });
+  var aset = D.inventaris.filter(function (x) { return x.kategori === 'Aset'; });
+  var butuhUmur = aset.filter(function (x) { return itemPenyusutan(x).butuhUmur; });
+  var h = '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button><div class="bar"><div class="pagetitle" style="margin:0">Inventaris</div><button class="btn sm" onclick="formInventaris()">+ Barang</button></div>';
+  h += '<div class="stats" style="grid-template-columns:repeat(2,1fr)"><div class="stat"><div class="k">Nilai aset (' + aset.length + ' barang)</div><div class="v">' + rpSingkat(sum(aset, function (x) { return x.nilai_beli; })) + '</div></div>' +
+    '<div class="stat"><div class="k">Penyusutan/bulan</div><div class="v">' + rpSingkat(totalPenyusutanBulanan()) + '</div></div></div>';
+  h += '<div class="meta" style="margin-bottom:14px">Dihitung dari barang kategori Aset, milik Posetive, harga ≥ ' + rp(Pd('PENYUSUTAN_HARGA_MIN', 250000)) + ' (atur di PENGATURAN), dan umur manfaat terisi. Dipakai otomatis di kalkulator skema & RAB event.</div>';
+  if (butuhUmur.length) h += notice('', '<b>' + butuhUmur.length + ' aset</b> di atas harga minimal belum diisi umur manfaat, belum ikut dihitung penyusutan: ' + butuhUmur.map(function (x) { return esc(x.nama); }).join(', ') + '.');
+  h += '<div class="chips" style="margin-bottom:14px">' + [['', 'Semua'], ['Aset', 'Aset'], ['Barang Habis Pakai', 'Habis Pakai']].map(function (c) {
+    return '<button class="chip ' + (c[0] === f ? 'on' : '') + '" onclick="FILTER.inventaris=\'' + c[0] + '\';tampil(\'inventaris\')">' + c[1] + '</button>';
+  }).join('') + '</div>';
+  h += '<div class="card">' + (list.length ? list.map(function (x) {
+    var p = itemPenyusutan(x), pinjam = x.pemilik && x.pemilik !== 'Posetive';
+    var sub = esc(x.kategori || '—') + (x.jumlah ? ' · ' + x.jumlah + ' ' + esc(x.satuan || '') : '') + (pinjam ? ' · pinjaman ' + esc(x.pemilik) : '');
+    var end = x.nilai_beli ? rp(x.nilai_beli) : '';
+    if (p.umur) end += '<div class="s">' + rp(p.bulanan) + '/bln' + (p.aktif ? '' : ' · lunas susut') + ' · buku ' + rp(p.nilaiBuku) + '</div>';
+    return item({t: esc(x.nama) + (x.kondisi && x.kondisi !== 'Baik' ? ' <span class="pill p-warn">' + esc(x.kondisi) + '</span>' : ''), s: sub, end: end, on: "formInventaris('" + x.id_alat + "')"});
+  }).join('') : '<div class="empty">Belum ada barang.</div>') + '</div>';
+  return h;
+}
+var F_INVENTARIS = [
+  {n: 'nama', l: 'Nama barang', wajib: 1},
+  {n: 'kategori', l: 'Kategori', t: 'sel', o: pil('Kategori Alat'), def: 'Aset', wajib: 1},
+  {n: 'pemilik', l: 'Pemilik', t: 'sel', o: pil('Pemilik'), def: 'Posetive'},
+  {n: 'jumlah', l: 'Jumlah', t: 'num', def: 1}, {n: 'satuan', l: 'Satuan (unit, pcs, pack, ...)'},
+  {n: 'kondisi', l: 'Kondisi', t: 'sel', o: pil('Kondisi'), def: 'Baik'},
+  {n: 'lokasi', l: 'Lokasi'}, {n: 'tanggal_masuk', l: 'Tanggal masuk', t: 'date'},
+  {g: 'Penyusutan'},
+  {n: 'nilai_beli', l: 'Nilai beli (Rp)', t: 'num'},
+  {n: 'umur_manfaat_bulan', l: 'Umur manfaat (bulan) — kosongkan bila tidak dihitung penyusutannya', t: 'num'},
+  {n: 'catatan', l: 'Catatan', t: 'area'}
+];
+function formInventaris(id) {
+  var x = id ? cari(D.inventaris, 'id_alat', id) : {};
+  var extra = id ? '<button class="btn danger" type="button" onclick="hapus(\'INVENTARIS\',\'' + id + '\')">Hapus</button>' : '';
+  bukaForm(id ? (x.nama || id) : 'Barang baru', F_INVENTARIS, x, function (r) { return panggil('saveRecord', 'INVENTARIS', r); }, extra);
+}
 function vLainnya() {
   if (D.serverLama) return '<div class="pagetitle">Lainnya</div>' + notice('bad', '<b>Code.gs di Apps Script masih versi lama.</b> Tempel ulang Code.gs terbaru lalu Terapkan → Versi baru.');
   var bulanList = Array.from(new Set(D.event.map(function (e) { return String(e.tanggal).slice(0, 7); }).concat(D.kas.map(function (k) { return String(k.tanggal).slice(0, 7); })).concat([D.hariIni.slice(0, 7)])))
@@ -775,6 +832,7 @@ function vLainnya() {
     '<div class="bar" style="margin:0"><select class="plain" id="lap_bulan">' + bulanList.map(function (b) { return '<option value="' + b + '"' + (b === LAP.bulan ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select>' +
     '<button class="btn sm" onclick="LAP.bulan=document.getElementById(\'lap_bulan\').value;tampil(\'laporan\')">Buka laporan</button></div></div>');
   h += sec('Crew', '<div class="card pad"><div class="meta" style="margin-bottom:10px">Data tim: kontak domisili, kendaraan, rekening, dan masa kontrak.</div><button class="btn sm" onclick="tampil(\'crew\')">Kelola crew</button></div>');
+  h += sec('Inventaris', '<div class="card pad"><div class="meta" style="margin-bottom:10px">Alat & aset milik atau pinjaman ke Posetive, beserta penyusutannya (' + rpSingkat(totalPenyusutanBulanan()) + '/bulan).</div><button class="btn sm" onclick="tampil(\'inventaris\')">Kelola inventaris</button></div>');
   h += sec('Otomatis', '<div class="card" id="oto">' + (OTO ? isiOto() : '<div class="empty">Memeriksa…</div>') + '</div><div class="meta" style="margin-top:8px">Pertama kali dinyalakan, Google akan meminta izin tambahan (Gmail & Drive). Pilih akun Anda → Lanjutan → Izinkan.</div>');
   h += sec('Info usaha untuk invoice', '<div class="card pad"><table>' +
     '<tr><td>Nama usaha</td><td class="r">' + esc(D.pengaturan.NAMA_USAHA || '—') + '</td></tr>' +
@@ -1137,8 +1195,12 @@ function formLaporan(idEvent) {
     if (k !== null) l.stok_kertas_awal = k;
     if (b !== null) l.stok_buku_awal = b;
   }
-  bukaForm('Laporan ' + idEvent, F_LAPORAN, l, function (r) { r.id_event = idEvent; return panggil('simpanLaporan', r); },
-    '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual.</div>');
+  bukaForm('Laporan ' + idEvent, F_LAPORAN, l, function (r) {
+    r.id_event = idEvent;
+    r.realisasi_penyusutan = totalPenyusutanBulanan() / (P('EVENT_BULAN') || 1);
+    r.realisasi_jepreto = P('JEPRETO_BULAN') / (P('EVENT_BULAN') || 1);
+    return panggil('simpanLaporan', r);
+  }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto ikut terkunci sesuai kondisi Inventaris saat ini — perubahan Inventaris berikutnya tidak akan mengubah angka event ini lagi.</div>');
 }
 function formKas(id, idEvent) {
   var k = id ? cari(D.kas, 'id', id) : {id_event: idEvent || ''};
