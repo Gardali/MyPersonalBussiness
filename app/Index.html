@@ -101,6 +101,33 @@ nav button.on{color:var(--accent)}
 .grp{font-weight:700;margin:20px 0 10px;font-size:13px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
 #toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;display:none;z-index:20}
 #loading{text-align:center;padding:60px 0;color:var(--muted)}
+.brand{display:none}
+.cols,.col{display:block}
+.head2{display:block}
+@media (min-width:900px){
+  body{padding-bottom:0;padding-left:232px;font-size:15px}
+  main{max-width:1080px;padding:32px 40px}
+  nav{top:0;bottom:0;right:auto;width:232px;flex-direction:column;border-top:0;border-right:1px solid var(--line);padding:24px 14px;gap:4px}
+  nav .brand{display:block;font-weight:700;font-size:20px;letter-spacing:-.02em;padding:0 12px 20px;color:var(--ink)}
+  nav .brand small{display:block;font-size:12px;font-weight:500;color:var(--muted);letter-spacing:0}
+  nav button{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;padding:11px 12px;border-radius:12px;font-size:14px}
+  nav button.on{background:var(--accent-soft)}
+  nav svg{width:20px;height:20px}
+  .cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:0 28px;align-items:start}
+  .head2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:end;margin-bottom:26px}
+  .head2 .hero,.head2 .quick,.head2 .stats{margin:0}
+  .hero .v{font-size:44px}
+  .top .hi{font-size:26px}.top .hi br{display:none}
+  .pagetitle{font-size:26px}
+  .stats.four{grid-template-columns:repeat(4,1fr)}
+  .sheet{align-items:center;padding:24px}
+  .sheet .panel{border-radius:20px;max-width:760px;max-height:88vh;padding:24px 28px}
+  .grab{display:none}
+  #frm{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+  #frm .grp,#frm .btns,#frm .f.wide{grid-column:1/-1}
+  #toast{bottom:32px;left:calc(50% + 116px)}
+  .it.tap:hover{background:var(--soft);margin:0 -14px;padding-left:14px;padding-right:14px}
+}
 .empty{color:var(--muted);padding:14px 0;font-size:14px}
 </style>
 </head>
@@ -127,7 +154,7 @@ var IC = {
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>'
 };
 function ikon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC[n] + '</svg>'; }
-document.getElementById('nav').innerHTML = [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas']]
+document.getElementById('nav').innerHTML = '<div class="brand">Posetive<small>Photobooth</small></div>' + [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas']]
   .map(function (x) { return '<button data-v="' + x[0] + '"' + (x[0] === 'beranda' ? ' class="on"' : '') + '>' + ikon(x[1]) + x[2] + '</button>'; }).join('');
 
 // ---------------------------------------------------------------- utilitas
@@ -222,10 +249,10 @@ function vBeranda() {
   var keluarBln = sum(kasBln.filter(function (k) { return k.jenis === 'Keluar' && k.kategori !== 'Pengadaan Barang'; }), function (k) { return k.nominal; });
   var alatBln = sum(kasBln.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === 'Pengadaan Barang'; }), function (k) { return k.nominal; });
 
-  h += '<div class="top"><div><div class="hi">' + salam() + ',<br>' + esc(NAMA) + '</div><div class="date">' + hari(now) + ', ' + tgl(now) + '</div></div><button class="iconbtn" onclick="muat()" aria-label="Muat ulang">' + ikon('refresh') + '</button></div>';
-  h += '<div class="hero"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div>' +
+  h += '<div class="top"><div><div class="hi">' + salam() + ', <br>' + esc(NAMA) + '</div><div class="date">' + hari(now) + ', ' + tgl(now) + '</div></div><button class="iconbtn" onclick="muat()" aria-label="Muat ulang">' + ikon('refresh') + '</button></div>';
+  h += '<div class="head2"><div class="hero"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div>' +
     (saldo < 0 ? '<div class="note">Ada biaya yang ditalangi dari luar kas divisi.</div>' : '') + '</div>';
-  h += '<div class="quick"><button onclick="formKas()"><span>' + ikon('wallet') + '</span>Catat kas</button><button onclick="formPipeline()"><span>' + ikon('user') + '</span>Prospek</button><button onclick="formEvent()"><span>' + ikon('cal') + '</span>Event</button></div>';
+  h += '<div class="quick"><button onclick="formKas()"><span>' + ikon('wallet') + '</span>Catat kas</button><button onclick="formPipeline()"><span>' + ikon('user') + '</span>Prospek</button><button onclick="formEvent()"><span>' + ikon('cal') + '</span>Event</button></div></div><div class="cols"><div class="col">';
 
   var n = '';
   bentrok().forEach(function (b) { n += notice('bad', '<b>Jadwal bentrok ' + tgl(b.tanggal) + '</b> — ' + b.ev.map(function (e) { return esc(e.nama_event); }).join(' & ')); });
@@ -246,6 +273,7 @@ function vBeranda() {
     return item({lead: '<div class="av">' + inisial(p.nama_klien) + '</div>', t: esc(p.nama_klien), s: esc(p.referensi || p.status), end: '<span class="pill ' + (d < 0 ? 'p-bad' : 'p-warn') + '">' + (d < 0 ? 'Terlewat ' + (-d) + ' hr' : d === 0 ? 'Hari ini' : tgl(p.follow_up)) + '</span>', on: "formPipeline('" + p.id + "')"});
   }).join('') + '</div>');
 
+  h += '</div><div class="col">';
   h += sec(BLN[Number(bulan.slice(5)) - 1] + ' ' + bulan.slice(0, 4),
     '<div class="stats" style="margin:0">' +
     '<div class="stat"><div class="k">Pemasukan</div><div class="v">' + rpSingkat(masukBln) + '</div></div>' +
@@ -263,7 +291,7 @@ function vBeranda() {
   if (cek.length) h += sec('Perlu dicek <span class="pill p-warn" style="margin-left:4px">' + cek.length + '</span>', '<div class="card">' + cek.slice(0, CEK_SEMUA ? cek.length : 3).map(function (c) {
     return item({t: '<span class="pill">' + esc(c.tab) + '</span> ' + esc(c.id), s: esc(c.ket)});
   }).join('') + (cek.length > 3 ? '<div class="it"><button class="link" style="border:0;background:none;color:var(--accent);font-weight:600;padding:0" onclick="CEK_SEMUA=!CEK_SEMUA;tampil(\'beranda\')">' + (CEK_SEMUA ? 'Tampilkan lebih sedikit' : 'Lihat semua ' + cek.length) + '</button></div>' : '') + '</div><div class="meta" style="margin-top:8px">Hapus tulisan "CEK:" di kolom catatan setelah diperiksa.</div>');
-  return h;
+  return h + '</div></div>';
 }
 
 function vPipeline() {
@@ -302,9 +330,11 @@ function vEvent() {
       on: "bukaEvent('" + e.id_event + "')"});
   }
   var h = '<div class="bar"><div class="pagetitle" style="margin:0">Event</div><button class="btn sm" onclick="formEvent()">+ Event</button></div>';
+  h += '<div class="cols"><div class="col">';
   h += sec('Akan datang', '<div class="card">' + (depan.length ? depan.map(baris).join('') : '<div class="empty">Belum ada.</div>') + '</div>');
+  h += '</div><div class="col">';
   h += sec('Sudah lewat', '<div class="card">' + (lalu.length ? lalu.map(baris).join('') : '<div class="empty">Belum ada.</div>') + '</div>');
-  return h;
+  return h + '</div></div>';
 }
 
 function bukaEvent(id) { DETAIL = id; tampil('event'); }
@@ -337,7 +367,7 @@ function vDetailEvent() {
       '<div style="position:relative;height:18px"><div style="position:absolute;left:' + pctL + '%;transform:translateX(-50%);top:2px;font-size:11px;color:var(--muted)">▲ ' + r.bepLapangan + '</div></div>' +
       '<div class="meta">' + r.bepLapangan + ' lembar menutup biaya lapangan · ' + r.bepTotal + ' lembar termasuk alokasi</div></div>';
   }
-  h += sec('Keuangan', hk);
+  h += '<div class="cols"><div class="col">' + sec('Keuangan', hk);
 
   if (lap) {
     var lp = '<div class="card pad"><table>' +
@@ -356,8 +386,9 @@ function vDetailEvent() {
     if (Math.abs(r.omzet - r.masuk) > 0) lp += '<div style="margin-top:8px">' + notice('', 'Omzet laporan ' + rp(r.omzet) + ' ≠ pemasukan di Kas ' + rp(r.masuk) + '. Pastikan penjualan sudah dicatat.') + '</div>';
     h += sec('Laporan produksi', lp);
   }
+  h += '</div><div class="col">';
   h += sec('Transaksi', '<div class="card">' + (r.kas.length ? r.kas.map(barisKas).join('') : '<div class="empty">Belum ada catatan kas untuk event ini.</div>') + '</div>');
-  return h;
+  return h + '</div></div>';
 }
 
 function barisKas(k) {
@@ -374,13 +405,12 @@ function vKas() {
   var setoran = sum(list.filter(function (k) { return k.jenis === 'Masuk' && k.kategori === 'Setoran Owner'; }), function (k) { return k.nominal; });
   var keluar = sum(list.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
   var saldo = saldoKas();
-  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Kas</div><button class="btn sm" onclick="formKas()">+ Catat</button></div>';
-  h += '<div class="hero" style="margin-top:0"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div></div>';
-  h += '<div class="bar"><select class="plain" onchange="FILTER.kas=this.value;tampil(\'kas\')"><option value="">Semua bulan</option>' +
-    bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select></div>';
+  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Kas</div><div style="display:flex;gap:8px;align-items:center"><select class="plain" onchange="FILTER.kas=this.value;tampil(\'kas\')"><option value="">Semua bulan</option>' +
+    bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select><button class="btn sm" onclick="formKas()">+ Catat</button></div></div>';
+  h += '<div class="head2"><div class="hero" style="margin-top:0"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div></div>';
   h += '<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><div class="k">Pemasukan</div><div class="v pos">' + rpSingkat(masuk) + '</div></div>' +
     '<div class="stat"><div class="k">Dari owner</div><div class="v">' + rpSingkat(setoran) + '</div></div>' +
-    '<div class="stat"><div class="k">Keluar</div><div class="v">' + rpSingkat(keluar) + '</div></div></div>';
+    '<div class="stat"><div class="k">Keluar</div><div class="v">' + rpSingkat(keluar) + '</div></div></div></div>';
   h += '<div class="card">' + (list.length ? list.map(barisKas).join('') : '<div class="empty">Belum ada transaksi.</div>') + '</div>';
   return h;
 }
@@ -457,7 +487,7 @@ function bukaForm(judul, fields, rec, onSave, extra) {
       var type = {date: 'date', time: 'time', num: 'number', pct: 'number', tel: 'tel'}[f.t] || 'text';
       inp = '<input name="' + f.n + '" type="' + type + '"' + (type === 'number' ? ' inputmode="decimal" step="any"' : '') + ' value="' + esc(v) + '">';
     }
-    h += '<div class="f" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
+    h += '<div class="f' + (f.t === 'area' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
   });
   h += '<div class="btns"><button class="btn" type="submit" style="flex:1">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()">Batal</button></div>' + (extra ? '<div class="btns">' + extra + '</div>' : '') + '</form>';
   document.getElementById('panel').innerHTML = h;
