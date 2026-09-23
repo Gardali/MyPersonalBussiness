@@ -283,7 +283,9 @@ function statusPill(s) { var c = {Deal: 'p-ok', Selesai: 'p-ok', Kalah: 'p-bad',
 // ---------------------------------------------------------------- perhitungan
 function P(k) { return num(D.pengaturan[k]); }
 function biayaLembar() { return (P('HARGA_KERTAS') / (P('ISI_KERTAS') || 1) + P('HARGA_TINTA') / (P('KAPASITAS_TINTA') || 1)) * (1 + P('CADANGAN_GAGAL')); }
-function alokasiEvent() { return (P('JEPRETO_BULAN') + totalPenyusutanBulanan()) / (P('EVENT_BULAN') || 1); }
+/** Target event per bulan (PENGATURAN EVENT_BULAN) — pembagi alokasi penyusutan & Jepreto per event. */
+function targetEventBulan() { return Pd('EVENT_BULAN', 4) || 1; }
+function alokasiEvent() { return (P('JEPRETO_BULAN') + totalPenyusutanBulanan()) / targetEventBulan(); }
 function bukanSetoran(k) { return k.jenis === 'Masuk' && k.kategori !== 'Setoran Owner'; }
 
 // ---- penyusutan inventaris
@@ -314,8 +316,8 @@ function hasilEvent(ev) {
   var realisasiKategori = function (kat) { return sum(kas.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === kat; }), function (k) { return k.nominal; }); };
   h.rab = { penyusutan: num(ev.rab_penyusutan), jepreto: num(ev.rab_jepreto), feeCrew: num(ev.rab_fee_crew), transport: num(ev.rab_transport), konsumsi: num(ev.rab_konsumsi) };
   h.realisasi = {
-    penyusutan: (lap && lap.realisasi_penyusutan !== '' && lap.realisasi_penyusutan != null) ? num(lap.realisasi_penyusutan) : totalPenyusutanBulanan() / (P('EVENT_BULAN') || 1),
-    jepreto: (lap && lap.realisasi_jepreto !== '' && lap.realisasi_jepreto != null) ? num(lap.realisasi_jepreto) : P('JEPRETO_BULAN') / (P('EVENT_BULAN') || 1),
+    penyusutan: (lap && lap.realisasi_penyusutan !== '' && lap.realisasi_penyusutan != null) ? num(lap.realisasi_penyusutan) : totalPenyusutanBulanan() / targetEventBulan(),
+    jepreto: (lap && lap.realisasi_jepreto !== '' && lap.realisasi_jepreto != null) ? num(lap.realisasi_jepreto) : P('JEPRETO_BULAN') / targetEventBulan(),
     feeCrew: realisasiKategori('Fee Crew'), transport: realisasiKategori('Transport'), konsumsi: realisasiKategori('Konsumsi')
   };
   h.alokasi = h.realisasi.penyusutan + h.realisasi.jepreto;
@@ -1047,9 +1049,15 @@ function vInventaris() {
   var aset = D.inventaris.filter(function (x) { return x.kategori === 'Aset'; });
   var butuhUmur = aset.filter(function (x) { return itemPenyusutan(x).butuhUmur; });
   var h = '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button><div class="bar"><div class="pagetitle" style="margin:0">Inventaris</div><button class="btn sm" onclick="formInventaris()">+ Barang</button></div>';
-  h += '<div class="stats" style="grid-template-columns:repeat(2,1fr)"><div class="stat"><div class="k">Nilai aset (' + aset.length + ' barang)</div><div class="v">' + rpSingkat(sum(aset, function (x) { return x.nilai_beli; })) + '</div></div>' +
-    '<div class="stat"><div class="k">Penyusutan/bulan</div><div class="v">' + rpSingkat(totalPenyusutanBulanan()) + '</div></div></div>';
-  h += '<div class="meta" style="margin-bottom:14px">Dihitung dari barang kategori Aset, milik Posetive, harga ≥ ' + rp(Pd('PENYUSUTAN_HARGA_MIN', 250000)) + ' (atur di PENGATURAN), dan umur manfaat terisi. Dipakai otomatis di kalkulator skema & RAB event.</div>';
+  var target = targetEventBulan();
+  h += '<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><div class="k">Nilai aset (' + aset.length + ')</div><div class="v">' + rpSingkat(sum(aset, function (x) { return x.nilai_beli; })) + '</div></div>' +
+    '<div class="stat"><div class="k">Penyusutan/bulan</div><div class="v">' + rpSingkat(totalPenyusutanBulanan()) + '</div></div>' +
+    '<div class="stat"><div class="k">Alokasi/event</div><div class="v">' + rpSingkat(totalPenyusutanBulanan() / target) + '</div></div></div>';
+  h += '<div class="card pad" style="margin-bottom:10px"><div class="bar" style="margin:0;gap:10px"><label for="inv_target" style="font-weight:600">Target event per bulan</label>' +
+    '<div style="display:flex;gap:8px;align-items:center"><input id="inv_target" type="number" inputmode="numeric" min="1" step="1" value="' + target + '" style="width:72px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;text-align:center">' +
+    '<button class="btn sm" onclick="simpanTargetEvent(this)">Simpan</button></div></div>' +
+    '<div class="meta" style="margin-top:8px">Alokasi per event = ' + rp(totalPenyusutanBulanan()) + ' ÷ ' + target + ' event = <b>' + rp(totalPenyusutanBulanan() / target) + '</b>. Dipakai untuk RAB event baru, kalkulator skema, dan event yang belum dilaporkan; event yang sudah ada laporannya tetap terkunci.</div></div>';
+  h += '<div class="meta" style="margin-bottom:14px">Dihitung dari barang kategori Aset, milik Posetive, harga ≥ ' + rp(Pd('PENYUSUTAN_HARGA_MIN', 250000)) + ' (atur di PENGATURAN), dan umur manfaat terisi.</div>';
   if (butuhUmur.length) h += notice('', '<b>' + butuhUmur.length + ' aset</b> di atas harga minimal belum diisi umur manfaat, belum ikut dihitung penyusutan: ' + butuhUmur.map(function (x) { return esc(x.nama); }).join(', ') + '.');
   h += '<div class="chips" style="margin-bottom:14px">' + [['', 'Semua'], ['Aset', 'Aset'], ['Barang Habis Pakai', 'Habis Pakai']].map(function (c) {
     return '<button class="chip ' + (c[0] === f ? 'on' : '') + '" onclick="FILTER.inventaris=\'' + c[0] + '\';tampil(\'inventaris\')">' + c[1] + '</button>';
@@ -1058,10 +1066,17 @@ function vInventaris() {
     var p = itemPenyusutan(x), pinjam = x.pemilik && x.pemilik !== 'Posetive';
     var sub = esc(x.kategori || '—') + (x.jumlah ? ' · ' + x.jumlah + ' ' + esc(x.satuan || '') : '') + (pinjam ? ' · pinjaman ' + esc(x.pemilik) : '');
     var end = x.nilai_beli ? rp(x.nilai_beli) : '';
-    if (p.umur) end += '<div class="s">' + rp(p.bulanan) + '/bln' + (p.aktif ? '' : ' · lunas susut') + ' · buku ' + rp(p.nilaiBuku) + '</div>';
+    if (p.umur) end += '<div class="s">' + (p.aktif ? rp(p.bulanan) + '/bln · ' + rp(p.bulanan / target) + '/event' : 'lunas susut') + '</div><div class="s">buku ' + rp(p.nilaiBuku) + '</div>';
     return item({t: esc(x.nama) + (x.kondisi && x.kondisi !== 'Baik' ? ' <span class="pill p-warn">' + esc(x.kondisi) + '</span>' : ''), s: sub, end: end, on: "formInventaris('" + x.id_alat + "')"});
   }).join('') : '<div class="empty">Belum ada barang.</div>') + '</div>';
   return h;
+}
+function simpanTargetEvent(btn) {
+  var n = Math.round(Number(document.getElementById('inv_target').value));
+  if (!(n >= 1)) { toast('Target minimal 1 event per bulan'); return; }
+  btn.disabled = true; btn.textContent = 'Menyimpan…';
+  panggil('simpanPengaturan', 'EVENT_BULAN', n).then(function () { toast('Target ' + n + ' event/bulan tersimpan'); return muat(true); })
+    .catch(function (e) { btn.disabled = false; btn.textContent = 'Simpan'; toast('Gagal: ' + (e && e.message || e)); });
 }
 var F_INVENTARIS = [
   {n: 'nama', l: 'Nama barang', wajib: 1},
@@ -1348,8 +1363,8 @@ var F_EVENT = [
   {n: 'jumlah_crew', l: 'Jumlah crew', t: 'num'}, {n: 'penanggung_jawab', l: 'Penanggung jawab'}, {n: 'tim', l: 'Tim'},
   {n: 'folder_drive', l: 'Folder Drive'},
   {g: 'RAB (Rencana Anggaran Biaya)'},
-  {n: 'rab_penyusutan', l: 'Alokasi penyusutan (Rp) — saran dari Inventaris ÷ target event/bulan', t: 'num', def: function () { return Math.round(totalPenyusutanBulanan() / (Pd('EVENT_BULAN', 4))); }},
-  {n: 'rab_jepreto', l: 'Alokasi langganan Jepreto (Rp) — saran dari PENGATURAN ÷ target event/bulan', t: 'num', def: function () { return Math.round(P('JEPRETO_BULAN') / (Pd('EVENT_BULAN', 4))); }},
+  {n: 'rab_penyusutan', l: 'Alokasi penyusutan (Rp) — saran dari Inventaris ÷ target event/bulan', t: 'num', def: function () { return Math.round(totalPenyusutanBulanan() / targetEventBulan()); }},
+  {n: 'rab_jepreto', l: 'Alokasi langganan Jepreto (Rp) — saran dari PENGATURAN ÷ target event/bulan', t: 'num', def: function () { return Math.round(P('JEPRETO_BULAN') / targetEventBulan()); }},
   {n: 'rab_fee_crew', l: 'Fee crew (Rp)', t: 'num'}, {n: 'rab_transport', l: 'Transport (Rp)', t: 'num'}, {n: 'rab_konsumsi', l: 'Konsumsi (Rp)', t: 'num'},
   {n: 'catatan', l: 'Catatan', t: 'area'}
 ];
@@ -1488,8 +1503,8 @@ function formLaporan(idEvent) {
   }
   bukaForm('Laporan ' + idEvent, F_LAPORAN, l, function (r) {
     r.id_event = idEvent;
-    r.realisasi_penyusutan = totalPenyusutanBulanan() / (P('EVENT_BULAN') || 1);
-    r.realisasi_jepreto = P('JEPRETO_BULAN') / (P('EVENT_BULAN') || 1);
+    r.realisasi_penyusutan = totalPenyusutanBulanan() / targetEventBulan();
+    r.realisasi_jepreto = P('JEPRETO_BULAN') / targetEventBulan();
     return panggil('simpanLaporan', r);
   }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto ikut terkunci sesuai kondisi Inventaris saat ini — perubahan Inventaris berikutnya tidak akan mengubah angka event ini lagi. Admin QRIS & admin pencairan otomatis tercatat sebagai transaksi Kas Keluar (sudah termasuk di "Biaya langsung"), tidak perlu dicatat manual lagi di Kas.</div>');
 }

@@ -292,6 +292,25 @@ function deleteRecord(tab, id) {
   }
 }
 
+// Pengaturan yang boleh diubah langsung dari aplikasi (sisanya tetap diubah di tab PENGATURAN).
+var PENGATURAN_APP = {
+  EVENT_BULAN: ['event', 'Target event per bulan (dasar alokasi Jepreto & penyusutan)']
+};
+/** Mengubah nilai satu pengaturan; baris dibuat bila belum ada. */
+function simpanPengaturan(kunci, nilai) {
+  var info = PENGATURAN_APP[kunci];
+  if (!info) throw new Error('Pengaturan ' + kunci + ' hanya bisa diubah di tab PENGATURAN.');
+  var n = Number(nilai);
+  if (!(n > 0)) throw new Error('Nilai harus angka lebih dari 0.');
+  var sh = sheet_('PENGATURAN'), values = sh.getDataRange().getValues();
+  var col = values[0].map(String).indexOf('nilai') + 1;
+  for (var i = 1; i < values.length; i++) {
+    if (String(values[i][0]) === kunci) { sh.getRange(i + 1, col).setValue(n); return n; }
+  }
+  sh.appendRow([kunci, n, info[0], info[1]]);
+  return n;
+}
+
 /** Prospek jadi deal: buat event baru dari data pipeline, lalu tandai pipeline Deal + kode event. */
 function dealKeEvent(pipelineId) {
   var p = readTab_('PIPELINE').filter(function (r) { return r.id === pipelineId; })[0];
