@@ -1,0 +1,101 @@
+<script>
+// Posetive — halaman Pipeline, kalkulator skema, dan form prospek.
+function vPipeline() {
+  var f = FILTER.pipeline, now = D.hariIni;
+  var list = D.pipeline.filter(function (p) {
+    return f === 'Semua' || (f === 'Aktif' && aktif(p)) || (f === 'Deal' && p.status === 'Deal') || (f === 'Kalah/Batal' && (p.status === 'Kalah' || p.status === 'Batal'));
+  }).sort(function (a, b) { return String(a.follow_up || '9') < String(b.follow_up || '9') ? -1 : 1; });
+  var nilai = sum(D.pipeline.filter(aktif), function (p) { return p.harga_deal || p.harga_penawaran; });
+  var h = '<div class="bar" style="margin-bottom:6px"><div class="pagetitle" style="margin:0">Pipeline</div><div style="display:flex;gap:8px"><button class="btn sm ghost" onclick="bukaKalkulator()">Kalkulator</button><button class="btn sm" onclick="formPipeline()">+ Prospek</button></div></div>';
+  h += '<div class="meta" style="margin-bottom:14px">' + D.pipeline.filter(aktif).length + ' prospek aktif' + (nilai ? ' · nilai ' + rp(nilai) : '') + '</div>';
+  h += '<div class="chips" style="margin-bottom:14px">' + ['Aktif', 'Deal', 'Kalah/Batal', 'Semua'].map(function (c) {
+    return '<button class="chip ' + (c === f ? 'on' : '') + '" onclick="FILTER.pipeline=\'' + c + '\';tampil(\'pipeline\')">' + c + '</button>';
+  }).join('') + '</div>';
+  h += '<div class="card">' + (list.length ? list.map(function (p) {
+    var late = aktif(p) && p.follow_up && p.follow_up < now, harga = num(p.harga_deal || p.harga_penawaran);
+    var acara = p.referensi || p.jenis_acara || 'Prospek';
+    var sub = esc(p.nama_klien || '—') + (p.referensi && p.jenis_acara ? ' · ' + esc(p.jenis_acara) : '') + (p.tanggal_event ? ' · ' + tgl(p.tanggal_event) : '');
+    if (aktif(p) && p.follow_up) sub += '<br><span class="' + (late ? 'neg' : '') + '">Follow-up ' + tgl(p.follow_up) + (late ? ' · terlewat' : '') + '</span>';
+    return item({lead: '<div class="av">' + inisial(acara) + '</div>', t: esc(acara), s: sub, end: waBtn(p.kontak) + statusPill(p.status) + (function () { var e = aktif(p) ? estimasiPipeline(p) : null; return e ? '<div class="s" style="margin-top:3px">' + pillStatus(e.status) + ' ' + rpSingkat(e.laba) + '</div>' : (harga ? '<div class="s">' + rpSingkat(harga) + '</div>' : ''); })(), on: "formPipeline('" + p.id + "')"});
+  }).join('') : '<div class="empty">Tidak ada prospek di sini.</div>') + '</div>';
+  var kalah = D.pipeline.filter(function (p) { return p.status === 'Kalah' || p.status === 'Batal'; });
+  if (kalah.length) {
+    var al = {}; kalah.forEach(function (p) { var k = p.alasan_kalah || 'Tidak diisi'; al[k] = (al[k] || 0) + 1; });
+    h += '<div style="height:22px"></div>' + sec('Alasan kalah / batal', '<div class="card">' + Object.keys(al).map(function (k) { return item({t: esc(k), end: al[k]}); }).join('') + '</div>');
+  }
+  return h;
+}
+
+var KALK = {sesi: 30, crew: '', harga: ''};
+function bukaKalkulator() {
+  var h = '<div class="grab"></div><h2>Kalkulator skema</h2><div class="meta" style="margin-bottom:12px">Bandingkan semua skema untuk perkiraan jumlah sesi yang sama. Angka harga & biaya dari tab PENGATURAN.</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:0 10px">' +
+    '<div class="f"><label>Perkiraan sesi</label><input id="k_sesi" type="number" inputmode="numeric" value="' + esc(KALK.sesi) + '"></div>' +
+    '<div class="f"><label>Jumlah crew</label><input id="k_crew" type="number" inputmode="numeric" placeholder="' + Pd('CREW_DEFAULT', 2) + '" value="' + esc(KALK.crew) + '"></div>' +
+    '<div class="f"><label>Harga kontrak (Rp)</label><input id="k_harga" type="number" inputmode="numeric" placeholder="opsional" value="' + esc(KALK.harga) + '"></div></div>' +
+    '<div id="k_hasil"></div><div class="btns"><button class="btn ghost" type="button" onclick="tutupForm()" style="flex:1">Tutup</button></div>';
+  document.getElementById('panel').innerHTML = h;
+  document.getElementById('sheet').classList.add('open');
+  ['k_sesi', 'k_crew', 'k_harga'].forEach(function (id) { document.getElementById(id).addEventListener('input', hitungKalkulator); });
+  hitungKalkulator();
+}
+function hitungKalkulator() {
+  KALK = {sesi: document.getElementById('k_sesi').value, crew: document.getElementById('k_crew').value, harga: document.getElementById('k_harga').value};
+  var rows = SKEMA_SEMUA.filter(function (sk) { return sk !== 'Kontrak Klien' || num(KALK.harga) > 0; })
+    .map(function (sk) { return hitungSkema({skema: sk, sesi: KALK.sesi, crew: KALK.crew, harga: KALK.harga}); })
+    .sort(function (a, b) { return b.laba - a.laba; });
+  var r0 = rows[0] || {};
+  var h = '<div class="meta" style="margin:4px 0 8px">Biaya tetap per event: bahan ' + rp(biayaLembar()) + '/sesi · lapangan ' + rp(r0.lapangan) + ' (' + r0.crew + ' crew + transport) · alokasi ' + rp(r0.alokasi) + '</div><div class="card">';
+  h += rows.map(function (r) {
+    return item({t: esc(r.skema), s: esc(r.ket) + ' · omzet ' + rpSingkat(r.pendapatan) + (r.panitia ? ' · panitia ' + rpSingkat(r.panitia) : '') + (r.impas !== undefined ? ' · impas ' + (r.impas === null ? '>1000' : r.impas) + ' sesi' : ''),
+      end: '<span class="' + cls(r.laba) + '">' + rp(r.laba) + '</span><div class="s" style="margin-top:3px">' + pillStatus(r.status) + '</div>'});
+  }).join('') + '</div><div class="meta" style="margin-top:8px"><b>AMAN</b> = untung setelah alokasi Jepreto & penyusutan. <b>TIPIS</b> = biaya lapangan tertutup, alokasi belum. <b>RUGI</b> = biaya lapangan pun tidak tertutup.</div>';
+  document.getElementById('k_hasil').innerHTML = h;
+}
+
+function previewPipeline(r) {
+  var sk = skemaDari(r), el = document.getElementById('preview'); if (!el) return;
+  if (!sk) { el.innerHTML = '<div class="meta">Pilih model pendapatan (dan skema) untuk melihat perkiraan laba.</div>'; return; }
+  if (sk === 'Kontrak Klien' ? !num(r.harga_deal || r.harga_penawaran) : !num(r.estimasi_sesi)) { el.innerHTML = '<div class="meta">Isi ' + (sk === 'Kontrak Klien' ? 'harga penawaran/deal' : 'estimasi sesi') + ' untuk melihat perkiraan laba.</div>'; return; }
+  var e = hitungSkema({skema: sk, sesi: r.estimasi_sesi, param: r.parameter_skema, harga: r.harga_deal || r.harga_penawaran});
+  el.innerHTML = '<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center"><div class="meta">Perkiraan laba · ' + esc(sk) + '</div>' + pillStatus(e.status) + '</div>' +
+    '<div class="big ' + cls(e.laba) + '" style="font-size:24px">' + rp(e.laba) + '</div><table>' +
+    '<tr><td>Omzet' + (e.ket ? ' <span class="meta">(' + esc(e.ket) + ')</span>' : '') + '</td><td class="r">' + rp(e.pendapatan) + '</td></tr>' +
+    (e.panitia ? '<tr><td>Ke panitia</td><td class="r">−' + rp(e.panitia) + '</td></tr>' : '') +
+    '<tr><td>Bahan (' + e.sesi + ' sesi)</td><td class="r">−' + rp(e.bahan) + '</td></tr>' +
+    '<tr><td>Lapangan (' + e.crew + ' crew + transport)</td><td class="r">−' + rp(e.lapangan) + '</td></tr>' +
+    '<tr><td>Alokasi Jepreto + penyusutan</td><td class="r">−' + rp(e.alokasi) + '</td></tr></table>' +
+    (e.impas !== undefined ? '<div class="meta" style="margin-top:6px">Impas di ' + (e.impas === null ? 'lebih dari 1000' : e.impas) + ' sesi.</div>' : '') + '</div>';
+}
+
+var F_PIPELINE = [
+  {n: 'nama_klien', l: 'Nama klien / PIC', wajib: 1}, {n: 'kontak', l: 'Kontak (WA)', t: 'tel'},
+  {n: 'referensi', l: 'Nama acara / referensi'}, {n: 'status', l: 'Status', t: 'sel', o: pil('Status Pipeline'), def: 'Prospek'},
+  {n: 'alasan_kalah', l: 'Alasan kalah / batal', t: 'sel', o: pil('Alasan Kalah'), show: function (r) { return r.status === 'Kalah' || r.status === 'Batal'; }},
+  {n: 'follow_up', l: 'Follow-up berikutnya', t: 'date'},
+  {g: 'Acara'}, {n: 'jenis_acara', l: 'Jenis acara', t: 'sel', o: pil('Jenis Acara')}, {n: 'tanggal_event', l: 'Tanggal acara', t: 'date'},
+  {n: 'kota', l: 'Kota'}, {n: 'luar_kota', l: 'Luar kota?', t: 'sel', o: pil('Ya/Tidak')},
+  {n: 'indoor_outdoor', l: 'Indoor / outdoor', t: 'sel', o: pil('Indoor/Outdoor')}, {n: 'estimasi_tamu', l: 'Estimasi tamu', t: 'num'},
+  {g: 'Penawaran'}, {n: 'model_pendapatan', l: 'Model pendapatan', t: 'sel', o: pil('Model Pendapatan')},
+  {n: 'skema', l: 'Skema kerja sama', t: 'sel', o: pil('Skema'), show: function (r) { return r.model_pendapatan === 'Kerja Sama Panitia'; }},
+  {n: 'parameter_skema', l: 'Parameter skema', show: function (r) { return r.model_pendapatan === 'Kerja Sama Panitia'; }},
+  {n: 'estimasi_sesi', l: 'Estimasi sesi', t: 'num'}, {n: 'paket', l: 'Paket'},
+  {n: 'harga_penawaran', l: 'Harga penawaran (Rp)', t: 'num'}, {n: 'harga_deal', l: 'Harga deal (Rp)', t: 'num'},
+  {g: 'Asal'}, {n: 'sumber', l: 'Sumber', t: 'sel', o: pil('Sumber')}, {n: 'kanal', l: 'Kanal', t: 'sel', o: pil('Kanal')},
+  {n: 'tanggal_masuk', l: 'Tanggal masuk', t: 'date', def: 'today'}, {n: 'catatan', l: 'Catatan', t: 'area'}
+];
+function formPipeline(id) {
+  var p = id ? cari(D.pipeline, 'id', id) : {};
+  var extra = '';
+  if (id && !p.id_event && p.status !== 'Kalah' && p.status !== 'Batal') extra += '<button class="btn ghost" type="button" onclick="jadiEvent(\'' + id + '\')">Deal → buat event</button>';
+  if (p.id_event) extra += '<button class="btn ghost" type="button" onclick="tutupForm();bukaEvent(\'' + p.id_event + '\')">Lihat ' + esc(p.id_event) + '</button>';
+  if (id) extra += '<button class="btn danger" type="button" onclick="hapus(\'PIPELINE\',\'' + id + '\')">Hapus</button>';
+  bukaForm(id ? 'Prospek ' + id : 'Prospek baru', F_PIPELINE, p, function (r) { return panggil('saveRecord', 'PIPELINE', r); }, extra, previewPipeline);
+}
+function jadiEvent(id) {
+  var r = bacaForm(); delete r._row;
+  panggil('saveRecord', 'PIPELINE', r).then(function () { return panggil('dealKeEvent', id); })
+    .then(function (ev) { tutupForm(); toast('Event ' + ev + ' dibuat'); VIEW = 'event'; DETAIL = ev; return muat(true); })
+    .catch(function (e) { toast('Gagal: ' + (e && e.message || e)); });
+}
+</script>

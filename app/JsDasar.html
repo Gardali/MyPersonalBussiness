@@ -1,0 +1,344 @@
+<script>
+// Posetive — status, ikon & menu, utilitas, komponen, dan semua perhitungan (HPP, tagihan, fee, bentrok, stok, skema).
+var D = null, VIEW = 'beranda', FILTER = {pipeline: 'Aktif', kas: '', kasSumber: '', inventaris: ''}, DETAIL = null;
+var NAMA = 'Garda', CEK_SEMUA = false;
+
+// ---------------------------------------------------------------- ikon
+var IC = {
+  home: '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+  funnel: '<path d="M4 5h16l-6 8v5l-4 2v-7z"/>',
+  cal: '<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  wallet: '<rect x="3" y="6" width="18" height="14" rx="3"/><path d="M3 10h18M16 15h2"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  box: '<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7M12 11v10"/>',
+  calc: '<rect x="5" y="3" width="14" height="18" rx="3"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/>',
+  chat: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>',
+  nota: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>',
+  camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>'
+};
+function ikon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC[n] + '</svg>'; }
+document.getElementById('nav').innerHTML = '<div class="brand">Posetive<small>Photobooth</small></div>' + [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas'], ['stok', 'box', 'Stok'], ['lainnya', 'gear', 'Lainnya']]
+  .map(function (x) { return '<button data-v="' + x[0] + '"' + (x[0] === 'beranda' ? ' class="on"' : '') + '>' + ikon(x[1]) + x[2] + '</button>'; }).join('');
+
+// ---------------------------------------------------------------- utilitas
+var BLN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+var HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+function rp(n) { n = Math.round(Number(n) || 0); return (n < 0 ? '−Rp' : 'Rp') + Math.abs(n).toLocaleString('id-ID'); }
+function rpSingkat(n) { n = Number(n) || 0; var a = Math.abs(n), s = n < 0 ? '−' : ''; if (a >= 1e6) return s + 'Rp' + (a / 1e6).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' jt'; if (a >= 1e3) return s + 'Rp' + Math.round(a / 1e3) + ' rb'; return rp(n); }
+function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function tgl(s) { if (!s) return '—'; var p = String(s).split('-'); if (p.length !== 3) return esc(s); return Number(p[2]) + ' ' + BLN[Number(p[1]) - 1] + ' ' + p[0]; }
+function hari(s) { var p = String(s).split('-'); return HARI[new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).getDay()]; }
+function selisihHari(a, b) { return Math.round((Date.parse(a) - Date.parse(b)) / 864e5); }
+function sum(arr, f) { return arr.reduce(function (t, x) { return t + num(f(x)); }, 0); }
+function toast(msg) { var t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; setTimeout(function () { t.style.display = 'none'; }, 2500); }
+function cls(n) { return n < 0 ? 'neg' : n > 0 ? 'pos' : ''; }
+function inisial(s) { return esc(String(s || '?').replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean).slice(0, 2).map(function (w) { return w[0]; }).join('').toUpperCase() || '?'); }
+var WARNA_AVATAR = ['#D98A4E', '#4E8A7A', '#6E5FA8', '#B25A7A', '#4E7AA8', '#8A9A4E'];
+function warnaAvatar(s) { var n = 0; String(s || '').split('').forEach(function (c) { n += c.charCodeAt(0); }); return WARNA_AVATAR[n % WARNA_AVATAR.length]; }
+function waLink(kontak) {
+  var d = String(kontak || '').replace(/\D/g, '');
+  if (!d) return null;
+  if (d.charAt(0) === '0') d = d.slice(1);
+  if (d.slice(0, 2) !== '62') d = '62' + d;
+  return 'https://wa.me/' + d;
+}
+function panggil(fn) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  return new Promise(function (ok, gagal) { var r = google.script.run.withSuccessHandler(ok).withFailureHandler(gagal); r[fn].apply(r, args); });
+}
+
+// ---------------------------------------------------------------- komponen
+function dt(s) { if (!s) return '<div class="dt"><b>?</b><span>—</span></div>'; var p = String(s).split('-'); return '<div class="dt"><b>' + Number(p[2]) + '</b><span>' + BLN[Number(p[1]) - 1] + '</span></div>'; }
+function item(o) {
+  return '<div class="it' + (o.on ? ' tap" onclick="' + o.on : '') + '">' + (o.lead || '') + '<div class="mid"><div class="t">' + o.t + '</div>' + (o.s ? '<div class="s">' + o.s + '</div>' : '') + '</div>' + (o.end !== undefined ? '<div class="end">' + o.end + '</div>' : '') + '</div>';
+}
+function sec(judul, isi, aksi) { return '<div class="sec"><div class="sec-h"><h2>' + judul + '</h2>' + (aksi || '') + '</div>' + isi + '</div>'; }
+function notice(jenis, html) { return '<div class="notice ' + jenis + '"><i></i><div>' + html + '</div></div>'; }
+function waBtn(kontak) {
+  var url = waLink(kontak);
+  return url ? '<a class="wa" href="' + url + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Chat WhatsApp">' + ikon('chat') + '</a>' : '';
+}
+function statusPill(s) { var c = {Deal: 'p-ok', Selesai: 'p-ok', Kalah: 'p-bad', Batal: 'p-bad', Negosiasi: 'p-acc', 'Penawaran Dikirim': 'p-acc', Terkonfirmasi: 'p-acc'}[s] || ''; return '<span class="pill ' + c + '">' + esc(s || '—') + '</span>'; }
+
+// ---------------------------------------------------------------- perhitungan
+function P(k) { return num(D.pengaturan[k]); }
+function biayaLembar() { return (P('HARGA_KERTAS') / (P('ISI_KERTAS') || 1) + P('HARGA_TINTA') / (P('KAPASITAS_TINTA') || 1)) * (1 + P('CADANGAN_GAGAL')); }
+/** Target event per bulan (PENGATURAN EVENT_BULAN) — pembagi alokasi penyusutan & Jepreto per event. */
+function targetEventBulan() { return Pd('EVENT_BULAN', 4) || 1; }
+function alokasiEvent() { return (P('JEPRETO_BULAN') + totalPenyusutanBulanan()) / targetEventBulan(); }
+function bukanSetoran(k) { return k.jenis === 'Masuk' && k.kategori !== 'Setoran Owner'; }
+
+// ---- penyusutan inventaris
+function bulanAntara(a, b) {
+  var pa = String(a).split('-'), pb = String(b).split('-');
+  var m = (Number(pb[0]) - Number(pa[0])) * 12 + (Number(pb[1]) - Number(pa[1])) - (Number(pb[2]) < Number(pa[2]) ? 1 : 0);
+  return Math.max(0, m);
+}
+/** Penyusutan garis lurus: hanya barang kategori Aset, milik Posetive, harga ≥ PENYUSUTAN_HARGA_MIN, dan umur manfaat terisi. */
+function itemPenyusutan(x) {
+  var layak = x.kategori === 'Aset' && (!x.pemilik || x.pemilik === 'Posetive') && num(x.nilai_beli) >= Pd('PENYUSUTAN_HARGA_MIN', 250000);
+  if (!layak) return {layak: false, bulanan: 0};
+  if (!num(x.umur_manfaat_bulan)) return {layak: true, butuhUmur: true, bulanan: 0};
+  var nilai = num(x.nilai_beli), umur = num(x.umur_manfaat_bulan), elapsed = x.tanggal_masuk ? bulanAntara(x.tanggal_masuk, D.hariIni) : 0;
+  var aktif = elapsed < umur, perBulan = nilai / umur;
+  return {layak: true, bulanan: aktif ? perBulan : 0, aktif: aktif, elapsed: elapsed, umur: umur, nilaiBuku: Math.max(0, nilai - perBulan * Math.min(elapsed, umur))};
+}
+function totalPenyusutanBulanan() { return sum(D.inventaris, function (x) { return itemPenyusutan(x).bulanan; }); }
+
+function hasilEvent(ev) {
+  var kas = D.kas.filter(function (k) { return k.id_event === ev.id_event; });
+  var lap = D.laporan.filter(function (l) { return l.id_event === ev.id_event; })[0] || null;
+  var terkunci = function (k) { return lap && lap[k] !== '' && lap[k] != null; };
+  // HPP terkunci di laporan (saat laporan disimpan / sebelum HPP diubah); event tanpa laporan memakai HPP terbaru.
+  var h = {kas: kas, lap: lap, bl: terkunci('realisasi_biaya_lembar') ? num(lap.realisasi_biaya_lembar) : biayaLembar(),
+    biayaBuku: terkunci('realisasi_biaya_buku') ? num(lap.realisasi_biaya_buku) : P('BIAYA_BUKU')};
+  h.masuk = sum(kas.filter(bukanSetoran), function (k) { return k.nominal; });
+  h.keluar = sum(kas.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
+  h.tercetak = lap ? Math.max(0, num(lap.counter_akhir) - num(lap.counter_awal)) : 0;
+  h.bahan = h.tercetak * h.bl + (lap ? (num(lap.grad_book_terjual) + num(lap.buku_rusak)) * h.biayaBuku : 0);
+  var realisasiKategori = function (kat) { return sum(kas.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === kat; }), function (k) { return k.nominal; }); };
+  h.rab = { penyusutan: num(ev.rab_penyusutan), jepreto: num(ev.rab_jepreto), feeCrew: num(ev.rab_fee_crew), transport: num(ev.rab_transport), konsumsi: num(ev.rab_konsumsi) };
+  h.realisasi = {
+    penyusutan: (lap && lap.realisasi_penyusutan !== '' && lap.realisasi_penyusutan != null) ? num(lap.realisasi_penyusutan) : totalPenyusutanBulanan() / targetEventBulan(),
+    jepreto: (lap && lap.realisasi_jepreto !== '' && lap.realisasi_jepreto != null) ? num(lap.realisasi_jepreto) : P('JEPRETO_BULAN') / targetEventBulan(),
+    feeCrew: realisasiKategori('Fee Crew'), transport: realisasiKategori('Transport'), konsumsi: realisasiKategori('Konsumsi')
+  };
+  h.alokasi = h.realisasi.penyusutan + h.realisasi.jepreto;
+  h.labaKotor = h.masuk - h.keluar - h.bahan;
+  h.labaBersih = h.labaKotor - h.alokasi;
+  h.untungLembar = P('HARGA_4R') - h.bl;
+  h.bepLapangan = h.untungLembar > 0 ? Math.ceil((h.keluar) / h.untungLembar) : null;
+  h.bepTotal = h.untungLembar > 0 ? Math.ceil((h.keluar + h.alokasi) / h.untungLembar) : null;
+  if (lap) {
+    var adaSplit = lap.sesi_terjual !== '' && lap.sesi_terjual != null;
+    h.sesiTerjual = adaSplit ? num(lap.sesi_terjual) : num(lap.foto_4r_terjual);
+    // Lembar tambahan = strip tambahan (produk yang sama, harga HARGA_STRIP). strip_terjual hanya ada di laporan lama.
+    h.lembarTambahan = num(lap.lembar_tambahan) + Math.ceil(num(lap.strip_terjual) * (P('LEMBAR_PER_STRIP') || 1));
+    h.omzet = h.sesiTerjual * P('HARGA_4R') + h.lembarTambahan * P('HARGA_STRIP') + num(lap.grad_book_terjual) * P('HARGA_BUKU') -
+      num(lap.grup_potongan) * P('POTONGAN_GRUP');
+    h.diterima = num(lap.tunai_dihitung) - num(lap.modal_kembalian) + num(lap.qris_transfer);
+    h.selisihKas = h.diterima - h.omzet;
+    h.lembarTerjual = h.sesiTerjual + h.lembarTambahan + num(lap.grad_book_terjual);
+    h.selisihLembar = h.tercetak - (h.lembarTerjual + num(lap.lembar_uji_bonus) + num(lap.lembar_gagal));
+  }
+  if (ev.model_pendapatan === 'Kontrak Klien' && num(ev.nilai_kontrak) > 0) h.piutang = num(ev.nilai_kontrak) - h.masuk;
+  return h;
+}
+
+// ---- tagihan klien (DP → pelunasan)
+/**
+ * Tahap tagihan kontrak klien. Pembayaran = semua kas Masuk event (selain setoran owner).
+ * Bila DP diisi dan pembayaran belum mencapai DP → tahap DP; selain itu tahap Pelunasan
+ * (jatuh tempo default = tanggal event). null bila bukan kontrak klien.
+ */
+function tagihan(e, h) {
+  if (e.model_pendapatan !== 'Kontrak Klien' || !num(e.nilai_kontrak) || e.status === 'Batal') return null;
+  h = h || hasilEvent(e);
+  var kontrak = num(e.nilai_kontrak), dp = Math.min(num(e.dp_nominal), kontrak), bayar = h.masuk;
+  var t = {kontrak: kontrak, dp: dp, dibayar: bayar, kurang: 0, tahap: 'Lunas', jatuh: ''};
+  if (bayar < kontrak) {
+    var isDp = dp > 0 && bayar < dp;
+    t.tahap = isDp ? 'DP' : 'Pelunasan';
+    t.kurang = (isDp ? dp : kontrak) - bayar;
+    t.jatuh = isDp ? (e.jatuh_tempo_dp || '') : (e.jatuh_tempo_pelunasan || e.tanggal || '');
+  }
+  t.sisaHari = t.jatuh ? selisihHari(t.jatuh, D.hariIni) : null;
+  return t;
+}
+function teksJatuhTempo(t) {
+  if (t.sisaHari === null) return 'belum ada jatuh tempo';
+  return t.sisaHari < 0 ? 'terlambat ' + (-t.sisaHari) + ' hari' : t.sisaHari === 0 ? 'jatuh tempo hari ini' : 'jatuh tempo ' + tgl(t.jatuh);
+}
+/** Tagihan yang jatuh tempo ≤ 3 hari lagi atau sudah terlambat. */
+function tagihanMendesak() {
+  return D.event.map(function (e) { return {e: e, t: tagihan(e)}; })
+    .filter(function (x) { return x.t && x.t.kurang > 0 && x.t.sisaHari !== null && x.t.sisaHari <= 3; })
+    .sort(function (a, b) { return a.t.jatuh < b.t.jatuh ? -1 : 1; });
+}
+
+// ---- fee crew
+function namaCrew(id) { var c = cari(D.crew, 'id_crew', id); return c ? (c.nama_panggilan || c.nama_lengkap) : id; }
+/** Fee dianggap lunas hanya bila baris KAS pembayarannya masih ada. */
+function feeLunas(t) { return !!(t.id_kas && cari(D.kas, 'id', t.id_kas)); }
+/** Penugasan yang fee-nya belum dibayar (event batal tidak dihitung). sudahLewat: hanya event sebelum hari ini. */
+function feeBelumDibayar(sudahLewat) {
+  return D.tugas.filter(function (t) {
+    var e = cari(D.event, 'id_event', t.id_event);
+    return e && e.status !== 'Batal' && !feeLunas(t) && (!sudahLewat || e.tanggal < D.hariIni);
+  });
+}
+
+// ---- crew bentrok
+function menit(jam) { var m = String(jam || '').match(/(\d{1,2})[:.](\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
+/** [mulai, selesai] dalam menit dari tengah malam; null bila jam buka kosong. Tanpa jam tutup → + DURASI_TERCAKUP. */
+function rentangEvent(e) {
+  var a = menit(e.jam_buka); if (a === null) return null;
+  var b = menit(e.jam_tutup); if (b === null) b = a + Pd('DURASI_TERCAKUP', 6) * 60;
+  return [a, b <= a ? b + 1440 : b];
+}
+/** Dua event dianggap bentrok bila tanggalnya sama dan jamnya tumpang tindih (atau salah satu belum ada jam). */
+function eventTumpang(e1, e2) {
+  if (!e1.tanggal || e1.tanggal !== e2.tanggal) return false;
+  var a = rentangEvent(e1), b = rentangEvent(e2);
+  return !a || !b || (a[0] < b[1] && b[0] < a[1]);
+}
+/** Event lain (tidak batal) tempat crew ini sudah bertugas yang bentrok dengan event e. */
+function bentrokCrew(idCrew, e) {
+  return D.tugas.filter(function (t) { return t.id_crew === idCrew && t.id_event !== e.id_event; })
+    .map(function (t) { return cari(D.event, 'id_event', t.id_event); })
+    .filter(function (x) { return x && x.status !== 'Batal' && eventTumpang(x, e); });
+}
+/** Semua crew yang bentrok di event mendatang, satu baris per crew per tanggal. */
+function semuaCrewBentrok() {
+  var out = {}, now = D.hariIni;
+  D.tugas.forEach(function (t) {
+    var e = cari(D.event, 'id_event', t.id_event);
+    if (!e || e.status === 'Batal' || e.tanggal < now) return;
+    var lain = bentrokCrew(t.id_crew, e);
+    if (!lain.length) return;
+    var k = t.id_crew + '|' + e.tanggal, o = out[k] = out[k] || {id_crew: t.id_crew, tanggal: e.tanggal, ev: {}};
+    [e].concat(lain).forEach(function (x) { o.ev[x.id_event] = x; });
+  });
+  return Object.keys(out).map(function (k) { var o = out[k]; o.ev = Object.keys(o.ev).map(function (id) { return o.ev[id]; }); return o; })
+    .sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : 1; });
+}
+
+function saldoKas() { return sum(D.kas, function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
+function saldoPosetive() { return sum(D.kas.filter(function (k) { return !k.id_event; }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
+function saldoEvent() { return sum(D.kas.filter(function (k) { return k.id_event; }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
+function perluCek() {
+  var out = [];
+  [['PIPELINE', 'id'], ['EVENT', 'id_event'], ['LAPORAN_EVENT', 'id_event'], ['KAS', 'id'], ['INVENTARIS', 'id_alat']].forEach(function (t) {
+    var key = {PIPELINE: 'pipeline', EVENT: 'event', LAPORAN_EVENT: 'laporan', KAS: 'kas', INVENTARIS: 'inventaris'}[t[0]];
+    D[key].forEach(function (r) { if (String(r.catatan || '').indexOf('CEK:') === 0) out.push({tab: t[0], id: r[t[1]], ket: String(r.catatan).slice(4).trim()}); });
+  });
+  return out;
+}
+function bentrok() {
+  var per = {};
+  D.event.filter(function (e) { return e.status !== 'Batal' && e.tanggal; }).forEach(function (e) { (per[e.tanggal] = per[e.tanggal] || []).push(e); });
+  return Object.keys(per).filter(function (t) { return per[t].length > 1; }).map(function (t) { return {tanggal: t, ev: per[t]}; });
+}
+
+
+function Pd(k, def) { var v = D.pengaturan[k]; return v === undefined || v === '' ? def : num(v); }
+
+// ---- stok
+var BAHAN = ['Kertas 4R', 'Graduation Book'];
+function stok(bahan, sampai) {
+  var urut = {Masuk: 0, Keluar: 0, 'Hitung Fisik': 1};
+  var rows = (D.mutasi || []).filter(function (m) { return m.bahan === bahan && (!sampai || m.tanggal <= sampai); })
+    .sort(function (a, b) { return a.tanggal !== b.tanggal ? (a.tanggal < b.tanggal ? -1 : 1) : (urut[a.jenis] - urut[b.jenis]) || (a.id < b.id ? -1 : 1); });
+  var n = 0, ada = rows.length > 0;
+  rows.forEach(function (m) { var j = num(m.jumlah); if (m.jenis === 'Hitung Fisik') n = j; else if (m.jenis === 'Masuk') n += j; else n -= j; });
+  return ada ? n : null;
+}
+function tintaTerakhir() {
+  var ev = {}; D.event.forEach(function (e) { ev[e.id_event] = e; });
+  var l = D.laporan.filter(function (x) { return x.tinta_terendah_persen !== '' && x.tinta_terendah_persen != null && ev[x.id_event]; })
+    .sort(function (a, b) { return ev[a.id_event].tanggal < ev[b.id_event].tanggal ? -1 : 1; }).pop();
+  return l ? {level: num(l.tinta_terendah_persen), tanggal: ev[l.id_event].tanggal, id_event: l.id_event} : null;
+}
+function kebutuhanEvent(e) {
+  var p = e.id_pipeline ? cari(D.pipeline, 'id', e.id_pipeline) : null;
+  return p && num(p.estimasi_sesi) ? num(p.estimasi_sesi) : Pd('STOK_MIN_KERTAS', 100);
+}
+function peringatanStok() {
+  var out = [], now = D.hariIni;
+  var k = stok('Kertas 4R'), b = stok('Graduation Book'), t = tintaTerakhir();
+  var next = D.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal >= now; }).sort(function (a, c) { return a.tanggal < c.tanggal ? -1 : 1; })[0];
+  if (k === null) out.push({j: '', h: '<b>Stok kertas belum pernah dihitung.</b> Buka menu Stok → Hitung fisik.'});
+  else if (next && k < kebutuhanEvent(next)) out.push({j: 'bad', h: '<b>Kertas 4R tinggal ' + k + ' lembar</b> — kurang untuk ' + esc(next.nama_event) + ' (' + tgl(next.tanggal) + ', perkiraan ' + kebutuhanEvent(next) + ' lembar).'});
+  else if (k < Pd('STOK_MIN_KERTAS', 100)) out.push({j: '', h: '<b>Kertas 4R tinggal ' + k + ' lembar</b> (minimum ' + Pd('STOK_MIN_KERTAS', 100) + ').'});
+  if (b !== null && b < Pd('STOK_MIN_BUKU', 5)) out.push({j: '', h: '<b>Graduation Book tinggal ' + b + '</b> (minimum ' + Pd('STOK_MIN_BUKU', 5) + ').'});
+  if (t && t.level <= Pd('TINTA_MIN', 0.2)) out.push({j: 'bad', h: '<b>Tinta terendah ' + Math.round(t.level * 100) + '%</b> — siapkan isi ulang sebelum event berikutnya.'});
+  return out;
+}
+
+// ---- kalkulator skema
+var SKEMA_SEMUA = ['Kontrak Klien', 'Open Booth Mandiri', 'A. Berjenjang', 'B. Persentase Omzet', 'C. Di Atas Impas', 'D. Fee Tetap', 'E. Voucher Prabayar', 'F. Bundling Peserta'];
+function tarifJenjang(sesi) {
+  var r = 0;
+  String(D.pengaturan.SKEMA_A_JENJANG || '').split(';').forEach(function (p) { var x = p.split(':'); if (x.length === 2 && sesi >= num(x[0])) r = num(x[1]); });
+  return r;
+}
+/** o: {skema, sesi, param, harga, crew}. skema = salah satu SKEMA_SEMUA. */
+function hitungSkema(o) {
+  var sesi = Math.max(0, num(o.sesi)), param = o.param === '' || o.param == null ? null : num(o.param), jual = P('HARGA_4R');
+  var r = {skema: o.skema, sesi: sesi, pendapatan: 0, panitia: 0, ket: ''};
+  switch (o.skema) {
+    case 'Kontrak Klien': r.pendapatan = num(o.harga); r.ket = 'Harga kontrak'; break;
+    case 'Open Booth Mandiri': r.pendapatan = sesi * jual; r.panitia = param || 0; r.ket = 'Sewa lapak ' + rp(r.panitia); break;
+    case 'A. Berjenjang': r.pendapatan = sesi * jual; r.panitia = sesi * tarifJenjang(sesi); r.ket = rp(tarifJenjang(sesi)) + '/sesi ke panitia'; break;
+    case 'B. Persentase Omzet': var pc = param === null ? P('SKEMA_B_PERSEN') : (param > 1 ? param / 100 : param);
+      r.pendapatan = sesi * jual; r.panitia = r.pendapatan * pc; r.ket = Math.round(pc * 100) + '% omzet ke panitia'; break;
+    case 'C. Di Atas Impas': r.pendapatan = sesi * jual; r.panitia = Math.max(0, sesi - P('SKEMA_C_BATAS')) * P('SKEMA_C_BAGIAN');
+      r.ket = rp(P('SKEMA_C_BAGIAN')) + '/sesi di atas ' + P('SKEMA_C_BATAS') + ' sesi'; break;
+    case 'D. Fee Tetap': r.pendapatan = sesi * jual; r.panitia = param === null ? P('SKEMA_D_FEE') : param; r.ket = 'Fee tetap ' + rp(r.panitia); break;
+    case 'E. Voucher Prabayar': var v = Math.max(param === null ? 0 : param, P('SKEMA_E_MIN'));
+      r.pendapatan = v * P('SKEMA_E_HARGA'); r.ket = v + ' voucher × ' + rp(P('SKEMA_E_HARGA')); break;
+    case 'F. Bundling Peserta': var q = Math.max(param === null ? 0 : param, P('SKEMA_F_MIN'));
+      r.pendapatan = q * P('SKEMA_F_HARGA'); r.ket = q + ' peserta × ' + rp(P('SKEMA_F_HARGA')); break;
+  }
+  var crew = o.crew === '' || o.crew == null ? Pd('CREW_DEFAULT', 2) : num(o.crew);
+  r.bahan = sesi * biayaLembar();
+  r.lapangan = crew * (P('FEE_CREW') + P('KONSUMSI_ORANG')) + P('TRANSPORT_STD');
+  r.alokasi = alokasiEvent();
+  r.labaLapangan = r.pendapatan - r.panitia - r.bahan - r.lapangan;
+  r.laba = r.labaLapangan - r.alokasi;
+  r.status = r.laba >= 0 ? 'AMAN' : r.labaLapangan >= 0 ? 'TIPIS' : 'RUGI';
+  r.crew = crew;
+  if (['Kontrak Klien', 'E. Voucher Prabayar', 'F. Bundling Peserta'].indexOf(o.skema) < 0 && !o.tanpaImpas) {
+    r.impas = null;
+    for (var s2 = 0; s2 <= 1000; s2++) { if (hitungSkema(Object.assign({}, o, {sesi: s2, tanpaImpas: 1})).laba >= 0) { r.impas = s2; break; } }
+  }
+  return r;
+}
+function skemaDari(rec) {
+  if (rec.model_pendapatan === 'Kontrak Klien') return 'Kontrak Klien';
+  if (rec.model_pendapatan === 'Open Booth Mandiri') return 'Open Booth Mandiri';
+  if (rec.model_pendapatan === 'Kerja Sama Panitia' && rec.skema) return rec.skema;
+  return null;
+}
+function estimasiPipeline(p) {
+  var sk = skemaDari(p); if (!sk) return null;
+  if (sk === 'Kontrak Klien' ? !num(p.harga_deal || p.harga_penawaran) : !num(p.estimasi_sesi)) return null;
+  return hitungSkema({skema: sk, sesi: p.estimasi_sesi, param: p.parameter_skema, harga: p.harga_deal || p.harga_penawaran});
+}
+function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', TIPIS: 'p-warn', RUGI: 'p-bad'}[st] + '">' + st + '</span>'; }
+
+// ---------------------------------------------------------------- tampilan
+function tampil(v) {
+  VIEW = v; if (v !== 'event') DETAIL = null;
+  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === ((v === 'laporan' || v === 'crew' || v === 'inventaris' || v === 'hpp') ? 'lainnya' : v)); });
+  var el = document.getElementById('view');
+  try {
+    el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok, lainnya: vLainnya, laporan: vLaporan, crew: vCrew, inventaris: vInventaris, hpp: vHpp}[v]();
+  } catch (err) {
+    el.innerHTML = '<div class="pagetitle">Ada yang error</div>' + notice('bad', 'Halaman ini gagal ditampilkan: <b>' + esc(err && err.message || err) + '</b>. Kirim screenshot ini ke Claude.');
+  }
+  window.scrollTo(0, 0);
+}
+function addHari(s, n) { var d = new Date(Date.parse(s) + n * 864e5); return d.toISOString().slice(0, 10); }
+function aktif(p) { return ['Deal', 'Kalah', 'Batal'].indexOf(p.status) < 0; }
+function salam() { var h = new Date().getHours(); return h < 11 ? 'Selamat pagi' : h < 15 ? 'Selamat siang' : h < 18 ? 'Selamat sore' : 'Selamat malam'; }
+
+function namaEvent(id) { var e = cari(D.event, 'id_event', id); return e ? e.nama_event + ' (' + tgl(e.tanggal) + ')' : id; }
+function kontakEvent(e) { var p = e.id_pipeline ? cari(D.pipeline, 'id', e.id_pipeline) : null; return p ? p.kontak : ''; }
+function pemilikAlat(a) { var i = a.id_alat ? cari(D.inventaris, 'id_alat', a.id_alat) : null; return i ? i.pemilik : ''; }
+function alatBelumKembali() {
+  var now = D.hariIni;
+  return D.pemakaian.filter(function (a) { var e = cari(D.event, 'id_event', a.id_event); return e && (e.tanggal < now || e.status === 'Selesai') && a.dibawa === 'Ya' && a.kembali !== 'Ya'; })
+    .map(function (a) { return Object.assign({pemilik: pemilikAlat(a)}, a); });
+}
+function pil(k) { return function () { return (D.pilihan[k] || []).map(function (v) { return [v, v]; }); }; }
+function pilEvent() { return D.event.slice().sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : -1; }).map(function (e) { return [e.id_event, e.id_event + ' · ' + e.nama_event + ' (' + tgl(e.tanggal) + ')']; }); }
+
+function cari(list, key, id) { return list.filter(function (x) { return x[key] === id; })[0]; }
+</script>

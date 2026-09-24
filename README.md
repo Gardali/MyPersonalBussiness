@@ -4,9 +4,16 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 
 ## Struktur
 - `migrasi/buat_master.py` — membuat file DATABASE MASTER (.xlsx) dari data lama.
-- `app/Code.gs` — server Google Apps Script (baca/tulis tab spreadsheet).
-- `app/Index.html` — tampilan aplikasi (Beranda, Pipeline, Event + laporan, Kas) dan semua perhitungan.
-- `app/PANDUAN_PASANG.md` — langkah memasang aplikasi di file master.
+- `app/` — kode Google Apps Script, dikirim ke Apps Script dengan clasp (`bun run kirim`).
+  - Server (`.gs`, digabung otomatis oleh Apps Script):
+    `Code.gs` (inti: baca/tulis tab, `doGet`, `include`), `Event.gs` (event, laporan, kas, stok, checklist),
+    `Crew.gs` (crew & fee), `Kalender.gs` (Google Calendar), `Laporan.gs` (PDF, Unduh Laporan, backup),
+    `Pengingat.gs` (email harian & pemicu), `Pengaturan.gs` (pengaturan & HPP).
+  - Tampilan: `Index.html` hanya kerangka yang memanggil `Css.html` dan `Js*.html` lewat `include()`.
+    `JsDasar` (utilitas & semua perhitungan, dimuat pertama), `JsBeranda`, `JsPipeline`, `JsEvent`, `JsKasStok`,
+    `JsCrew`, `JsLainnya`, `JsForm`, dan `JsMulai` (menjalankan aplikasi, dimuat terakhir).
+- `app/PANDUAN_PASANG.md` — langkah memasang & memperbarui aplikasi.
+- `package.json` — perintah clasp: `bun run masuk` (login Google), `bun run kirim` (kirim kode ke Apps Script).
 
 ## Tahap
 1. Database master — selesai (milik posetivestudio@gmail.com).

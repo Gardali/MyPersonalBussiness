@@ -1,0 +1,139 @@
+<script>
+// Posetive — kalender & halaman Beranda.
+// ---- kalender beranda
+var KAL = {bulan: '', pilih: ''};
+var BLN_PANJANG = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+/** Agenda per tanggal: event (kecuali batal), jatuh tempo tagihan klien, dan follow-up prospek aktif. */
+function agendaKalender() {
+  var a = {}, tambah = function (t, x) { if (t) (a[t] = a[t] || []).push(x); };
+  D.event.forEach(function (e) {
+    if (e.status === 'Batal') return;
+    tambah(e.tanggal, {j: 'ev', e: e});
+    var t = tagihan(e);
+    if (t && t.kurang > 0 && t.jatuh) tambah(t.jatuh, {j: 'tg', e: e, t: t});
+  });
+  D.pipeline.filter(aktif).forEach(function (p) { tambah(p.follow_up, {j: 'fu', p: p}); });
+  return a;
+}
+function itemAgenda(x) {
+  if (x.j === 'ev') return item({lead: '<div class="ic">' + ikon('camera') + '</div>', t: esc(x.e.nama_event),
+    s: [x.e.jam_buka ? esc(x.e.jam_buka) + (x.e.jam_tutup ? '–' + esc(x.e.jam_tutup) : '') : '', esc(x.e.lokasi || x.e.kota || '')].filter(Boolean).join(' · ') || 'Event',
+    end: statusPill(x.e.status), on: "bukaEvent('" + x.e.id_event + "')"});
+  if (x.j === 'tg') return item({lead: '<div class="ic">' + ikon('wallet') + '</div>', t: 'Jatuh tempo ' + (x.t.tahap === 'DP' ? 'DP' : 'pelunasan'),
+    s: esc(x.e.nama_event), end: '<span class="' + (x.t.sisaHari < 0 ? 'neg' : '') + '">' + rp(x.t.kurang) + '</span>', on: "bukaEvent('" + x.e.id_event + "')"});
+  return item({lead: '<div class="ic">' + ikon('user') + '</div>', t: 'Follow-up ' + esc(x.p.nama_klien), s: esc(x.p.referensi || x.p.status || ''),
+    end: waBtn(x.p.kontak), on: "formPipeline('" + x.p.id + "')"});
+}
+function htmlKalender() {
+  var now = D.hariIni;
+  if (!KAL.bulan) { KAL.bulan = now.slice(0, 7); KAL.pilih = now; }
+  var y = Number(KAL.bulan.slice(0, 4)), m = Number(KAL.bulan.slice(5)) - 1, ag = agendaKalender();
+  var mundur = (new Date(Date.UTC(y, m, 1)).getUTCDay() + 6) % 7; // minggu dimulai Senin
+  var sel = Math.ceil((mundur + new Date(Date.UTC(y, m + 1, 0)).getUTCDate()) / 7) * 7;
+  var h = '<div class="kal-h"><b>' + BLN_PANJANG[m] + ' ' + y + '</b><div>' +
+    (KAL.bulan !== now.slice(0, 7) ? '<button class="kal-kini" onclick="kalKe(\'' + now + '\')">Hari ini</button>' : '') +
+    '<button onclick="kalGeser(-1)" aria-label="Bulan sebelumnya">‹</button> <button onclick="kalGeser(1)" aria-label="Bulan berikutnya">›</button></div></div>';
+  h += '<div class="kal-g">' + ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'].map(function (d) { return '<div class="hd">' + d + '</div>'; }).join('');
+  for (var i = 0; i < sel; i++) {
+    var d = new Date(Date.UTC(y, m, 1 - mundur + i)).toISOString().slice(0, 10), isi = ag[d] || [];
+    var jenis = ['ev', 'tg', 'fu'].filter(function (j) { return isi.some(function (x) { return x.j === j; }); });
+    var c = [d.slice(0, 7) !== KAL.bulan ? 'lain' : '', d === now ? 'kini' : '', d === KAL.pilih ? 'pilih' : ''].filter(Boolean).join(' ');
+    h += '<button' + (c ? ' class="' + c + '"' : '') + ' onclick="kalKe(\'' + d + '\')" aria-label="' + tgl(d) + (isi.length ? ', ' + isi.length + ' agenda' : '') + '"><span class="n">' + Number(d.slice(8)) + '</span><span class="dots">' +
+      jenis.map(function (j) { return '<i class="d-' + j + '"></i>'; }).join('') + '</span></button>';
+  }
+  h += '</div><div class="kal-leg"><span><i class="d-ev"></i>Event</span><span><i class="d-tg"></i>Tagihan</span><span><i class="d-fu"></i>Follow-up</span></div>';
+  var hariIni = ag[KAL.pilih] || [];
+  h += '<div class="kal-ag"><div class="meta">' + hari(KAL.pilih) + ', ' + tgl(KAL.pilih) + '</div><div>' +
+    (hariIni.length ? hariIni.map(itemAgenda).join('') : '<div class="it"><div class="meta">Tidak ada agenda.</div></div>') + '</div></div>';
+  return h;
+}
+function renderKalender() { var el = document.getElementById('kal'); if (el) el.innerHTML = htmlKalender(); }
+function kalKe(d) { KAL.pilih = d; KAL.bulan = d.slice(0, 7); renderKalender(); }
+function kalGeser(n) {
+  var y = Number(KAL.bulan.slice(0, 4)), m = Number(KAL.bulan.slice(5)) - 1 + n;
+  KAL.bulan = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
+  KAL.pilih = KAL.bulan === D.hariIni.slice(0, 7) ? D.hariIni : KAL.bulan + '-01';
+  renderKalender();
+}
+
+function vBeranda() {
+  var now = D.hariIni, bulan = now.slice(0, 7), saldo = saldoKas(), h = '';
+  var kasBln = D.kas.filter(function (k) { return String(k.tanggal).slice(0, 7) === bulan; });
+  var masukBln = sum(kasBln.filter(bukanSetoran), function (k) { return k.nominal; });
+  var keluarBln = sum(kasBln.filter(function (k) { return k.jenis === 'Keluar' && k.kategori !== 'Pengadaan Barang'; }), function (k) { return k.nominal; });
+  var alatBln = sum(kasBln.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === 'Pengadaan Barang'; }), function (k) { return k.nominal; });
+  var bulanLalu = addHari(bulan + '-01', -1).slice(0, 7);
+  var kasBlnLalu = D.kas.filter(function (k) { return String(k.tanggal).slice(0, 7) === bulanLalu; });
+  var masukBlnLalu = sum(kasBlnLalu.filter(bukanSetoran), function (k) { return k.nominal; });
+  var keluarBlnLalu = sum(kasBlnLalu.filter(function (k) { return k.jenis === 'Keluar' && k.kategori !== 'Pengadaan Barang'; }), function (k) { return k.nominal; });
+  var deltaHtml = function (skrg, lalu) {
+    if (!lalu) return '';
+    var pct = Math.round((skrg - lalu) / Math.abs(lalu) * 100), naik = pct >= 0;
+    return '<div class="sdelta ' + (naik ? 'up' : 'down') + '">' + ikon(naik ? 'up' : 'down') + Math.abs(pct) + '% dari bulan lalu</div>';
+  };
+
+  h += '<div class="top"><div><div class="hi">' + salam() + ', <br>' + esc(NAMA) + '</div><div class="date">' + hari(now) + ', ' + tgl(now) + '</div></div><div class="iconbtns"><button class="iconbtn" onclick="tampil(\'lainnya\')" aria-label="Lainnya">' + ikon('gear') + '</button><button class="iconbtn" onclick="muat()" aria-label="Muat ulang">' + ikon('refresh') + '</button></div></div>';
+  h += '<div class="head2 head2b"><div class="hcard"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div>' +
+    (saldo < 0 ? '<div class="note">Ada biaya yang ditalangi dari luar kas divisi.</div>' : '') + '</div>';
+  h += '<div class="quick"><button onclick="formKas()"><span>' + ikon('wallet') + '</span>Catat kas</button><button onclick="formPipeline()"><span>' + ikon('user') + '</span>Prospek</button><button onclick="formEvent()"><span>' + ikon('cal') + '</span>Event</button></div></div><div class="cols"><div class="col">';
+
+  var n = '';
+  alatBelumKembali().forEach(function (a) { n += '<div onclick="bukaEvent(\'' + a.id_event + '\')" style="cursor:pointer">' + notice('bad', '<b>' + esc(a.nama_alat) + ' belum kembali</b> dari ' + esc(namaEvent(a.id_event)) + (a.pemilik && a.pemilik !== 'Posetive' ? ' · milik ' + esc(a.pemilik) : '') + '.') + '</div>'; });
+  D.inventaris.filter(function (x) { return ['Perlu Perbaikan', 'Rusak', 'Hilang'].indexOf(x.kondisi) >= 0; }).forEach(function (x) { n += '<div onclick="formInventaris(\'' + x.id_alat + '\')" style="cursor:pointer">' + notice(x.kondisi === 'Perlu Perbaikan' ? '' : 'bad', '<b>' + esc(x.nama) + '</b>: ' + esc(x.kondisi).toLowerCase() + (x.pemilik && x.pemilik !== 'Posetive' ? ' · milik ' + esc(x.pemilik) : '') + '.') + '</div>'; });
+  peringatanStok().forEach(function (w) { n += '<div onclick="tampil(\'stok\')" style="cursor:pointer">' + notice(w.j, w.h) + '</div>'; });
+  bentrok().forEach(function (b) { n += notice('bad', '<b>Jadwal bentrok ' + tgl(b.tanggal) + '</b> — ' + b.ev.map(function (e) { return esc(e.nama_event); }).join(' & ')); });
+  semuaCrewBentrok().forEach(function (b) {
+    n += '<div onclick="bukaEvent(\'' + b.ev[0].id_event + '\')" style="cursor:pointer">' + notice('bad', '<b>' + esc(namaCrew(b.id_crew)) + ' bentrok ' + tgl(b.tanggal) + '</b> — ditugaskan di ' + b.ev.map(function (e) { return esc(e.nama_event) + (e.jam_buka ? ' (' + esc(e.jam_buka) + ')' : ''); }).join(' & ') + '.') + '</div>';
+  });
+  tagihanMendesak().forEach(function (x) {
+    n += '<div onclick="bukaEvent(\'' + x.e.id_event + '\')" style="cursor:pointer">' + notice(x.t.sisaHari < 0 ? 'bad' : '', '<b>Tagih ' + (x.t.tahap === 'DP' ? 'DP' : 'pelunasan') + ' ' + esc(x.e.nama_event) + '</b> — ' + rp(x.t.kurang) + ', ' + teksJatuhTempo(x.t) + '. ' + waBtn(kontakEvent(x.e))) + '</div>';
+  });
+  var feeLewat = feeBelumDibayar(true);
+  if (feeLewat.length) n += '<div onclick="tampil(\'crew\')" style="cursor:pointer">' + notice('', '<b>Fee crew belum dibayar ' + rp(sum(feeLewat, function (t) { return t.fee; })) + '</b> — ' + feeLewat.length + ' penugasan dari event yang sudah lewat.') + '</div>';
+  D.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal && e.tanggal < now; }).forEach(function (e) {
+    n += '<div onclick="bukaEvent(\'' + e.id_event + '\')" style="cursor:pointer">' + notice('', '<b>' + esc(e.nama_event) + ' (' + tgl(e.tanggal) + ')</b> sudah lewat — isi laporan & tutup event.') + '</div>';
+  });
+  if (n) h += sec('Perlu perhatian', n);
+
+  h += sec('Kalender', '<div class="card kal" id="kal">' + htmlKalender() + '</div>',
+    D.kalender ? '<a class="link" style="text-decoration:none" href="https://calendar.google.com/calendar/r/month/' + KAL.bulan.replace('-', '/') + '/1" target="_blank" rel="noopener">Google Calendar ↗</a>' : '');
+
+  var akanDatang = D.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal >= now; }).sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : 1; });
+  h += sec('Event mendatang', (akanDatang.length ? akanDatang.slice(0, 5).map(function (e) {
+    var d = selisihHari(e.tanggal, now);
+    return '<div class="evcard" onclick="bukaEvent(\'' + e.id_event + '\')" style="cursor:pointer"><div class="evart">' + ikon('camera') + '</div><div class="mid"><div class="t">' + esc(e.nama_event) + '</div><div class="s">' + esc(e.lokasi || e.kota || '') + ' · ' + tgl(e.tanggal) + '</div></div><div class="end">' + waBtn(kontakEvent(e)) + '<span class="pill2' + (d <= 3 ? '' : ' soft') + '">' + (d === 0 ? 'Hari ini' : d === 1 ? 'Besok' : d + ' hari') + '</span></div></div>';
+  }).join('') : '<div class="card"><div class="empty">Belum ada event terkonfirmasi.</div></div>'), '<button class="link" onclick="tampil(\'event\')">Semua</button>');
+
+  var fu = D.pipeline.filter(function (p) { return aktif(p) && p.follow_up && p.follow_up <= addHari(now, 3); }).sort(function (a, b) { return a.follow_up < b.follow_up ? -1 : 1; });
+  if (fu.length) h += sec('Follow-up', fu.map(function (p) {
+    var d = selisihHari(p.follow_up, now);
+    return '<div class="fcard" onclick="formPipeline(\'' + p.id + '\')" style="cursor:pointer"><div class="favatar" style="background:' + warnaAvatar(p.nama_klien) + '">' + inisial(p.nama_klien) + '</div><div class="mid"><div class="t">' + esc(p.nama_klien) + '</div><div class="s">' + esc(p.referensi || p.status) + '</div></div><div class="end">' + waBtn(p.kontak) + '<span class="pill ' + (d < 0 ? 'p-bad' : 'p-warn') + '">' + (d < 0 ? 'Terlewat ' + (-d) + ' hr' : d === 0 ? 'Hari ini' : tgl(p.follow_up)) + '</span></div></div>';
+  }).join(''));
+
+  h += '</div><div class="col">';
+  h += sec(BLN[Number(bulan.slice(5)) - 1] + ' ' + bulan.slice(0, 4),
+    '<div class="stats2" style="margin:0">' +
+    '<div class="scard"><div class="sicon">' + ikon('down') + '</div><div class="k">Pemasukan</div><div class="v">' + rpSingkat(masukBln) + '</div>' + deltaHtml(masukBln, masukBlnLalu) + '</div>' +
+    '<div class="scard"><div class="sicon">' + ikon('up') + '</div><div class="k">Biaya operasional</div><div class="v">' + rpSingkat(keluarBln) + '</div>' + deltaHtml(keluarBln, keluarBlnLalu) + '</div>' +
+    '<div class="scard"><div class="sicon">' + ikon('calc') + '</div><div class="k">Hasil operasional</div><div class="v ' + cls(masukBln - keluarBln) + '">' + rpSingkat(masukBln - keluarBln) + '</div>' + deltaHtml(masukBln - keluarBln, masukBlnLalu - keluarBlnLalu) + '</div>' +
+    '<div class="scard"><div class="sicon">' + ikon('box') + '</div><div class="k">Belanja alat</div><div class="v">' + rpSingkat(alatBln) + '</div></div></div>');
+
+  var tk = tintaTerakhir(), sk = stok('Kertas 4R'), sb = stok('Graduation Book');
+  h += sec('Stok', '<div class="stats" style="grid-template-columns:repeat(3,1fr);margin:0;cursor:pointer" onclick="tampil(\'stok\')">' +
+    '<div class="stat"><div class="k">Kertas 4R</div><div class="v ' + (sk !== null && sk < Pd('STOK_MIN_KERTAS', 100) ? 'neg' : '') + '">' + (sk === null ? '—' : sk) + '</div></div>' +
+    '<div class="stat"><div class="k">Grad Book</div><div class="v ' + (sb !== null && sb < Pd('STOK_MIN_BUKU', 5) ? 'neg' : '') + '">' + (sb === null ? '—' : sb) + '</div></div>' +
+    '<div class="stat"><div class="k">Tinta</div><div class="v ' + (tk && tk.level <= Pd('TINTA_MIN', 0.2) ? 'neg' : '') + '">' + (tk ? Math.round(tk.level * 100) + '%' : '—') + '</div></div></div>');
+
+  var selesai = D.event.filter(function (e) { return e.status === 'Selesai'; }).sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : -1; });
+  if (selesai.length) h += sec('Hasil event terakhir', '<div class="card">' + selesai.slice(0, 3).map(function (e) {
+    var r = hasilEvent(e);
+    return item({lead: dt(e.tanggal), t: esc(e.nama_event), s: 'Omzet ' + rp(r.masuk), end: '<span class="' + cls(r.labaKotor) + '">' + rp(r.labaKotor) + '</span><div class="s">laba kotor</div>', on: "bukaEvent('" + e.id_event + "')"});
+  }).join('') + '</div>');
+
+  var cek = perluCek();
+  if (cek.length) h += sec('Perlu dicek <span class="pill p-warn" style="margin-left:4px">' + cek.length + '</span>', '<div class="card">' + cek.slice(0, CEK_SEMUA ? cek.length : 3).map(function (c) {
+    return item({t: '<span class="pill">' + esc(c.tab) + '</span> ' + esc(c.id), s: esc(c.ket)});
+  }).join('') + (cek.length > 3 ? '<div class="it"><button class="link" style="border:0;background:none;color:var(--accent);font-weight:600;padding:0" onclick="CEK_SEMUA=!CEK_SEMUA;tampil(\'beranda\')">' + (CEK_SEMUA ? 'Tampilkan lebih sedikit' : 'Lihat semua ' + cek.length) + '</button></div>' : '') + '</div><div class="meta" style="margin-top:8px">Hapus tulisan "CEK:" di kolom catatan setelah diperiksa.</div>');
+  return h + '</div></div>';
+}
+</script>

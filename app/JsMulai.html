@@ -1,0 +1,13 @@
+<script>
+// Posetive — memuat data & menjalankan aplikasi — dimuat paling akhir.
+// ---------------------------------------------------------------- mulai
+function muat(diam) {
+  if (!diam) document.getElementById('view').innerHTML = '<div id="loading">Memuat data…</div>';
+  return panggil('getData').then(function (d) {
+    D = d; D.serverLama = !d.mutasi || !d.pemakaian; D.mutasi = d.mutasi || []; D.pemakaian = d.pemakaian || []; D.keputusan = d.keputusan || []; D.crew = d.crew || []; D.tugas = d.tugas || []; tampil(VIEW);
+  })
+    .catch(function (e) { document.getElementById('view').innerHTML = notice('bad', 'Gagal memuat: ' + esc(e && e.message || e)); });
+}
+document.getElementById('nav').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b && b.dataset.v) { DETAIL = null; tampil(b.dataset.v); } });
+muat();
+</script>

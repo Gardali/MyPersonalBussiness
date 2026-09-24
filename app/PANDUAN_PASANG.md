@@ -8,17 +8,21 @@ Cukup dilakukan sekali, sekitar 10 menit. Bisa dari akun Garda (editor file) ata
 2. Menu **Ekstensi → Apps Script**. Tab baru terbuka.
 3. Di kiri atas, klik "Proyek tanpa judul" lalu ganti nama menjadi **Posetive App**.
 
-## 2. Tempel kode server
-1. Di daftar file sebelah kiri, klik **Code.gs**.
-2. Hapus semua isinya.
-3. Salin seluruh isi file `app/Code.gs` lalu tempel.
-4. Tekan **Ctrl+S** (simpan).
+## 2–3. Kirim kode dengan clasp (bukan copy-paste)
+Kode terdiri dari banyak file (`app/*.gs` dan `app/*.html`), jadi dikirim sekaligus dengan **clasp**
+(alat resmi Google), dijalankan lewat **Bun** — Node.js tidak perlu dipasang.
 
-## 3. Tempel tampilan
-1. Klik **+** di samping "File" → **HTML**.
-2. Beri nama persis **Index** (tanpa .html; huruf I besar).
-3. Hapus isinya, lalu tempel seluruh isi file `app/Index.html`.
-4. Tekan **Ctrl+S**.
+Persiapan sekali saja (sudah dilakukan untuk akun posetivestudio@gmail.com):
+1. Buka https://script.google.com/home/usersettings → **Google Apps Script API: Aktif**.
+2. Di folder proyek: `bun install`, lalu `bun run masuk` → browser terbuka → pilih akun
+   **posetivestudio@gmail.com** → **Izinkan**.
+3. Script ID proyek sudah tercatat di `.clasp.json`.
+
+Kirim kode: `bun run kirim` (semua file di `app/` terkirim; editor Apps Script ikut berubah, aplikasi
+di HP belum).
+
+Jangan mengedit kode langsung di editor Apps Script — pengiriman berikutnya akan menimpanya. Ubah kode
+di folder proyek, lalu kirim.
 
 ## 4. Terbitkan sebagai aplikasi web
 1. Kanan atas: **Terapkan → Deployment baru**.
@@ -37,8 +41,16 @@ Cukup dilakukan sekali, sekitar 10 menit. Bisa dari akun Garda (editor file) ata
 Buka URL tadi di Chrome HP (login dengan akun yang sama) → menu ⋮ → **Tambahkan ke layar utama**.
 
 ## Kalau ada pembaruan kode
-Tempel kode baru di Code.gs / Index, simpan, lalu **Terapkan → Kelola deployment → ikon pensil →
-Versi: Versi baru → Terapkan**. URL tidak berubah.
+Di folder proyek jalankan **`bun run pasang`**. Perintah ini mengirim semua file lalu memperbarui
+deployment aplikasi web ke versi baru. URL tidak berubah; buka ulang aplikasi di HP untuk memakai kode baru.
+
+Kalau Google meminta izin baru (mis. fitur baru memakai Kalender/Drive), buka editor Apps Script,
+jalankan fungsi apa saja sekali (mis. `statusOtomatis`), lalu **Izinkan**.
+
+**Mengembalikan versi lama** bila pembaruan bermasalah:
+1. `bun run versi-aplikasi` → lihat nomor versi (mis. versi 31 terbaru, 30 sebelumnya).
+2. `bunx @google/clasp update-deployment AKfycbzLnJOrqLzFUCmo91fog8eyVVl2F86RWW5Jtn0DaX-RPMHybQ2_AH-VCqFWYVBBU9zP -V 30`
+   (ganti 30 dengan versi yang diinginkan). Aplikasi langsung kembali ke versi itu.
 
 ## Menghubungkan Google Calendar (sekali saja)
 1. Buka aplikasi → **Lainnya → Google Calendar → Hubungkan & sinkronkan**.
@@ -57,6 +69,7 @@ Versi: Versi baru → Terapkan**. URL tidak berubah.
 ## Aturan pakai
 - Isi data **lewat aplikasi**. Membuka spreadsheet langsung tetap boleh, tapi jangan mengubah judul
   kolom (baris 1) atau nama tab.
-- Angka harga & biaya diubah di tab **PENGATURAN**; aplikasi otomatis memakai angka terbaru.
+- HPP, harga jual, dan target event per bulan diubah lewat aplikasi (**Lainnya → HPP & harga jual**,
+  **Lainnya → Inventaris**) supaya laporan event lama ikut terkunci. Angka lain di tab **PENGATURAN**.
 - Baris dengan catatan diawali `CEK:` muncul di Beranda sebagai "Perlu dicek". Hapus tulisan `CEK:`
   setelah diperiksa.

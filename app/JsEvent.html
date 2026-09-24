@@ -1,0 +1,436 @@
+<script>
+// Posetive — halaman Event & detailnya, checklist alat, invoice, Unduh Laporan, form event & laporan.
+function vEvent() {
+  var now = D.hariIni;
+  var depan = D.event.filter(function (e) { return e.tanggal >= now && e.status !== 'Batal'; }).sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : 1; });
+  var lalu = D.event.filter(function (e) { return !(e.tanggal >= now && e.status !== 'Batal'); }).sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : -1; });
+  function baris(e) {
+    var r = hasilEvent(e), perlu = e.status === 'Terkonfirmasi' && e.tanggal < now;
+    return item({lead: dt(e.tanggal), t: esc(e.nama_event), s: esc(e.model_pendapatan || 'Model belum diisi'),
+      end: waBtn(kontakEvent(e)) + (e.status === 'Selesai' ? '<span class="' + cls(r.labaKotor) + '">' + rpSingkat(r.labaKotor) + '</span><div class="s">laba kotor</div>' : perlu ? '<span class="pill p-warn">Perlu laporan</span>' : statusPill(e.status)),
+      on: "bukaEvent('" + e.id_event + "')"});
+  }
+  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Event</div><button class="btn sm" onclick="formEvent()">+ Event</button></div>';
+  h += '<div class="cols"><div class="col">';
+  h += sec('Akan datang', '<div class="card">' + (depan.length ? depan.map(baris).join('') : '<div class="empty">Belum ada.</div>') + '</div>');
+  h += '</div><div class="col">';
+  h += sec('Sudah lewat', '<div class="card">' + (lalu.length ? lalu.map(baris).join('') : '<div class="empty">Belum ada.</div>') + '</div>');
+  return h + '</div></div>';
+}
+
+function bukaEvent(id) { DETAIL = id; tampil('event'); }
+
+function vDetailEvent() {
+  var e = D.event.filter(function (x) { return x.id_event === DETAIL; })[0];
+  if (!e) { DETAIL = null; return vEvent(); }
+  var r = hasilEvent(e), lap = r.lap, openBooth = e.model_pendapatan !== 'Kontrak Klien';
+  var h = '<button class="back" onclick="DETAIL=null;tampil(\'event\')">‹ Event</button>';
+  h += '<div class="meta">' + hari(e.tanggal) + ', ' + tgl(e.tanggal) + (e.jam_buka ? ' · ' + esc(e.jam_buka) + '–' + esc(e.jam_tutup) : '') + '</div>';
+  h += '<div class="pagetitle" style="margin:2px 0 6px">' + esc(e.nama_event) + '</div>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">' + statusPill(e.status) + '<span class="pill">' + esc(e.model_pendapatan || 'Model belum diisi') + '</span>' + (e.skema ? '<span class="pill">' + esc(e.skema) + '</span>' : '') + '</div>';
+  var kEv = kontakEvent(e);
+  h += '<div class="meta">' + esc(e.lokasi || '') + (e.tim ? ' · ' + esc(e.tim) : '') + (kEv ? ' · ' + esc(kEv) + ' ' + waBtn(kEv) : '') + '</div>';
+  h += '<div class="btns" style="margin-bottom:20px"><button class="btn sm" onclick="formLaporan(\'' + e.id_event + '\')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="btn sm ghost" onclick="formKas(null,\'' + e.id_event + '\')">+ Kas</button><button class="btn sm ghost" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button><button class="btn sm ghost" onclick="unduhLaporanEvent(\'' + e.id_event + '\',this)">Unduh Laporan</button>' + (e.model_pendapatan === 'Kontrak Klien' ? '<button class="btn sm ghost" onclick="buatInvoiceUI(\'' + e.id_event + '\',this)">Invoice PDF</button>' : '') + '<button class="btn sm ghost" onclick="formEvent(\'' + e.id_event + '\')">Ubah</button></div>';
+  if (String(e.catatan || '').indexOf('CEK:') === 0) h += notice('', esc(e.catatan.slice(4).trim()));
+
+  var hk = '<div class="card pad"><div class="meta">Laba kotor</div><div class="big ' + cls(r.labaKotor) + '">' + rp(r.labaKotor) + '</div>' +
+    '<div class="meta" style="margin-bottom:8px">Setelah alokasi Jepreto + penyusutan: <b class="' + cls(r.labaBersih) + '">' + rp(r.labaBersih) + '</b></div><table>' +
+    '<tr><td>Pemasukan</td><td class="r">' + rp(r.masuk) + '</td></tr>' +
+    '<tr><td>Biaya langsung</td><td class="r">−' + rp(r.keluar) + '</td></tr>' +
+    '<tr><td>Bahan · ' + r.tercetak + ' lbr × ' + rp(r.bl) + '</td><td class="r">−' + rp(r.bahan) + '</td></tr>' +
+    '<tr><td>Alokasi per event</td><td class="r">−' + rp(r.alokasi) + '</td></tr></table>';
+  hk += '</div>';
+  var tg = tagihan(e, r);
+  if (tg) {
+    var pctBayar = Math.min(100, Math.round(tg.dibayar / tg.kontrak * 100)), pctDp = Math.round(tg.dp / tg.kontrak * 100);
+    var tahapBaris = function (label, nominal, lunas, jatuh) {
+      return '<tr><td>' + label + (jatuh ? ' <span class="meta">· ' + tgl(jatuh) + '</span>' : '') + '</td><td class="r">' + rp(nominal) + ' ' + (lunas ? '<span class="pill p-ok">Lunas</span>' : '<span class="pill">Belum</span>') + '</td></tr>';
+    };
+    hk += '<div class="card pad" style="margin-top:8px"><div class="meta">Pembayaran klien</div>' +
+      '<div style="font-weight:700;margin:2px 0 10px">' + rp(tg.dibayar) + ' dari ' + rp(tg.kontrak) + '</div>' +
+      '<div style="position:relative;height:10px;border-radius:10px;background:var(--soft);overflow:hidden"><div style="height:100%;width:' + pctBayar + '%;background:' + (tg.kurang ? 'var(--accent)' : 'var(--ok)') + ';border-radius:10px"></div>' +
+      (tg.dp && tg.dp < tg.kontrak ? '<div style="position:absolute;top:0;bottom:0;left:' + pctDp + '%;width:2px;background:var(--card)"></div>' : '') + '</div><table style="margin-top:10px">' +
+      (tg.dp ? tahapBaris('DP', tg.dp, tg.dibayar >= tg.dp, e.jatuh_tempo_dp) : '') +
+      tahapBaris(tg.dp ? 'Pelunasan' : 'Pembayaran penuh', tg.kontrak - tg.dp, tg.dibayar >= tg.kontrak, e.jatuh_tempo_pelunasan || e.tanggal) + '</table>' +
+      (tg.kurang ? '<div class="meta ' + (tg.sisaHari !== null && tg.sisaHari < 0 ? 'neg' : '') + '" style="margin:8px 0 10px">Tagih ' + (tg.tahap === 'DP' ? 'DP' : 'pelunasan') + ' <b>' + rp(tg.kurang) + '</b> · ' + teksJatuhTempo(tg) + '</div>' +
+        '<button class="btn sm" onclick="formKas(null,\'' + e.id_event + '\',{jenis:\'Masuk\',kategori:\'DP / Pelunasan Kontrak\',nominal:' + tg.kurang + ',keterangan:\'' + (tg.tahap === 'DP' ? 'DP' : 'Pelunasan') + ' ' + esc(String(e.nama_event).replace(/['\\]/g, '')) + '\'})">+ Catat pembayaran</button>' : '') + '</div>';
+  }
+  if (openBooth && r.bepLapangan !== null) {
+    var terjual = lap ? r.lembarTerjual : 0, pct = Math.min(100, Math.round(terjual / (r.bepTotal || 1) * 100)), pctL = Math.min(100, Math.round(r.bepLapangan / (r.bepTotal || 1) * 100));
+    hk += '<div class="card pad" style="margin-top:8px"><div class="meta">Titik impas (untung ' + rp(r.untungLembar) + '/lembar)</div>' +
+      '<div style="font-weight:700;margin:2px 0 10px">' + terjual + ' terjual dari ' + r.bepTotal + ' lembar</div>' +
+      '<div style="position:relative;height:10px;border-radius:10px;background:var(--soft);overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + (terjual >= r.bepTotal ? 'var(--ok)' : 'var(--accent)') + ';border-radius:10px"></div></div>' +
+      '<div style="position:relative;height:18px"><div style="position:absolute;left:' + pctL + '%;transform:translateX(-50%);top:2px;font-size:11px;color:var(--muted)">▲ ' + r.bepLapangan + '</div></div>' +
+      '<div class="meta">' + r.bepLapangan + ' lembar menutup biaya lapangan · ' + r.bepTotal + ' lembar termasuk alokasi</div></div>';
+  }
+  h += '<div class="cols"><div class="col">' + sec('Keuangan', hk);
+
+  if (lap) {
+    var lp = '<div class="card pad"><table>' +
+      '<tr><td>Jam aktual</td><td class="r">' + esc(lap.jam_buka_aktual || '—') + '–' + esc(lap.jam_tutup_aktual || '—') + '</td></tr>' +
+      '<tr><td>Transaksi</td><td class="r">' + num(lap.jumlah_transaksi) + '</td></tr>' +
+      '<tr><td>Sesi · Lembar/strip tambahan · Grad Book</td><td class="r">' + r.sesiTerjual + ' · ' + r.lembarTambahan + ' · ' + num(lap.grad_book_terjual) + '</td></tr>' +
+      '<tr><td>Tercetak (counter)</td><td class="r">' + r.tercetak + '</td></tr>' +
+      '<tr><td>Terjual + uji + gagal</td><td class="r">' + r.lembarTerjual + ' + ' + num(lap.lembar_uji_bonus) + ' + ' + num(lap.lembar_gagal) + '</td></tr>' +
+      '<tr class="total"><td>Selisih lembar</td><td class="r ' + (r.selisihLembar ? 'neg' : 'pos') + '">' + (r.selisihLembar ? r.selisihLembar + ' · periksa' : 'Cocok') + '</td></tr>' +
+      '<tr><td>Omzet menurut laporan</td><td class="r">' + rp(r.omzet) + '</td></tr>' +
+      '<tr><td>Uang diterima</td><td class="r">' + rp(r.diterima) + '</td></tr>' +
+      '<tr class="total"><td>Selisih kas</td><td class="r ' + (r.selisihKas ? 'neg' : 'pos') + '">' + (r.selisihKas ? rp(r.selisihKas) : 'Cocok') + '</td></tr></table>';
+    if (lap.rekomendasi) lp += '<div class="meta" style="margin-top:10px"><b>Rekomendasi</b><br>' + esc(lap.rekomendasi) + '</div>';
+    if (lap.kendala) lp += '<div class="meta" style="margin-top:8px"><b>Kendala</b><br>' + esc(lap.kendala) + '</div>';
+    lp += '</div>';
+    if (Math.abs(r.omzet - r.masuk) > 0) lp += '<div style="margin-top:8px">' + notice('', 'Omzet laporan ' + rp(r.omzet) + ' ≠ pemasukan di Kas ' + rp(r.masuk) + '. Pastikan penjualan sudah dicatat.') + '</div>';
+    h += sec('Laporan produksi', lp);
+  }
+  var rabBaris = [['Penyusutan', r.rab.penyusutan, r.realisasi.penyusutan], ['Langganan Jepreto', r.rab.jepreto, r.realisasi.jepreto],
+    ['Fee crew', r.rab.feeCrew, r.realisasi.feeCrew], ['Transport', r.rab.transport, r.realisasi.transport], ['Konsumsi', r.rab.konsumsi, r.realisasi.konsumsi]];
+  if (rabBaris.some(function (x) { return x[1]; })) {
+    var rabTotal = 0, realTotal = 0;
+    var rb = '<div class="card pad"><table><tr><td></td><td class="r" style="font-weight:600">RAB</td><td class="r" style="font-weight:600">Realisasi</td><td class="r" style="font-weight:600">Selisih</td></tr>' +
+      rabBaris.map(function (x) {
+        rabTotal += x[1]; realTotal += x[2];
+        var s = x[2] - x[1];
+        return '<tr><td>' + x[0] + '</td><td class="r">' + rp(x[1]) + '</td><td class="r">' + rp(x[2]) + '</td><td class="r ' + (s > 0 ? 'neg' : s < 0 ? 'pos' : '') + '">' + (s ? rp(s) : '—') + '</td></tr>';
+      }).join('') +
+      '<tr class="total"><td>Total</td><td class="r">' + rp(rabTotal) + '</td><td class="r">' + rp(realTotal) + '</td><td class="r ' + (realTotal > rabTotal ? 'neg' : realTotal < rabTotal ? 'pos' : '') + '">' + (realTotal !== rabTotal ? rp(realTotal - rabTotal) : '—') + '</td></tr></table></div>';
+    h += sec('RAB vs Realisasi', rb + '<div class="meta" style="margin-top:8px">' + (lap ? 'Penyusutan & Jepreto terkunci sesuai kondisi Inventaris saat laporan disimpan.' : 'Penyusutan & Jepreto masih perkiraan langsung dari Inventaris — terkunci setelah laporan diisi.') + '</div>');
+  }
+  h += '</div><div class="col">';
+  var tugas = D.tugas.filter(function (t) { return t.id_event === e.id_event; });
+  var totalFee = sum(tugas, function (t) { return t.fee; }), belumFee = tugas.filter(function (t) { return !feeLunas(t); });
+  h += sec('Crew bertugas', '<div class="card">' + (tugas.length ? tugas.map(function (t) {
+    var lunas = feeLunas(t), nm = namaCrew(t.id_crew), bt = e.status === 'Batal' ? [] : bentrokCrew(t.id_crew, e);
+    return item({lead: '<div class="av">' + inisial(nm) + '</div>', t: esc(nm) + (bt.length ? ' <span class="pill p-bad">Bentrok</span>' : ''),
+      s: (bt.length ? '<span class="neg">Juga di ' + bt.map(function (x) { return esc(x.nama_event); }).join(', ') + '</span><br>' : '') + 'Fee ' + rp(t.fee) + (t.catatan ? ' · ' + esc(t.catatan) : ''),
+      end: lunas ? '<span class="pill p-ok">Dibayar</span>' : '<button class="btn sm" onclick="event.stopPropagation();formBayarFee([\'' + t.id + '\'])">Bayar</button>',
+      on: "formTugas('" + t.id + "')"});
+  }).join('') : '<div class="empty">Belum ada crew yang ditugaskan.</div>') + '</div><div class="meta" style="margin-top:8px">' +
+    tugas.length + (num(e.jumlah_crew) ? ' dari ' + num(e.jumlah_crew) : '') + ' crew · total fee ' + rp(totalFee) + (r.rab.feeCrew ? ' (RAB ' + rp(r.rab.feeCrew) + ')' : '') +
+    (belumFee.length > 1 ? ' · <button class="link" style="border:0;background:none;color:var(--accent);font-weight:600;padding:0" onclick="formBayarFee(' + esc(JSON.stringify(belumFee.map(function (t) { return t.id; }))) + ')">Bayar semua (' + rp(sum(belumFee, function (t) { return t.fee; })) + ')</button>' : '') + '</div>',
+    '<button class="link" onclick="formTugas(null,\'' + e.id_event + '\')">+ Crew</button>');
+  var alat = D.pemakaian.filter(function (a) { return a.id_event === e.id_event && a.dibawa === 'Ya'; }), blm = alat.filter(function (a) { return a.kembali !== 'Ya'; });
+  h += sec('Alat', '<div class="card pad" style="cursor:pointer" onclick="bukaChecklist(\'' + e.id_event + '\')">' + (alat.length ?
+    '<div style="font-weight:700">' + alat.length + ' dibawa · ' + (alat.length - blm.length) + ' kembali</div>' + (blm.length ? '<div class="meta neg" style="margin-top:4px">Belum kembali: ' + blm.map(function (a) { return esc(a.nama_alat); }).join(', ') + '</div>' : '<div class="meta pos" style="margin-top:4px">Semua alat sudah kembali.</div>') :
+    '<div class="meta">Belum ada checklist. Ketuk untuk mencentang alat yang dibawa.</div>') + '</div>');
+  h += sec('Transaksi', '<div class="card">' + (r.kas.length ? r.kas.map(barisKas).join('') : '<div class="empty">Belum ada catatan kas untuk event ini.</div>') + '</div>');
+  return h + '</div></div>';
+}
+
+// ---------------------------------------------------------------- checklist alat
+var CL = null;
+function bukaChecklist(idEvent) {
+  var ada = D.pemakaian.filter(function (a) { return a.id_event === idEvent; });
+  var rows = {};
+  D.inventaris.filter(function (x) { return x.kategori === 'Aset'; }).forEach(function (x) {
+    rows[x.id_alat] = {id_alat: x.id_alat, nama_alat: x.nama, dibawa: 'Tidak', kembali: '', kondisi_akhir: x.kondisi || 'Baik', catatan: '', pemilik: x.pemilik};
+  });
+  // set/alat tanpa kode dari checklist mana pun
+  D.pemakaian.filter(function (a) { return !a.id_alat; }).forEach(function (a) { rows['SET:' + a.nama_alat] = rows['SET:' + a.nama_alat] || {id_alat: '', nama_alat: a.nama_alat, dibawa: 'Tidak', kembali: '', kondisi_akhir: 'Baik', catatan: ''}; });
+  ada.forEach(function (a) { var k = a.id_alat || 'SET:' + a.nama_alat; rows[k] = Object.assign(rows[k] || {}, a, {pemilik: pemilikAlat(a)}); });
+  CL = {id: idEvent, rows: Object.keys(rows).map(function (k) { return rows[k]; }).sort(function (a, b) {
+    return String(a.nama_alat).localeCompare(String(b.nama_alat));
+  })};
+  renderChecklist();
+  document.getElementById('sheet').classList.add('open');
+}
+function salinChecklistTerakhir() {
+  var ev = {}; D.event.forEach(function (e) { ev[e.id_event] = e; });
+  var ids = Array.from(new Set(D.pemakaian.filter(function (a) { return a.id_event !== CL.id && ev[a.id_event]; }).map(function (a) { return a.id_event; })))
+    .sort(function (a, b) { return ev[a].tanggal < ev[b].tanggal ? 1 : -1; });
+  if (!ids.length) { toast('Belum ada checklist sebelumnya'); return; }
+  var bawa = {}; D.pemakaian.filter(function (a) { return a.id_event === ids[0] && a.dibawa === 'Ya'; }).forEach(function (a) { bawa[a.id_alat || 'SET:' + a.nama_alat] = 1; });
+  CL.rows.forEach(function (r) { r.dibawa = bawa[r.id_alat || 'SET:' + r.nama_alat] ? 'Ya' : 'Tidak'; });
+  toast('Disalin dari ' + ids[0]); renderChecklist();
+}
+function clSet(i, k, v) { CL.rows[i][k] = v; if (k === 'dibawa' && v !== 'Ya') CL.rows[i].kembali = ''; renderChecklist(); }
+function clSemuaKembali() { CL.rows.forEach(function (r) { if (r.dibawa === 'Ya') r.kembali = 'Ya'; }); renderChecklist(); }
+function clTambah() { var n = prompt('Nama alat / set (mis. Set kabel & adapter)'); if (n) { CL.rows.push({id_alat: '', nama_alat: n, dibawa: 'Ya', kembali: '', kondisi_akhir: 'Baik', catatan: ''}); renderChecklist(); } }
+function clHapus(i) { if (confirm('Keluarkan "' + CL.rows[i].nama_alat + '" dari daftar checklist ini?')) { CL.rows.splice(i, 1); renderChecklist(); } }
+function renderChecklist() {
+  var bawa = CL.rows.filter(function (r) { return r.dibawa === 'Ya'; }), kembali = bawa.filter(function (r) { return r.kembali === 'Ya'; });
+  var h = '<div class="grab"></div><h2>Checklist alat · ' + esc(CL.id) + '</h2>' +
+    '<div class="meta" style="margin-bottom:10px">' + bawa.length + ' dibawa · ' + kembali.length + ' kembali' + (bawa.length > kembali.length ? ' · <b class="neg">' + (bawa.length - kembali.length) + ' belum kembali</b>' : '') + '</div>' +
+    '<div class="btns" style="margin:0 0 12px"><button class="btn sm ghost" type="button" onclick="salinChecklistTerakhir()">Salin dari event terakhir</button><button class="btn sm ghost" type="button" onclick="clSemuaKembali()">Semua kembali</button><button class="btn sm ghost" type="button" onclick="clTambah()">+ Alat/set</button></div><div class="card">';
+  h += CL.rows.map(function (r, i) {
+    var milik = r.pemilik && r.pemilik !== 'Posetive' ? ' <span class="pill p-warn">' + esc(r.pemilik) + '</span>' : '';
+    return '<div class="it" style="flex-wrap:wrap"><div class="mid" style="min-width:140px"><div class="t">' + esc(r.nama_alat) + milik + '</div></div>' +
+      '<label class="chk"><input type="checkbox" ' + (r.dibawa === 'Ya' ? 'checked' : '') + ' onchange="clSet(' + i + ',\'dibawa\',this.checked?\'Ya\':\'Tidak\')">Bawa</label>' +
+      '<label class="chk"><input type="checkbox" ' + (r.kembali === 'Ya' ? 'checked' : '') + (r.dibawa === 'Ya' ? '' : ' disabled') + ' onchange="clSet(' + i + ',\'kembali\',this.checked?\'Ya\':\'\')">Kembali</label>' +
+      (r.dibawa === 'Ya' ? '<select class="plain" style="padding:5px 8px" onchange="clSet(' + i + ',\'kondisi_akhir\',this.value)">' + (D.pilihan.Kondisi || ['Baik', 'Perlu Perbaikan', 'Rusak', 'Hilang']).map(function (k) { return '<option' + (k === r.kondisi_akhir ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select>' : '') +
+      '<button class="btn sm ghost" type="button" title="Keluarkan dari daftar" onclick="clHapus(' + i + ')" style="padding:4px 10px">✕</button></div>';
+  }).join('') + '</div>';
+  h += '<div class="btns"><button class="btn" type="button" style="flex:1" onclick="simpanChecklistUI(this)">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()">Batal</button></div>';
+  var panel = document.getElementById('panel'), top = panel.scrollTop;
+  panel.innerHTML = h; panel.scrollTop = top;
+}
+function simpanChecklistUI(btn) {
+  btn.disabled = true; btn.textContent = 'Menyimpan…';
+  var rows = CL.rows.filter(function (r) { return r.dibawa === 'Ya' || D.pemakaian.some(function (a) { return a.id_event === CL.id && (a.id_alat || a.nama_alat) === (r.id_alat || r.nama_alat); }); })
+    .map(function (r) { return {id_alat: r.id_alat, nama_alat: r.nama_alat, dibawa: r.dibawa, kembali: r.kembali, kondisi_akhir: r.dibawa === 'Ya' ? r.kondisi_akhir : '', catatan: r.catatan || ''}; });
+  panggil('simpanChecklist', CL.id, rows).then(function () { tutupForm(); toast('Checklist tersimpan'); return muat(true); })
+    .catch(function (e) { btn.disabled = false; btn.textContent = 'Simpan'; toast('Gagal: ' + (e && e.message || e)); });
+}
+
+// ---- invoice
+function htmlInvoice(e) {
+  var r = hasilEvent(e), p = e.id_pipeline ? cari(D.pipeline, 'id', e.id_pipeline) : null, P2 = D.pengaturan;
+  var lunas = r.piutang !== undefined && r.piutang <= 0, bayar = r.kas.filter(bukanSetoran);
+  var nomor = 'INV/' + String(e.tanggal).slice(0, 7).replace('-', '') + '/' + e.id_event;
+  var td = 'padding:7px 0;border-top:1px solid #e6e1da;';
+  var h = '<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#1c1a17">' +
+    '<table style="width:100%"><tr><td><div style="font-size:20px;font-weight:bold">' + esc(P2.NAMA_USAHA || 'Posetive Photobooth') + '</div><div style="color:#7a736a">' + esc(P2.KONTAK_USAHA || '') + '</div></td>' +
+    '<td style="text-align:right"><div style="font-size:22px;font-weight:bold;color:#c84b31">' + (lunas ? 'KUITANSI' : 'INVOICE') + '</div><div>' + nomor + '</div><div style="color:#7a736a">' + tgl(D.hariIni) + '</div></td></tr></table>' +
+    '<div style="margin:18px 0 6px;color:#7a736a">Kepada</div><div style="font-weight:bold">' + esc(p ? p.nama_klien : e.nama_event) + '</div>' + (p && p.kontak ? '<div>' + esc(p.kontak) + '</div>' : '') +
+    '<table style="width:100%;border-collapse:collapse;margin-top:18px"><tr><td style="' + td + 'font-weight:bold">Keterangan</td><td style="' + td + 'text-align:right;font-weight:bold">Jumlah</td></tr>' +
+    '<tr><td style="' + td + '">Jasa photobooth — ' + esc(e.nama_event) + '<br><span style="color:#7a736a">' + tgl(e.tanggal) + (e.lokasi ? ' · ' + esc(e.lokasi) : '') + (p && p.paket ? ' · ' + esc(p.paket) : '') + '</span></td><td style="' + td + 'text-align:right">' + rp(e.nilai_kontrak) + '</td></tr>';
+  bayar.forEach(function (k) { h += '<tr><td style="' + td + 'color:#2e7d4f">Pembayaran ' + tgl(k.tanggal) + (k.keterangan ? ' — ' + esc(k.keterangan) : '') + '</td><td style="' + td + 'text-align:right;color:#2e7d4f">−' + rp(k.nominal) + '</td></tr>'; });
+  h += '<tr><td style="' + td + 'font-weight:bold">' + (lunas ? 'LUNAS' : 'Sisa tagihan') + '</td><td style="' + td + 'text-align:right;font-weight:bold;font-size:16px">' + rp(Math.max(0, r.piutang || 0)) + '</td></tr></table>';
+  var tg = tagihan(e, r);
+  if (tg && tg.kurang && tg.jatuh) h += '<div style="margin-top:18px">' + (tg.tahap === 'DP' ? 'DP ' : 'Pelunasan ') + '<b>' + rp(tg.kurang) + '</b> mohon dibayar paling lambat <b>' + tgl(tg.jatuh) + '</b>.</div>';
+  if (!lunas && P2.REKENING) h += '<div style="margin-top:18px">Pembayaran ke: <b>' + esc(P2.REKENING) + '</b></div>';
+  h += '<div style="margin-top:30px;color:#7a736a">Terima kasih.</div></div>';
+  return {html: h, nomor: nomor};
+}
+/**
+ * Isi laporan event (Google Spreadsheet): {sheets: [{nama, lebar: [px per kolom], grid, rows: [{v: [nilai], t: gaya baris, f: [format sel], w: bungkus teks}]}]}.
+ * Gaya baris: judul | sub | bagian | head | total. Format sel: rp | n | pct | tgl (teks 'yyyy-mm-dd'). Dirapikan di server (buatLaporanEventSheet).
+ */
+function dataLaporanEvent(e) {
+  var r = hasilEvent(e), lap = r.lap, P2 = D.pengaturan, sheets = [];
+  var p = e.id_pipeline ? cari(D.pipeline, 'id', e.id_pipeline) : null;
+  var lembar = function (nama, lebar, grid) { var s = {nama: nama, lebar: lebar, grid: !!grid, rows: []}; sheets.push(s); return s; };
+  var baris = function (s, v, t, f, w) { s.rows.push({v: v, t: t || '', f: f || [], w: !!w}); };
+  var kosong = function (s) { baris(s, []); };
+  var kv = function (s, label, nilai, fmt, t) { if (nilai === '' || nilai == null) return; baris(s, [label, nilai], t, ['', fmt || ''], fmt === undefined && String(nilai).length > 40); };
+  var kepala = function (s, sub) {
+    baris(s, [(P2.NAMA_USAHA || 'Posetive Photobooth') + ' — Laporan Event'], 'sub');
+    baris(s, [e.nama_event + (sub ? ' · ' + sub : '')], 'judul');
+    baris(s, [hari(e.tanggal) + ', ' + tgl(e.tanggal) + (e.lokasi ? ' · ' + e.lokasi : '') + ' · dibuat ' + tgl(D.hariIni)], 'sub');
+    kosong(s);
+  };
+
+  // ---- Ringkasan
+  var s = lembar('Ringkasan', [240, 150, 150, 150, 150]);
+  kepala(s);
+  baris(s, ['INFORMASI EVENT'], 'bagian');
+  kv(s, 'Kode', e.id_event); kv(s, 'Tanggal', e.tanggal, 'tgl');
+  kv(s, 'Jam rencana', e.jam_buka ? e.jam_buka + '–' + (e.jam_tutup || '?') : '');
+  kv(s, 'Lokasi', [e.lokasi, e.kota].filter(Boolean).join(', ')); kv(s, 'Jenis acara', e.jenis_acara);
+  kv(s, 'Model pendapatan', e.model_pendapatan); kv(s, 'Skema kerja sama', e.skema ? e.skema + (e.parameter_skema ? ' (' + e.parameter_skema + ')' : '') : '');
+  kv(s, 'Status', e.status); kv(s, 'Penanggung jawab', e.penanggung_jawab);
+  if (p) { kv(s, 'Klien', p.nama_klien + (p.kontak ? ' · ' + p.kontak : '')); kv(s, 'Paket', p.paket); }
+  kv(s, 'Catatan', e.catatan);
+  kosong(s);
+
+  baris(s, ['KEUANGAN'], 'bagian');
+  kv(s, 'Pemasukan', r.masuk, 'rp');
+  kv(s, 'Biaya langsung (kas keluar)', -r.keluar, 'rp');
+  kv(s, 'Bahan cetak (' + r.tercetak + ' lembar × ' + rp(r.bl) + (r.lap && num(r.lap.grad_book_terjual) + num(r.lap.buku_rusak) ? ' + buku' : '') + ')', -r.bahan, 'rp');
+  kv(s, 'Laba kotor', r.labaKotor, 'rp', 'total');
+  kv(s, 'Alokasi penyusutan + Jepreto', -r.alokasi, 'rp');
+  kv(s, 'Laba bersih', r.labaBersih, 'rp', 'total');
+  if (r.masuk) kv(s, 'Margin laba kotor', r.labaKotor / r.masuk, 'pct');
+  kosong(s);
+
+  var tg = tagihan(e, r);
+  if (tg) {
+    baris(s, ['PEMBAYARAN KLIEN'], 'bagian');
+    kv(s, 'Nilai kontrak', tg.kontrak, 'rp');
+    if (tg.dp) { kv(s, 'DP', tg.dp, 'rp'); kv(s, 'Jatuh tempo DP', e.jatuh_tempo_dp, 'tgl'); }
+    kv(s, 'Jatuh tempo pelunasan', e.jatuh_tempo_pelunasan || e.tanggal, 'tgl');
+    kv(s, 'Sudah dibayar', tg.dibayar, 'rp');
+    kv(s, 'Sisa tagihan', Math.max(0, tg.kontrak - tg.dibayar), 'rp', 'total');
+    kv(s, 'Status', tg.kurang ? 'Menunggu ' + (tg.tahap === 'DP' ? 'DP' : 'pelunasan') + ' — ' + teksJatuhTempo(tg).replace(/<[^>]+>/g, '') : 'LUNAS');
+    kosong(s);
+  }
+
+  var rab = [['Penyusutan', r.rab.penyusutan, r.realisasi.penyusutan], ['Langganan Jepreto', r.rab.jepreto, r.realisasi.jepreto],
+    ['Fee crew', r.rab.feeCrew, r.realisasi.feeCrew], ['Transport', r.rab.transport, r.realisasi.transport], ['Konsumsi', r.rab.konsumsi, r.realisasi.konsumsi]];
+  if (rab.some(function (x) { return x[1]; })) {
+    baris(s, ['RAB VS REALISASI'], 'bagian');
+    baris(s, ['Kategori', 'RAB', 'Realisasi', 'Selisih'], 'head');
+    rab.forEach(function (x) { baris(s, [x[0], x[1], x[2], x[2] - x[1]], '', ['', 'rp', 'rp', 'rp']); });
+    var tR = sum(rab, function (x) { return x[1]; }), tA = sum(rab, function (x) { return x[2]; });
+    baris(s, ['Total', tR, tA, tA - tR], 'total', ['', 'rp', 'rp', 'rp']);
+    kosong(s);
+  }
+
+  var tugas = D.tugas.filter(function (t) { return t.id_event === e.id_event; });
+  if (tugas.length || e.tim) {
+    baris(s, ['CREW & FEE'], 'bagian');
+    if (tugas.length) {
+      baris(s, ['Nama', 'Role', 'Fee', 'Status', 'Tanggal bayar'], 'head');
+      tugas.forEach(function (t) {
+        var c = cari(D.crew, 'id_crew', t.id_crew) || {}, k = t.id_kas ? cari(D.kas, 'id', t.id_kas) : null;
+        baris(s, [namaCrew(t.id_crew) + (t.catatan ? ' (' + t.catatan + ')' : ''), c.role || '', num(t.fee), k ? 'Dibayar' : 'Belum dibayar', k ? k.tanggal : ''], '', ['', '', 'rp', '', 'tgl']);
+      });
+      baris(s, ['Total fee', '', sum(tugas, function (t) { return t.fee; }), tugas.filter(function (t) { return !feeLunas(t); }).length + ' belum dibayar', ''], 'total', ['', '', 'rp']);
+    } else kv(s, 'Tim', e.tim);
+  }
+
+  // ---- Produksi
+  if (lap) {
+    s = lembar('Produksi', [260, 170, 320]);
+    kepala(s, 'Laporan produksi');
+    var n = function (k) { return num(lap[k]); };
+    baris(s, ['WAKTU'], 'bagian');
+    kv(s, 'Jam buka–tutup aktual', (lap.jam_buka_aktual || '?') + '–' + (lap.jam_tutup_aktual || '?'));
+    kv(s, 'Jam paling ramai', lap.jam_ramai); kv(s, 'Antrean terpanjang (orang)', lap.antrean_terpanjang, 'n'); kv(s, 'Total berhenti (menit)', lap.downtime_menit, 'n');
+    kosong(s);
+    baris(s, ['PENJUALAN'], 'bagian');
+    baris(s, ['', 'Jumlah', 'Omzet'], 'head');
+    baris(s, ['Jumlah transaksi', n('jumlah_transaksi')], '', ['', 'n']);
+    baris(s, ['Sesi terjual (foto 4R)', r.sesiTerjual, r.sesiTerjual * P('HARGA_4R')], '', ['', 'n', 'rp']);
+    baris(s, ['Lembar / strip tambahan', r.lembarTambahan, r.lembarTambahan * P('HARGA_STRIP')], '', ['', 'n', 'rp']);
+    baris(s, ['Graduation Book', n('grad_book_terjual'), n('grad_book_terjual') * P('HARGA_BUKU')], '', ['', 'n', 'rp']);
+    if (n('grup_potongan')) baris(s, ['Potongan grup', n('grup_potongan'), -n('grup_potongan') * P('POTONGAN_GRUP')], '', ['', 'n', 'rp']);
+    baris(s, ['Omzet menurut laporan', '', r.omzet], 'total', ['', '', 'rp']);
+    kv(s, 'Softfile terkirim', lap.softfile_terkirim, 'n');
+    kosong(s);
+    baris(s, ['PRINTER & LEMBAR'], 'bagian');
+    [['Counter awal', n('counter_awal')], ['Counter akhir', n('counter_akhir')], ['Tercetak (counter)', r.tercetak], ['Terjual', r.lembarTerjual],
+      ['Uji / bonus', n('lembar_uji_bonus')], ['Gagal', n('lembar_gagal')]].forEach(function (x) { baris(s, x, '', ['', 'n']); });
+    baris(s, ['Selisih lembar', r.selisihLembar, r.selisihLembar ? 'Periksa' : 'Cocok'], 'total', ['', 'n']);
+    kosong(s);
+    baris(s, ['UANG'], 'bagian');
+    [['Tunai dihitung saat tutup', n('tunai_dihitung')], ['Modal kembalian', -n('modal_kembalian')], ['QRIS / transfer', n('qris_transfer')]].forEach(function (x) { baris(s, x, '', ['', 'rp']); });
+    baris(s, ['Uang diterima', r.diterima], 'total', ['', 'rp']);
+    baris(s, ['Selisih dengan omzet laporan', r.selisihKas, r.selisihKas ? 'Periksa' : 'Cocok'], '', ['', 'rp']);
+    [['Potongan admin QRIS', n('admin_qris')], ['Admin pencairan QRIS', n('admin_pencairan')]].forEach(function (x) { if (x[1]) baris(s, x, '', ['', 'rp']); });
+    kosong(s);
+    baris(s, ['STOK & BAHAN'], 'bagian');
+    kv(s, 'Kertas awal (lembar)', lap.stok_kertas_awal, 'n'); kv(s, 'Kertas akhir, hitung fisik', lap.stok_kertas_akhir_fisik, 'n');
+    kv(s, 'Graduation Book awal', lap.stok_buku_awal, 'n'); kv(s, 'Buku rusak', lap.buku_rusak, 'n');
+    kv(s, 'Level tinta terendah', lap.tinta_terendah_persen, 'pct');
+    kv(s, 'HPP per lembar (terkunci)', r.bl, 'rp'); kv(s, 'HPP per Graduation Book (terkunci)', r.biayaBuku, 'rp');
+    kosong(s);
+    if (lap.kendala || lap.keluhan_pengunjung || lap.rekomendasi || lap.catatan) {
+      baris(s, ['CATATAN'], 'bagian');
+      [['Kendala & penanganan', lap.kendala], ['Keluhan / permintaan pengunjung', lap.keluhan_pengunjung], ['Rekomendasi event berikutnya', lap.rekomendasi], ['Catatan lain', lap.catatan]]
+        .forEach(function (x) { if (x[1]) baris(s, [x[0], x[1]], '', [], true); });
+    }
+  }
+
+  // ---- Kas
+  s = lembar('Kas', [95, 80, 70, 170, 260, 90, 115, 115, 230], true);
+  kepala(s, 'Transaksi kas');
+  baris(s, ['Tanggal', 'Kode', 'Jenis', 'Kategori', 'Keterangan', 'Metode', 'Masuk', 'Keluar', 'Nota'], 'head');
+  var kasUrut = r.kas.slice().sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : (a.id < b.id ? -1 : 1); });
+  kasUrut.forEach(function (k) {
+    var m = k.jenis === 'Masuk';
+    baris(s, [k.tanggal, k.id, k.jenis, k.kategori || '', k.keterangan || '', k.metode || '', m ? num(k.nominal) : '', m ? '' : num(k.nominal), /^https?:/.test(k.no_nota || '') ? k.no_nota : ''],
+      '', ['tgl', '', '', '', '', '', 'rp', 'rp']);
+  });
+  if (!kasUrut.length) baris(s, ['Belum ada transaksi kas untuk event ini.']);
+  var tMasuk = sum(kasUrut.filter(function (k) { return k.jenis === 'Masuk'; }), function (k) { return k.nominal; });
+  var tKeluar = sum(kasUrut.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
+  baris(s, ['Total', '', '', '', '', '', tMasuk, tKeluar, ''], 'total', ['', '', '', '', '', '', 'rp', 'rp']);
+  baris(s, ['Saldo event (masuk − keluar)', '', '', '', '', '', tMasuk - tKeluar, '', ''], '', ['', '', '', '', '', '', 'rp']);
+
+  // ---- Alat
+  var alat = D.pemakaian.filter(function (a) { return a.id_event === e.id_event; });
+  if (alat.length) {
+    s = lembar('Alat', [260, 120, 80, 80, 130, 260], true);
+    kepala(s, 'Checklist alat');
+    baris(s, ['Alat', 'Pemilik', 'Dibawa', 'Kembali', 'Kondisi akhir', 'Catatan'], 'head');
+    alat.forEach(function (a) { baris(s, [a.nama_alat, pemilikAlat(a) || 'Posetive', a.dibawa || '', a.dibawa === 'Ya' ? (a.kembali || 'Belum') : '', a.kondisi_akhir || '', a.catatan || '']); });
+    var dibawa = alat.filter(function (a) { return a.dibawa === 'Ya'; });
+    baris(s, [dibawa.length + ' dibawa · ' + dibawa.filter(function (a) { return a.kembali === 'Ya'; }).length + ' kembali'], 'total');
+  }
+  return {sheets: sheets};
+}
+function unduhLaporanEvent(id, btn) {
+  var e = cari(D.event, 'id_event', id), data = dataLaporanEvent(e);
+  var nama = (e.id_event + ' - ' + e.nama_event).replace(/[\/\\]/g, '-');
+  btn.disabled = true; btn.textContent = 'Menyiapkan…';
+  var selesai = function () { btn.disabled = false; btn.textContent = 'Unduh Laporan'; };
+  panggil('buatLaporanEventSheet', e.id_event, nama, data).then(function (hasil) {
+    selesai();
+    document.getElementById('panel').innerHTML = '<div class="grab"></div><h2>' + esc(nama) + '</h2>' +
+      '<p class="meta">Laporan tersimpan sebagai Google Spreadsheet di folder "Posetive - Laporan Event". Unduh ulang kapan saja — file yang sama diperbarui, tidak dobel.</p>' +
+      '<div class="btns"><a class="btn" style="text-decoration:none;flex:1;text-align:center" href="' + esc(hasil.url) + '" target="_blank" rel="noopener">Buka Spreadsheet</a>' +
+      '<a class="btn ghost" style="text-decoration:none;flex:1;text-align:center" href="' + esc(hasil.xlsx) + '" target="_blank" rel="noopener">Unduh .xlsx</a></div>' +
+      '<div class="btns"><button class="btn ghost" onclick="tutupForm()" style="flex:1">Tutup</button></div>';
+    document.getElementById('sheet').classList.add('open');
+  }).catch(function (err) { selesai(); toast('Gagal: ' + (err && err.message || err)); });
+}
+function buatInvoiceUI(id, btn) {
+  var e = cari(D.event, 'id_event', id);
+  if (!num(e.nilai_kontrak)) { toast('Isi nilai kontrak event dulu'); return; }
+  var inv = htmlInvoice(e); btn.disabled = true; btn.textContent = 'Membuat PDF…';
+  panggil('buatInvoice', inv.html, inv.nomor).then(function (url) { btn.disabled = false; btn.textContent = 'Invoice PDF'; bukaLink(url, inv.nomor); })
+    .catch(function (err) { btn.disabled = false; btn.textContent = 'Invoice PDF'; toast('Gagal: ' + (err && err.message || err)); });
+}
+
+var F_EVENT = [
+  {n: 'nama_event', l: 'Nama event', wajib: 1}, {n: 'tanggal', l: 'Tanggal', t: 'date', wajib: 1},
+  {n: 'status', l: 'Status', t: 'sel', o: pil('Status Event'), def: 'Terkonfirmasi'},
+  {n: 'jam_buka', l: 'Jam buka', t: 'time'}, {n: 'jam_tutup', l: 'Jam tutup', t: 'time'},
+  {n: 'lokasi', l: 'Lokasi'}, {n: 'kota', l: 'Kota'}, {n: 'jenis_acara', l: 'Jenis acara', t: 'sel', o: pil('Jenis Acara')},
+  {n: 'model_pendapatan', l: 'Model pendapatan', t: 'sel', o: pil('Model Pendapatan')},
+  {n: 'skema', l: 'Skema kerja sama', t: 'sel', o: pil('Skema'), show: function (r) { return r.model_pendapatan === 'Kerja Sama Panitia'; }},
+  {n: 'parameter_skema', l: 'Parameter skema', show: function (r) { return r.model_pendapatan === 'Kerja Sama Panitia'; }},
+  {n: 'nilai_kontrak', l: 'Nilai kontrak (Rp)', t: 'num', show: function (r) { return r.model_pendapatan === 'Kontrak Klien'; }},
+  {n: 'dp_nominal', l: 'DP (Rp) — kosongkan bila dibayar sekali lunas', t: 'num', show: function (r) { return r.model_pendapatan === 'Kontrak Klien'; }},
+  {n: 'jatuh_tempo_dp', l: 'Jatuh tempo DP', t: 'date', show: function (r) { return r.model_pendapatan === 'Kontrak Klien' && num(r.dp_nominal) > 0; }},
+  {n: 'jatuh_tempo_pelunasan', l: 'Jatuh tempo pelunasan — kosong = hari H', t: 'date', show: function (r) { return r.model_pendapatan === 'Kontrak Klien'; }},
+  {n: 'jumlah_crew', l: 'Jumlah crew', t: 'num'}, {n: 'penanggung_jawab', l: 'Penanggung jawab'}, {n: 'tim', l: 'Tim'},
+  {n: 'folder_drive', l: 'Folder Drive'},
+  {g: 'RAB (Rencana Anggaran Biaya)'},
+  {n: 'rab_penyusutan', l: 'Alokasi penyusutan (Rp) — saran dari Inventaris ÷ target event/bulan', t: 'num', def: function () { return Math.round(totalPenyusutanBulanan() / targetEventBulan()); }},
+  {n: 'rab_jepreto', l: 'Alokasi langganan Jepreto (Rp) — saran dari PENGATURAN ÷ target event/bulan', t: 'num', def: function () { return Math.round(P('JEPRETO_BULAN') / targetEventBulan()); }},
+  {n: 'rab_fee_crew', l: 'Fee crew (Rp)', t: 'num'}, {n: 'rab_transport', l: 'Transport (Rp)', t: 'num'}, {n: 'rab_konsumsi', l: 'Konsumsi (Rp)', t: 'num'},
+  {n: 'catatan', l: 'Catatan', t: 'area'}
+];
+var F_LAPORAN = [
+  {g: 'Waktu'}, {n: 'jam_buka_aktual', l: 'Jam buka aktual', t: 'time'}, {n: 'jam_tutup_aktual', l: 'Jam tutup aktual', t: 'time'},
+  {n: 'jam_ramai', l: 'Jam paling ramai'}, {n: 'antrean_terpanjang', l: 'Antrean terpanjang (orang)', t: 'num'},
+  {n: 'downtime_menit', l: 'Total berhenti (menit)', t: 'num'},
+  {g: 'Penjualan'}, {n: 'jumlah_transaksi', l: 'Jumlah transaksi', t: 'num'},
+  {n: 'sesi_terjual', l: 'Sesi terjual (1 sesi = 1 lembar)', t: 'num'}, {n: 'lembar_tambahan', l: 'Lembar / strip tambahan (di luar sesi)', t: 'num'},
+  {n: 'grad_book_terjual', l: 'Graduation Book terjual', t: 'num'},
+  {n: 'grup_potongan', l: 'Grup dapat potongan', t: 'num'}, {n: 'softfile_terkirim', l: 'Softfile terkirim', t: 'num'},
+  {g: 'Printer'}, {n: 'counter_awal', l: 'Counter awal', t: 'num'}, {n: 'counter_akhir', l: 'Counter akhir', t: 'num'},
+  {n: 'lembar_uji_bonus', l: 'Lembar uji / bonus', t: 'num'}, {n: 'lembar_gagal', l: 'Lembar gagal', t: 'num'},
+  {g: 'Uang'}, {n: 'tunai_dihitung', l: 'Tunai dihitung saat tutup (Rp)', t: 'num'}, {n: 'modal_kembalian', l: 'Modal kembalian (Rp)', t: 'num'},
+  {n: 'qris_transfer', l: 'QRIS / transfer (Rp)', t: 'num'},
+  {n: 'admin_qris', l: 'Potongan admin QRIS, total (Rp) — otomatis dicatat sebagai Kas Keluar', t: 'num'},
+  {n: 'admin_pencairan', l: 'Admin transfer pencairan QRIS (Rp) — otomatis dicatat sebagai Kas Keluar', t: 'num'},
+  {g: 'Stok'}, {n: 'stok_kertas_awal', l: 'Kertas awal (lembar)', t: 'num'}, {n: 'stok_kertas_akhir_fisik', l: 'Kertas akhir, hitung fisik', t: 'num'},
+  {n: 'stok_buku_awal', l: 'Graduation Book awal', t: 'num'}, {n: 'buku_rusak', l: 'Buku rusak', t: 'num'},
+  {n: 'tinta_terendah_persen', l: 'Level tinta terendah (%)', t: 'pct'},
+  {g: 'Catatan'}, {n: 'kendala', l: 'Kendala & penanganan', t: 'area'}, {n: 'keluhan_pengunjung', l: 'Keluhan / permintaan pengunjung', t: 'area'},
+  {n: 'rekomendasi', l: 'Rekomendasi event berikutnya', t: 'area'}, {n: 'catatan', l: 'Catatan lain', t: 'area'}
+];
+function formEvent(id) {
+  var e = id ? cari(D.event, 'id_event', id) : {};
+  var extra = id ? '<button class="btn danger" type="button" onclick="hapus(\'EVENT\',\'' + id + '\')">Hapus</button>' : '';
+  bukaForm(id ? 'Ubah ' + id : 'Event baru', F_EVENT, e, function (r) {
+    var sama = D.event.filter(function (x) { return x.tanggal === r.tanggal && x.id_event !== r.id_event && x.status !== 'Batal'; });
+    if (sama.length && r.status !== 'Batal' && !confirm('Tanggal ini sudah terisi: ' + sama.map(function (x) { return x.nama_event; }).join(', ') + '. Tetap simpan?')) return Promise.reject(new Error('dibatalkan'));
+    var crewBt = r.id_event && r.status !== 'Batal' ? D.tugas.filter(function (t) { return t.id_event === r.id_event && bentrokCrew(t.id_crew, r).length; }) : [];
+    if (crewBt.length && !confirm('Crew bentrok dengan jadwal baru ini: ' + crewBt.map(function (t) { return namaCrew(t.id_crew) + ' (di ' + bentrokCrew(t.id_crew, r)[0].nama_event + ')'; }).join(', ') + '. Tetap simpan?')) return Promise.reject(new Error('dibatalkan'));
+    return panggil('simpanEvent', r).then(function (hasil) { DETAIL = hasil.id; if (hasil.peringatan) alert(hasil.peringatan); });
+  }, extra);
+}
+function formLaporan(idEvent) {
+  var ada = cari(D.laporan, 'id_event', idEvent), l = Object.assign({}, ada || {id_event: idEvent});
+  if (num(l.strip_terjual)) { // laporan lama: strip digabung ke lembar tambahan (produk yang sama)
+    l.lembar_tambahan = num(l.lembar_tambahan) + Math.ceil(num(l.strip_terjual) * (P('LEMBAR_PER_STRIP') || 1));
+    l.strip_terjual = 0;
+  }
+  if (!ada) {
+    var k = stok('Kertas 4R'), b = stok('Graduation Book');
+    if (k !== null) l.stok_kertas_awal = k;
+    if (b !== null) l.stok_buku_awal = b;
+  }
+  bukaForm('Laporan ' + idEvent, F_LAPORAN, l, function (r) {
+    r.id_event = idEvent;
+    r.realisasi_penyusutan = totalPenyusutanBulanan() / targetEventBulan();
+    r.realisasi_jepreto = P('JEPRETO_BULAN') / targetEventBulan();
+    r.realisasi_biaya_lembar = biayaLembar();
+    r.realisasi_biaya_buku = P('BIAYA_BUKU');
+    return panggil('simpanLaporan', r);
+  }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto, serta HPP bahan per lembar & per buku, ikut terkunci sesuai kondisi Inventaris & PENGATURAN saat ini — perubahan berikutnya tidak akan mengubah angka event ini lagi. Admin QRIS & admin pencairan otomatis tercatat sebagai transaksi Kas Keluar (sudah termasuk di "Biaya langsung"), tidak perlu dicatat manual lagi di Kas.</div>');
+}
+</script>

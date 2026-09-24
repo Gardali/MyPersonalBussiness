@@ -1,0 +1,116 @@
+<script>
+// Posetive — halaman Kas & Stok, form kas & mutasi stok.
+function notaBtn(url) {
+  return /^https?:\/\//.test(url || '') ? '<a class="att" href="' + esc(url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Lihat nota">' + ikon('nota') + '</a>' : '';
+}
+function barisKas(k) {
+  var m = k.jenis === 'Masuk';
+  return item({lead: '<div class="ic ' + (m ? 'in' : '') + '">' + ikon(m ? 'down' : 'up') + '</div>', t: esc(k.keterangan || k.kategori), s: tgl(k.tanggal) + ' · ' + esc(k.kategori) + (k.id_event ? ' · ' + esc(k.id_event) : ''),
+    end: notaBtn(k.no_nota) + '<span class="' + (m ? 'pos' : '') + '">' + (m ? '+' : '−') + rp(k.nominal) + '</span>', on: "formKas('" + k.id + "')"});
+}
+
+function vKas() {
+  var bulanList = Array.from(new Set(D.kas.map(function (k) { return String(k.tanggal).slice(0, 7); }))).sort().reverse();
+  var f = FILTER.kas, sb = FILTER.kasSumber;
+  var list = D.kas.filter(function (k) { return !f || String(k.tanggal).slice(0, 7) === f; })
+    .filter(function (k) { return !sb || (sb === 'umum' ? !k.id_event : !!k.id_event); })
+    .sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : (a.id < b.id ? 1 : -1); });
+  var masuk = sum(list.filter(bukanSetoran), function (k) { return k.nominal; });
+  var setoran = sum(list.filter(function (k) { return k.jenis === 'Masuk' && k.kategori === 'Setoran Owner'; }), function (k) { return k.nominal; });
+  var keluar = sum(list.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
+  var saldo = saldoKas();
+  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Kas</div><div style="display:flex;gap:8px;align-items:center"><select class="plain" onchange="FILTER.kas=this.value;tampil(\'kas\')"><option value="">Semua bulan</option>' +
+    bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select><button class="btn sm" onclick="formKas()">+ Catat</button></div></div>';
+  h += '<div class="head2"><div class="hero" style="margin-top:0"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div></div>';
+  h += '<div class="stats" style="grid-template-columns:repeat(2,1fr)"><div class="stat"><div class="k">Kas Posetive (operasional)</div><div class="v">' + rpSingkat(saldoPosetive()) + '</div></div>' +
+    '<div class="stat"><div class="k">Dari event</div><div class="v">' + rpSingkat(saldoEvent()) + '</div></div></div>';
+  h += '<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><div class="k">Pemasukan</div><div class="v pos">' + rpSingkat(masuk) + '</div></div>' +
+    '<div class="stat"><div class="k">Dari owner</div><div class="v">' + rpSingkat(setoran) + '</div></div>' +
+    '<div class="stat"><div class="k">Keluar</div><div class="v">' + rpSingkat(keluar) + '</div></div></div></div>';
+  h += '<div class="chips" style="margin-bottom:14px">' + [['', 'Semua'], ['umum', 'Posetive'], ['event', 'Event']].map(function (c) {
+    return '<button class="chip ' + (c[0] === sb ? 'on' : '') + '" onclick="FILTER.kasSumber=\'' + c[0] + '\';tampil(\'kas\')">' + c[1] + '</button>';
+  }).join('') + '</div>';
+  h += '<div class="card">' + (list.length ? list.map(barisKas).join('') : '<div class="empty">Belum ada transaksi.</div>') + '</div>';
+  return h;
+}
+
+
+function vStok() {
+  if (D.serverLama) return '<div class="pagetitle">Stok</div>' + notice('bad', '<b>Code.gs di Apps Script masih versi lama.</b> Halaman Stok butuh Code.gs terbaru (281 baris). Tempel ulang Code.gs, simpan, lalu Terapkan → Kelola deployment → Versi baru.');
+  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Stok</div><div style="display:flex;gap:8px"><button class="btn sm ghost" onclick="formMutasi(null,\'Hitung Fisik\')">Hitung fisik</button><button class="btn sm" onclick="formMutasi(null,\'Masuk\')">+ Beli</button></div></div>';
+  var tk = tintaTerakhir();
+  var kartu = BAHAN.map(function (b) {
+    var n = stok(b), min = b === 'Kertas 4R' ? Pd('STOK_MIN_KERTAS', 100) : Pd('STOK_MIN_BUKU', 5), sat = b === 'Kertas 4R' ? 'lembar' : 'buku';
+    var pakai = D.mutasi.filter(function (m) { return m.bahan === b && m.jenis === 'Keluar' && m.id_event; });
+    var rata = pakai.length ? Math.round(sum(pakai, function (m) { return m.jumlah; }) / pakai.length) : null;
+    return '<div class="card pad"><div class="meta">' + esc(b) + '</div><div class="big ' + (n !== null && n < min ? 'neg' : '') + '">' + (n === null ? '—' : n) + ' <span class="meta" style="font-size:14px">' + sat + '</span></div>' +
+      '<div class="meta">Minimum ' + min + (b === 'Kertas 4R' && n !== null ? ' · ≈ ' + (n / (P('ISI_KERTAS') || 100)).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' pack' : '') + (rata !== null ? ' · rata-rata ' + rata + '/event' : '') + '</div></div>';
+  });
+  var tinta = '<div class="card pad"><div class="meta">Tinta Epson 057 (warna terendah)</div><div class="big ' + (tk && tk.level <= Pd('TINTA_MIN', 0.2) ? 'neg' : '') + '">' + (tk ? Math.round(tk.level * 100) + '%' : '—') + '</div>' +
+    '<div class="meta">' + (tk ? 'Dari laporan ' + esc(tk.id_event) + ' (' + tgl(tk.tanggal) + ') · ≈ ' + Math.round(tk.level * P('KAPASITAS_TINTA')) + ' lembar lagi' : 'Isi "level tinta terendah" di laporan event') + '</div></div>';
+  h += '<div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">' + kartu.join('') + tinta + '</div>';
+  var cekAwal = D.mutasi.filter(function (m) { return String(m.catatan || '').indexOf('CEK:') === 0; });
+  cekAwal.forEach(function (m) { h += notice('', esc(m.bahan) + ': ' + esc(m.catatan.slice(4).trim())); });
+  var list = D.mutasi.slice().sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : (a.id < b.id ? 1 : -1); });
+  h += sec('Riwayat', '<div class="card">' + (list.length ? list.map(function (m) {
+    var tanda = m.jenis === 'Masuk' ? '+' : m.jenis === 'Keluar' ? '−' : '=';
+    return item({lead: '<div class="ic ' + (m.jenis === 'Masuk' ? 'in' : '') + '">' + ikon(m.jenis === 'Masuk' ? 'down' : m.jenis === 'Keluar' ? 'up' : 'box') + '</div>',
+      t: esc(m.bahan) + ' · ' + esc(m.jenis), s: tgl(m.tanggal) + (m.id_event ? ' · ' + esc(m.id_event) : '') + (m.catatan ? ' · ' + esc(String(m.catatan).replace(/^CEK:\s*/, '')) : ''),
+      end: tanda + num(m.jumlah), on: "formMutasi('" + m.id + "')"});
+  }).join('') : '<div class="empty">Belum ada catatan stok.</div>') + '</div>');
+  return h;
+}
+
+var F_MUTASI = [
+  {n: 'tanggal', l: 'Tanggal', t: 'date', def: 'today', wajib: 1},
+  {n: 'bahan', l: 'Bahan', t: 'sel', o: function () { return BAHAN.map(function (b) { return [b, b]; }); }, def: 'Kertas 4R', wajib: 1},
+  {n: 'jenis', l: 'Jenis', t: 'sel', o: function () { return [['Masuk', 'Masuk (beli)'], ['Keluar', 'Keluar (pakai/rusak)'], ['Hitung Fisik', 'Hitung fisik (set stok)']]; }, wajib: 1},
+  {n: 'jumlah', l: 'Jumlah (lembar / buku). Kertas: 1 pack = 100 lembar', t: 'num', wajib: 1},
+  {n: '_harga', l: 'Harga beli total (Rp) — otomatis dicatat di Kas', t: 'num', show: function (r) { return r.jenis === 'Masuk' && !r.id; }},
+  {n: 'id_event', l: 'Event terkait', t: 'sel', o: pilEvent},
+  {n: 'catatan', l: 'Catatan', t: 'area'}
+];
+function formMutasi(id, jenis) {
+  var m = id ? cari(D.mutasi, 'id', id) : {jenis: jenis};
+  var extra = id ? '<button class="btn danger" type="button" onclick="hapus(\'MUTASI_STOK\',\'' + id + '\')">Hapus</button>' : '';
+  if (m && String(m.sumber || '').indexOf('LAPORAN:') === 0) extra = '<div class="meta">Dibuat otomatis dari laporan ' + esc(m.id_event) + '. Ubah laporannya, bukan catatan ini.</div>';
+  bukaForm(id ? 'Stok ' + id : (jenis === 'Hitung Fisik' ? 'Hitung fisik stok' : 'Catat stok'), F_MUTASI, m, function (r) {
+    var harga = r._harga; delete r._harga;
+    return panggil('simpanMutasi', r, harga || 0);
+  }, extra);
+}
+
+
+function pilihBukti(inp) {
+  var f = inp.files[0]; if (!f) return;
+  var ok = {'image/png': 1, 'image/jpeg': 1, 'application/pdf': 1};
+  if (!ok[f.type]) { toast('Harus PNG, JPG, atau PDF'); inp.value = ''; return; }
+  var reader = new FileReader();
+  reader.onload = function () {
+    NOTA_BARU = {base64: reader.result.split(',')[1], mime: f.type};
+    var span = document.getElementById('bukti_nama'); if (span) span.textContent = f.name;
+  };
+  reader.readAsDataURL(f);
+}
+var F_KAS = [
+  {n: 'tanggal', l: 'Tanggal', t: 'date', def: 'today', wajib: 1}, {n: 'jenis', l: 'Jenis', t: 'sel', o: pil('Jenis Kas'), def: 'Keluar', wajib: 1},
+  {n: 'nominal', l: 'Nominal (Rp)', t: 'num', wajib: 1}, {n: 'kategori', l: 'Kategori', t: 'sel', o: pil('Kategori Kas'), wajib: 1},
+  {n: 'keterangan', l: 'Keterangan'}, {n: 'id_event', l: 'Event terkait', t: 'sel', o: pilEvent},
+  {n: 'metode', l: 'Metode', t: 'sel', o: pil('Metode')}, {n: 'no_nota', l: 'Nota / bukti (PNG, JPG, atau PDF)', t: 'bukti'}, {n: 'catatan', l: 'Catatan', t: 'area'}
+];
+function formKas(id, idEvent, isian) {
+  var k = id ? cari(D.kas, 'id', id) : Object.assign({id_event: idEvent || ''}, isian);
+  NOTA_BARU = null;
+  var extra = id ? '<button class="btn danger" type="button" onclick="hapus(\'KAS\',\'' + id + '\')">Hapus</button>' : '';
+  if (k && String(k.sumber || '').indexOf('LAPORAN:') === 0) extra = '<div class="meta">Dibuat otomatis dari laporan ' + esc(k.id_event) + ' (admin QRIS/pencairan). Ubah laporannya, bukan catatan ini.</div>';
+  if (k && String(k.sumber || '').indexOf('TUGAS:') === 0) extra = '<div class="meta">Dibuat otomatis dari pembayaran fee crew (' + esc(String(k.sumber).slice(6)) + '). Ubah fee atau batalkan pembayaran dari halaman event ' + esc(k.id_event) + '.</div>';
+  bukaForm(id ? 'Kas ' + id : 'Catat kas', F_KAS, k, function (r) {
+    return panggil('saveRecord', 'KAS', r).then(function (idBaru) {
+      if (!NOTA_BARU) return idBaru;
+      var ext = {'image/png': '.png', 'image/jpeg': '.jpg', 'application/pdf': '.pdf'}[NOTA_BARU.mime] || '';
+      var nama = idBaru + ' - ' + r.tanggal + (r.kategori ? ' - ' + r.kategori : '') + ext;
+      return panggil('simpanNotaKas', idBaru, NOTA_BARU.base64, NOTA_BARU.mime, nama).then(function () { return idBaru; });
+    });
+  }, extra);
+}
+</script>

@@ -1,0 +1,2 @@
+# File yang TIDAK dikirim ke Apps Script (hanya .gs, .html, dan appsscript.json yang dikirim).
+**/*.md

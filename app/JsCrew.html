@@ -1,0 +1,137 @@
+<script>
+// Posetive — halaman Crew, form crew, penugasan & pembayaran fee.
+function vCrew() {
+  var now = D.hariIni;
+  var list = D.crew.slice().sort(function (a, b) { return String(a.nama_panggilan || a.nama_lengkap).localeCompare(String(b.nama_panggilan || b.nama_lengkap)); });
+  var h = '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button><div class="bar"><div class="pagetitle" style="margin:0">Crew</div><button class="btn sm" onclick="formCrew()">+ Crew</button></div>';
+  var belum = feeBelumDibayar(false), perCrew = {};
+  belum.forEach(function (t) { (perCrew[t.id_crew] = perCrew[t.id_crew] || []).push(t); });
+  if (belum.length) {
+    h += sec('Fee belum dibayar <span class="pill p-warn" style="margin-left:4px">' + rpSingkat(sum(belum, function (t) { return t.fee; })) + '</span>', Object.keys(perCrew).map(function (id) {
+      var c = cari(D.crew, 'id_crew', id) || {}, rows = perCrew[id].sort(function (a, b) { var ea = cari(D.event, 'id_event', a.id_event), eb = cari(D.event, 'id_event', b.id_event); return ea.tanggal < eb.tanggal ? -1 : 1; });
+      var ids = rows.map(function (t) { return t.id; });
+      return '<div class="card pad" style="margin-bottom:8px"><div class="bar" style="margin:0 0 4px"><div><div style="font-weight:700">' + esc(namaCrew(id)) + '</div><div class="meta">' + (c.bank || c.no_rekening ? esc(c.bank || '') + ' ' + esc(c.no_rekening || '') : 'Rekening belum diisi') + '</div></div>' +
+        '<button class="btn sm" onclick="formBayarFee(' + esc(JSON.stringify(ids)) + ')">Bayar ' + rp(sum(rows, function (t) { return t.fee; })) + '</button></div><table>' +
+        rows.map(function (t) {
+          var e = cari(D.event, 'id_event', t.id_event);
+          return '<tr style="cursor:pointer" onclick="bukaEvent(\'' + t.id_event + '\')"><td>' + tgl(e.tanggal) + ' · ' + esc(e.nama_event) + (e.tanggal >= now ? ' <span class="pill">belum jalan</span>' : '') + '</td><td class="r">' + rp(t.fee) + '</td></tr>';
+        }).join('') + '</table></div>';
+    }).join(''));
+  }
+  h += sec('Semua crew', '<div class="card">' + (list.length ? list.map(function (c) {
+    var habis = c.tanggal_akhir_kontrak && c.tanggal_akhir_kontrak < now;
+    var segera = !habis && c.tanggal_akhir_kontrak && selisihHari(c.tanggal_akhir_kontrak, now) <= 30;
+    var jml = D.tugas.filter(function (t) { return t.id_crew === c.id_crew; }).length;
+    return item({
+      lead: '<div class="av" id="avcrew-' + c.id_crew + '">' + inisial(c.nama_panggilan || c.nama_lengkap) + '</div>',
+      t: esc(c.nama_panggilan || c.nama_lengkap), s: esc(c.role || '—') + (c.domisili ? ' · ' + esc(c.domisili) : '') + (jml ? ' · ' + jml + ' event' : ''),
+      end: habis ? '<span class="pill p-bad">Kontrak berakhir</span>' : segera ? '<span class="pill p-warn">Kontrak segera berakhir</span>' : '',
+      on: "formCrew('" + c.id_crew + "')"
+    });
+  }).join('') : '<div class="empty">Belum ada data crew.</div>') + '</div>');
+  list.filter(function (c) { return c.foto; }).forEach(function (c) {
+    panggil('getFotoCrew', c.id_crew).then(function (dataUri) {
+      var el = document.getElementById('avcrew-' + c.id_crew);
+      if (el && dataUri) el.innerHTML = '<img src="' + dataUri + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover">';
+    });
+  });
+  return h;
+}
+function pilihFoto(inp) {
+  var f = inp.files[0]; if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    var img = new Image();
+    img.onload = function () {
+      var max = 640, w = img.width, h = img.height;
+      if (w > max || h > max) { if (w > h) { h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; } }
+      var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      var dataUrl = cv.toDataURL('image/jpeg', 0.82);
+      FOTO_BARU = {base64: dataUrl.split(',')[1], mime: 'image/jpeg', nama: (f.name || 'foto') + '.jpg'};
+      var prev = document.getElementById('foto_prev'); if (prev) { prev.src = dataUrl; prev.style.visibility = 'visible'; }
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(f);
+}
+var F_CREW = [
+  {n: '_foto', l: 'Foto profil', t: 'file'},
+  {n: 'nama_lengkap', l: 'Nama lengkap', wajib: 1}, {n: 'nama_panggilan', l: 'Nama panggilan'},
+  {n: 'email', l: 'Email (Gmail) — untuk undangan Google Calendar', t: 'email'},
+  {n: 'domisili', l: 'Domisili'}, {n: 'kendaraan', l: 'Punya kendaraan?', t: 'sel', o: pil('Ya/Tidak')},
+  {n: 'role', l: 'Role', t: 'sel', o: pil('Role Crew')},
+  {g: 'Kontrak'}, {n: 'tanggal_mulai_kontrak', l: 'Mulai kontrak', t: 'date'}, {n: 'tanggal_akhir_kontrak', l: 'Akhir kontrak', t: 'date'},
+  {g: 'Rekening'}, {n: 'bank', l: 'Bank'}, {n: 'no_rekening', l: 'No. rekening'},
+  {g: 'Lainnya'}, {n: 'catatan', l: 'Catatan', t: 'area'}
+];
+
+function formCrew(id) {
+  var c = id ? cari(D.crew, 'id_crew', id) : {};
+  FOTO_BARU = null;
+  var extra = id ? '<button class="btn danger" type="button" onclick="hapusCrewUI(\'' + id + '\')">Hapus</button>' : '';
+  bukaForm(id ? (c.nama_panggilan || c.nama_lengkap || id) : 'Crew baru', F_CREW, c, function (r) {
+    delete r._foto;
+    var emailBerubah = String(r.email || '').trim().toLowerCase() !== String(c.email || '').trim().toLowerCase();
+    return panggil('saveRecord', 'CREW', r).then(function (idBaru) {
+      return FOTO_BARU ? panggil('simpanFotoCrew', idBaru, FOTO_BARU.base64, FOTO_BARU.mime, FOTO_BARU.nama).then(function () { return idBaru; }) : idBaru;
+    }).then(function (idBaru) {
+      // Undangan kalender di event mendatang ikut disesuaikan; gagal di sini tidak membatalkan simpan.
+      return id && emailBerubah && D.kalender ? panggil('sinkronCrew', idBaru).catch(function () { }) : idBaru;
+    });
+  }, extra);
+  if (c.foto) panggil('getFotoCrew', id).then(function (dataUri) { var img = document.getElementById('foto_prev'); if (img && dataUri) { img.src = dataUri; img.style.visibility = 'visible'; } });
+}
+var F_TUGAS = [
+  {n: 'id_crew', l: 'Crew', t: 'sel', wajib: 1, o: function () {
+    var e = cari(D.event, 'id_event', FORM.rec.id_event) || {};
+    return D.crew.map(function (c) {
+      var bt = bentrokCrew(c.id_crew, e);
+      return [c.id_crew, (c.nama_panggilan || c.nama_lengkap) + (c.role ? ' · ' + c.role : '') + (bt.length ? ' — sudah di ' + bt[0].nama_event : '')];
+    });
+  }},
+  {n: 'fee', l: 'Fee (Rp)', t: 'num', wajib: 1, def: function () { return P('FEE_CREW'); }},
+  {n: 'catatan', l: 'Catatan (mis. lembur, jadi PJ)', t: 'area'}
+];
+function formTugas(id, idEvent) {
+  var t = id ? cari(D.tugas, 'id', id) : {id_event: idEvent};
+  if (!D.crew.length) { toast('Isi data crew dulu di Lainnya → Crew'); return; }
+  var extra = '';
+  if (id) {
+    extra = feeLunas(t) ? '<button class="btn ghost" type="button" onclick="batalBayarFee(\'' + id + '\')">Batalkan pembayaran</button>' : '<button class="btn ghost" type="button" onclick="tutupForm();formBayarFee([\'' + id + '\'])">Bayar fee</button>';
+    extra += '<button class="btn danger" type="button" onclick="hapusTugas(\'' + id + '\')">Hapus</button>';
+  }
+  bukaForm(id ? 'Tugas ' + namaCrew(t.id_crew) : 'Tugaskan crew', F_TUGAS, t, function (r) {
+    var dobel = D.tugas.filter(function (x) { return x.id_event === r.id_event && x.id_crew === r.id_crew && x.id !== r.id; });
+    if (dobel.length) return Promise.reject(new Error(namaCrew(r.id_crew) + ' sudah ditugaskan di event ini'));
+    var ev = cari(D.event, 'id_event', r.id_event), bt = ev ? bentrokCrew(r.id_crew, ev) : [];
+    if (bt.length && !confirm(namaCrew(r.id_crew) + ' sudah bertugas di ' + bt.map(function (x) { return x.nama_event + (x.jam_buka ? ' (' + x.jam_buka + '–' + (x.jam_tutup || '?') + ')' : ''); }).join(', ') + ' pada ' + tgl(ev.tanggal) + '. Tetap tugaskan?')) return Promise.reject(new Error('dibatalkan'));
+    return panggil('simpanTugasCrew', r);
+  }, extra + (id && feeLunas(t) ? '<div class="meta">Fee sudah dibayar. Mengubah fee ikut mengubah nominal di Kas.</div>' : ''));
+}
+var F_BAYAR_FEE = [
+  {n: 'tanggal', l: 'Tanggal bayar', t: 'date', def: 'today', wajib: 1},
+  {n: 'metode', l: 'Metode', t: 'sel', o: pil('Metode'), def: 'Transfer'}
+];
+function formBayarFee(ids) {
+  var rows = D.tugas.filter(function (t) { return ids.indexOf(t.id) >= 0; });
+  var info = '<div class="meta">' + rows.map(function (t) { return esc(namaCrew(t.id_crew)) + ' · ' + esc(namaEvent(t.id_event)) + ' · ' + rp(t.fee); }).join('<br>') +
+    '<br><b>Total ' + rp(sum(rows, function (t) { return t.fee; })) + '</b> — dicatat sebagai Kas Keluar "Fee Crew" per event.</div>';
+  bukaForm('Bayar fee crew', F_BAYAR_FEE, {}, function (r) { return panggil('bayarFeeCrew', ids, r); }, info);
+}
+function batalBayarFee(id) {
+  if (!confirm('Batalkan pembayaran fee ini? Catatan Kas-nya ikut dihapus.')) return;
+  panggil('batalBayarFeeCrew', id).then(function () { tutupForm(); toast('Pembayaran dibatalkan'); return muat(true); })
+    .catch(function (e) { toast('Gagal: ' + (e && e.message || e)); });
+}
+function hapusTugas(id) {
+  if (!confirm('Hapus penugasan ini?' + (feeLunas(cari(D.tugas, 'id', id)) ? ' Catatan Kas pembayaran fee-nya ikut dihapus.' : ''))) return;
+  panggil('hapusTugasCrew', id).then(function () { tutupForm(); toast('Penugasan dihapus'); return muat(true); })
+    .catch(function (e) { toast('Gagal: ' + (e && e.message || e)); });
+}
+function hapusCrewUI(id) {
+  if (!confirm('Hapus data crew ini? Foto ikut terhapus, tidak bisa dibatalkan.')) return;
+  panggil('hapusCrew', id).then(function () { tutupForm(); toast(id + ' dihapus'); return muat(true); })
+    .catch(function (e) { toast('Gagal: ' + (e && e.message || e)); });
+}
+</script>

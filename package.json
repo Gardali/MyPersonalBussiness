@@ -1,0 +1,15 @@
+{
+  "name": "posetive-app",
+  "private": true,
+  "description": "Aplikasi Posetive Photobooth (Google Apps Script). Kirim kode ke Apps Script dengan clasp — lihat app/PANDUAN_PASANG.md.",
+  "scripts": {
+    "masuk": "clasp login",
+    "kirim": "clasp push --force",
+    "pasang": "clasp push --force && clasp update-deployment AKfycbzLnJOrqLzFUCmo91fog8eyVVl2F86RWW5Jtn0DaX-RPMHybQ2_AH-VCqFWYVBBU9zP -d Pembaruan",
+    "versi-aplikasi": "clasp list-deployments && clasp list-versions",
+    "versi": "clasp --version"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.4.1"
+  }
+}

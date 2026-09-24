@@ -1,0 +1,72 @@
+<script>
+// Posetive — formulir umum (bukaForm, simpan, hapus).
+// ---------------------------------------------------------------- formulir
+var FORM = null, FOTO_BARU = null, NOTA_BARU = null;
+function bukaForm(judul, fields, rec, onSave, extra, preview) {
+  FORM = {fields: fields, rec: Object.assign({}, rec), onSave: onSave, preview: preview};
+  fields.forEach(function (f) { if (f.n && FORM.rec[f.n] === undefined && f.def) FORM.rec[f.n] = f.def === 'today' ? D.hariIni : (typeof f.def === 'function' ? f.def() : f.def); });
+  var h = '<div class="grab"></div><h2>' + esc(judul) + '</h2><form id="frm" onsubmit="simpanForm();return false">';
+  fields.forEach(function (f, i) {
+    if (f.g) { h += '<div class="grp">' + esc(f.g) + '</div>'; return; }
+    var v = FORM.rec[f.n]; v = v == null ? '' : v;
+    if (f.t === 'pct' && v !== '') v = Math.round(num(v) * 100);
+    var inp;
+    if (f.t === 'sel') inp = '<select name="' + f.n + '"><option value="">— pilih —</option>' + f.o().map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(v) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
+    else if (f.t === 'area') inp = '<textarea name="' + f.n + '">' + esc(v) + '</textarea>';
+    else if (f.t === 'file') inp = '<div style="display:flex;align-items:center;gap:12px"><img id="foto_prev" style="width:56px;height:56px;border-radius:50%;object-fit:cover;background:var(--soft);visibility:hidden;flex:none"><input type="file" accept="image/*" onchange="pilihFoto(this)"></div>';
+    else if (f.t === 'bukti') inp = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' + (/^https?:\/\//.test(v) ? '<a class="btn sm ghost" href="' + esc(v) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">Lihat nota</a>' : '') +
+      '<input type="file" accept="image/png,image/jpeg,application/pdf" onchange="pilihBukti(this)"><span id="bukti_nama" class="meta"></span></div>';
+    else {
+      var type = {date: 'date', time: 'time', num: 'number', pct: 'number', tel: 'tel', email: 'email'}[f.t] || 'text';
+      inp = '<input name="' + f.n + '" type="' + type + '"' + (type === 'number' ? ' inputmode="decimal" step="any"' : '') + ' value="' + esc(v) + '">';
+    }
+    h += '<div class="f' + (f.t === 'area' || f.t === 'file' || f.t === 'bukti' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
+  });
+  if (FORM.preview) h += '<div id="preview" class="f wide" style="margin-top:10px"></div>';
+  h += '<div class="btns"><button class="btn" type="submit" style="flex:1">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()">Batal</button></div>' + (extra ? '<div class="btns">' + extra + '</div>' : '') + '</form>';
+  document.getElementById('panel').innerHTML = h;
+  document.getElementById('sheet').classList.add('open');
+  document.getElementById('frm').addEventListener('change', aturTampil);
+  if (preview) document.getElementById('frm').addEventListener('input', function () { FORM.preview(bacaForm()); });
+  aturTampil();
+}
+function bacaForm() {
+  var frm = document.getElementById('frm'), r = Object.assign({}, FORM.rec);
+  FORM.fields.forEach(function (f) {
+    if (!f.n) return;
+    var el = frm.elements[f.n]; if (!el) return;
+    var v = el.value.trim();
+    if ((f.t === 'num' || f.t === 'pct') && v !== '') v = Number(v);
+    if (f.t === 'pct' && v !== '') v = v / 100;
+    r[f.n] = v;
+  });
+  return r;
+}
+function aturTampil() {
+  var r = bacaForm();
+  document.querySelectorAll('#frm .f[data-i]').forEach(function (div) {
+    var f = FORM.fields[Number(div.dataset.i)];
+    div.style.display = f.show && !f.show(r) ? 'none' : '';
+  });
+  if (FORM.preview) FORM.preview(r);
+}
+function tutupForm() { document.getElementById('sheet').classList.remove('open'); FORM = null; }
+document.getElementById('sheet').addEventListener('click', function (e) { if (e.target.id === 'sheet') tutupForm(); });
+
+function simpanForm() {
+  var r = bacaForm();
+  var kurang = FORM.fields.filter(function (f) { return f.wajib && (r[f.n] === '' || r[f.n] == null); });
+  if (kurang.length) { toast('Wajib diisi: ' + kurang.map(function (f) { return f.l; }).join(', ')); return; }
+  FORM.fields.forEach(function (f) { if (f.show && !f.show(r)) r[f.n] = ''; });
+  delete r._row;
+  var btn = document.querySelector('#frm button[type=submit]'); btn.disabled = true; btn.textContent = 'Menyimpan…';
+  FORM.onSave(r).then(function () { tutupForm(); toast('Tersimpan'); return muat(true); })
+    .catch(function (e) { btn.disabled = false; btn.textContent = 'Simpan'; toast('Gagal: ' + (e && e.message || e)); });
+}
+
+function hapus(tab, id) {
+  if (!confirm('Hapus ' + id + '? Tidak bisa dibatalkan.')) return;
+  (tab === 'EVENT' ? panggil('hapusEvent', id) : panggil('deleteRecord', tab, id)).then(function () { tutupForm(); toast(id + ' dihapus'); if (tab === 'EVENT') DETAIL = null; return muat(true); })
+    .catch(function (e) { toast('Gagal: ' + (e && e.message || e)); });
+}
+</script>
