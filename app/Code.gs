@@ -29,7 +29,6 @@ var PENGATURAN_BARU = [
   ['KONTAK_USAHA', '', 'teks', 'No. WA / email usaha di invoice'],
   ['REKENING', '', 'teks', 'Rekening pembayaran di invoice, mis. BCA 123456 a.n. ...'],
   ['NAMA_MANAJER', 'Garda Ali Rayhaan', 'teks', 'Nama penyusun laporan bulanan'],
-  ['HARGA_LEMBAR_TAMBAHAN', 0, 'Rp', 'Harga tiap lembar cetak tambahan di luar sesi (1 sesi = 1 lembar, dihitung dari HARGA_4R)'],
   ['PENYUSUTAN_HARGA_MIN', 250000, 'Rp', 'Barang Inventaris (kategori Aset, milik Posetive) di bawah harga ini tidak dihitung penyusutan']
 ];
 // Kolom baru di tab LAPORAN_EVENT, EVENT, INVENTARIS, dan KAS yang ditambahkan otomatis bila belum ada (di kolom paling kanan).
@@ -304,9 +303,8 @@ var PENGATURAN_APP = {
   CADANGAN_GAGAL: ['persen', 'Cadangan cetak gagal', 0, 1, false],
   BIAYA_BUKU: ['Rp/buku', 'Biaya cetak Graduation Book', 0, null, false],
   HARGA_4R: ['Rp/lembar', 'Harga jual foto 4R', 0, null, false],
-  HARGA_LEMBAR_TAMBAHAN: ['Rp', 'Harga tiap lembar cetak tambahan di luar sesi', 0, null, false],
   HARGA_BUKU: ['Rp/buku', 'Harga jual Graduation Book (termasuk 1 foto 4R)', 0, null, false],
-  HARGA_STRIP: ['Rp/lembar', 'Cetak strip tambahan', 0, null, false]
+  HARGA_STRIP: ['Rp/lembar', 'Harga lembar / strip tambahan di luar sesi', 0, null, false]
 };
 // Pengaturan yang menentukan HPP; sebelum diubah, HPP lama dikunci dulu ke laporan event yang sudah ada.
 var KUNCI_HPP = ['HARGA_KERTAS', 'ISI_KERTAS', 'HARGA_TINTA', 'KAPASITAS_TINTA', 'CADANGAN_GAGAL', 'BIAYA_BUKU'];

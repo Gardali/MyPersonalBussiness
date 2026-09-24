@@ -332,12 +332,13 @@ function hasilEvent(ev) {
   if (lap) {
     var adaSplit = lap.sesi_terjual !== '' && lap.sesi_terjual != null;
     h.sesiTerjual = adaSplit ? num(lap.sesi_terjual) : num(lap.foto_4r_terjual);
-    h.lembarTambahan = adaSplit ? num(lap.lembar_tambahan) : 0;
-    h.omzet = h.sesiTerjual * P('HARGA_4R') + h.lembarTambahan * P('HARGA_LEMBAR_TAMBAHAN') + num(lap.grad_book_terjual) * P('HARGA_BUKU') +
-      num(lap.strip_terjual) * P('HARGA_STRIP') - num(lap.grup_potongan) * P('POTONGAN_GRUP');
+    // Lembar tambahan = strip tambahan (produk yang sama, harga HARGA_STRIP). strip_terjual hanya ada di laporan lama.
+    h.lembarTambahan = num(lap.lembar_tambahan) + Math.ceil(num(lap.strip_terjual) * (P('LEMBAR_PER_STRIP') || 1));
+    h.omzet = h.sesiTerjual * P('HARGA_4R') + h.lembarTambahan * P('HARGA_STRIP') + num(lap.grad_book_terjual) * P('HARGA_BUKU') -
+      num(lap.grup_potongan) * P('POTONGAN_GRUP');
     h.diterima = num(lap.tunai_dihitung) - num(lap.modal_kembalian) + num(lap.qris_transfer);
     h.selisihKas = h.diterima - h.omzet;
-    h.lembarTerjual = h.sesiTerjual + h.lembarTambahan + num(lap.grad_book_terjual) + Math.ceil(num(lap.strip_terjual) * (P('LEMBAR_PER_STRIP') || 1));
+    h.lembarTerjual = h.sesiTerjual + h.lembarTambahan + num(lap.grad_book_terjual);
     h.selisihLembar = h.tercetak - (h.lembarTerjual + num(lap.lembar_uji_bonus) + num(lap.lembar_gagal));
   }
   if (ev.model_pendapatan === 'Kontrak Klien' && num(ev.nilai_kontrak) > 0) h.piutang = num(ev.nilai_kontrak) - h.masuk;
@@ -774,7 +775,7 @@ function vDetailEvent() {
     var lp = '<div class="card pad"><table>' +
       '<tr><td>Jam aktual</td><td class="r">' + esc(lap.jam_buka_aktual || '—') + '–' + esc(lap.jam_tutup_aktual || '—') + '</td></tr>' +
       '<tr><td>Transaksi</td><td class="r">' + num(lap.jumlah_transaksi) + '</td></tr>' +
-      '<tr><td>Sesi · Lembar tambahan · Grad Book · Strip</td><td class="r">' + r.sesiTerjual + ' · ' + r.lembarTambahan + ' · ' + num(lap.grad_book_terjual) + ' · ' + num(lap.strip_terjual) + '</td></tr>' +
+      '<tr><td>Sesi · Lembar/strip tambahan · Grad Book</td><td class="r">' + r.sesiTerjual + ' · ' + r.lembarTambahan + ' · ' + num(lap.grad_book_terjual) + '</td></tr>' +
       '<tr><td>Tercetak (counter)</td><td class="r">' + r.tercetak + '</td></tr>' +
       '<tr><td>Terjual + uji + gagal</td><td class="r">' + r.lembarTerjual + ' + ' + num(lap.lembar_uji_bonus) + ' + ' + num(lap.lembar_gagal) + '</td></tr>' +
       '<tr class="total"><td>Selisih lembar</td><td class="r ' + (r.selisihLembar ? 'neg' : 'pos') + '">' + (r.selisihLembar ? r.selisihLembar + ' · periksa' : 'Cocok') + '</td></tr>' +
@@ -1080,8 +1081,8 @@ function rincianHpp(p) {
   var kertas = p('HARGA_KERTAS') / (p('ISI_KERTAS') || 1), tinta = p('HARGA_TINTA') / (p('KAPASITAS_TINTA') || 1);
   var sub = kertas + tinta, cad = sub * p('CADANGAN_GAGAL'), lembar = sub + cad;
   return {kertas: kertas, tinta: tinta, sub: sub, cad: cad, lembar: lembar, buku: p('BIAYA_BUKU'),
-    produk: [['Foto 4R (1 sesi)', p('HARGA_4R'), lembar], ['Lembar tambahan', p('HARGA_LEMBAR_TAMBAHAN'), lembar],
-      ['Strip tambahan (per lembar)', p('HARGA_STRIP'), lembar], ['Graduation Book + 1 foto 4R', p('HARGA_BUKU'), p('BIAYA_BUKU') + lembar]]};
+    produk: [['Foto 4R (1 sesi)', p('HARGA_4R'), lembar], ['Lembar / strip tambahan', p('HARGA_STRIP'), lembar],
+      ['Graduation Book + 1 foto 4R', p('HARGA_BUKU'), p('BIAYA_BUKU') + lembar]]};
 }
 function tabelMargin(produk) {
   return '<table><tr><td></td><td class="r" style="font-weight:600">Jual</td><td class="r" style="font-weight:600">HPP</td><td class="r" style="font-weight:600">Margin</td></tr>' +
@@ -1116,8 +1117,8 @@ var F_HPP = [
   {n: 'HARGA_TINTA', l: 'Harga tinta per set (Rp)', t: 'num', wajib: 1}, {n: 'KAPASITAS_TINTA', l: 'Kapasitas tinta per set (lembar)', t: 'num', wajib: 1},
   {n: 'CADANGAN_GAGAL', l: 'Cadangan cetak gagal (%)', t: 'pct', wajib: 1}, {n: 'BIAYA_BUKU', l: 'Biaya cetak Graduation Book (Rp/buku)', t: 'num', wajib: 1},
   {g: 'Harga jual'},
-  {n: 'HARGA_4R', l: 'Foto 4R per sesi (Rp)', t: 'num', wajib: 1}, {n: 'HARGA_LEMBAR_TAMBAHAN', l: 'Lembar tambahan (Rp)', t: 'num', wajib: 1},
-  {n: 'HARGA_STRIP', l: 'Strip tambahan per lembar (Rp)', t: 'num', wajib: 1}, {n: 'HARGA_BUKU', l: 'Graduation Book + 1 foto (Rp)', t: 'num', wajib: 1}
+  {n: 'HARGA_4R', l: 'Foto 4R per sesi (Rp)', t: 'num', wajib: 1}, {n: 'HARGA_STRIP', l: 'Lembar / strip tambahan (Rp/lembar)', t: 'num', wajib: 1},
+  {n: 'HARGA_BUKU', l: 'Graduation Book + 1 foto (Rp)', t: 'num', wajib: 1}
 ];
 function formHpp() {
   var rec = {};
@@ -1332,8 +1333,8 @@ function dataLaporanEventXlsx(e) {
     rows.push(['LAPORAN PRODUKSI']);
     kv([
       ['Jam buka–tutup aktual', (lap.jam_buka_aktual || '') + '–' + (lap.jam_tutup_aktual || '')],
-      ['Jumlah transaksi', num(lap.jumlah_transaksi)], ['Sesi terjual', r.sesiTerjual], ['Lembar tambahan', r.lembarTambahan],
-      ['Graduation Book terjual', num(lap.grad_book_terjual)], ['Strip terjual', num(lap.strip_terjual)],
+      ['Jumlah transaksi', num(lap.jumlah_transaksi)], ['Sesi terjual', r.sesiTerjual], ['Lembar / strip tambahan', r.lembarTambahan],
+      ['Graduation Book terjual', num(lap.grad_book_terjual)],
       ['Counter awal', num(lap.counter_awal)], ['Counter akhir', num(lap.counter_akhir)], ['Tercetak', r.tercetak],
       ['Lembar uji/bonus', num(lap.lembar_uji_bonus)], ['Lembar gagal', num(lap.lembar_gagal)], ['Selisih lembar', r.selisihLembar || 0],
       ['Omzet menurut laporan', r.omzet || 0], ['Uang diterima', r.diterima || 0], ['Selisih kas', r.selisihKas || 0],
@@ -1436,8 +1437,8 @@ var F_LAPORAN = [
   {n: 'jam_ramai', l: 'Jam paling ramai'}, {n: 'antrean_terpanjang', l: 'Antrean terpanjang (orang)', t: 'num'},
   {n: 'downtime_menit', l: 'Total berhenti (menit)', t: 'num'},
   {g: 'Penjualan'}, {n: 'jumlah_transaksi', l: 'Jumlah transaksi', t: 'num'},
-  {n: 'sesi_terjual', l: 'Sesi terjual (1 sesi = 1 lembar)', t: 'num'}, {n: 'lembar_tambahan', l: 'Lembar tambahan (di luar sesi)', t: 'num'},
-  {n: 'grad_book_terjual', l: 'Graduation Book terjual', t: 'num'}, {n: 'strip_terjual', l: 'Strip tambahan (lembar)', t: 'num'},
+  {n: 'sesi_terjual', l: 'Sesi terjual (1 sesi = 1 lembar)', t: 'num'}, {n: 'lembar_tambahan', l: 'Lembar / strip tambahan (di luar sesi)', t: 'num'},
+  {n: 'grad_book_terjual', l: 'Graduation Book terjual', t: 'num'},
   {n: 'grup_potongan', l: 'Grup dapat potongan', t: 'num'}, {n: 'softfile_terkirim', l: 'Softfile terkirim', t: 'num'},
   {g: 'Printer'}, {n: 'counter_awal', l: 'Counter awal', t: 'num'}, {n: 'counter_akhir', l: 'Counter akhir', t: 'num'},
   {n: 'lembar_uji_bonus', l: 'Lembar uji / bonus', t: 'num'}, {n: 'lembar_gagal', l: 'Lembar gagal', t: 'num'},
@@ -1558,7 +1559,11 @@ function formEvent(id) {
   }, extra);
 }
 function formLaporan(idEvent) {
-  var ada = cari(D.laporan, 'id_event', idEvent), l = ada || {id_event: idEvent};
+  var ada = cari(D.laporan, 'id_event', idEvent), l = Object.assign({}, ada || {id_event: idEvent});
+  if (num(l.strip_terjual)) { // laporan lama: strip digabung ke lembar tambahan (produk yang sama)
+    l.lembar_tambahan = num(l.lembar_tambahan) + Math.ceil(num(l.strip_terjual) * (P('LEMBAR_PER_STRIP') || 1));
+    l.strip_terjual = 0;
+  }
   if (!ada) {
     var k = stok('Kertas 4R'), b = stok('Graduation Book');
     if (k !== null) l.stok_kertas_awal = k;
