@@ -18,3 +18,4 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 7. Undangan Google Calendar otomatis untuk crew yang ditugaskan (kolom email di CREW) dan peringatan crew bentrok jadwal — selesai.
 8. Inventaris: target event per bulan bisa diubah langsung, alokasi penyusutan per event (total & per barang) tampil — selesai.
 9. Halaman HPP & harga jual (Lainnya): rincian HPP, margin per produk, ubah angka dari aplikasi; HPP terkunci di laporan event — selesai.
+10. Tombol "Unduh Laporan" di event: laporan lengkap & rapi sebagai Google Spreadsheet (Ringkasan, Produksi, Kas, Alat), satu file per event, bisa diunduh .xlsx — selesai.

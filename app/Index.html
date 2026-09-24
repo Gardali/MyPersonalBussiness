@@ -736,7 +736,7 @@ function vDetailEvent() {
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">' + statusPill(e.status) + '<span class="pill">' + esc(e.model_pendapatan || 'Model belum diisi') + '</span>' + (e.skema ? '<span class="pill">' + esc(e.skema) + '</span>' : '') + '</div>';
   var kEv = kontakEvent(e);
   h += '<div class="meta">' + esc(e.lokasi || '') + (e.tim ? ' · ' + esc(e.tim) : '') + (kEv ? ' · ' + esc(kEv) + ' ' + waBtn(kEv) : '') + '</div>';
-  h += '<div class="btns" style="margin-bottom:20px"><button class="btn sm" onclick="formLaporan(\'' + e.id_event + '\')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="btn sm ghost" onclick="formKas(null,\'' + e.id_event + '\')">+ Kas</button><button class="btn sm ghost" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button><button class="btn sm ghost" onclick="exportLaporanEventXlsx(\'' + e.id_event + '\',this)">Export XLSX</button>' + (e.model_pendapatan === 'Kontrak Klien' ? '<button class="btn sm ghost" onclick="buatInvoiceUI(\'' + e.id_event + '\',this)">Invoice PDF</button>' : '') + '<button class="btn sm ghost" onclick="formEvent(\'' + e.id_event + '\')">Ubah</button></div>';
+  h += '<div class="btns" style="margin-bottom:20px"><button class="btn sm" onclick="formLaporan(\'' + e.id_event + '\')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="btn sm ghost" onclick="formKas(null,\'' + e.id_event + '\')">+ Kas</button><button class="btn sm ghost" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button><button class="btn sm ghost" onclick="unduhLaporanEvent(\'' + e.id_event + '\',this)">Unduh Laporan</button>' + (e.model_pendapatan === 'Kontrak Klien' ? '<button class="btn sm ghost" onclick="buatInvoiceUI(\'' + e.id_event + '\',this)">Invoice PDF</button>' : '') + '<button class="btn sm ghost" onclick="formEvent(\'' + e.id_event + '\')">Ubah</button></div>';
   if (String(e.catatan || '').indexOf('CEK:') === 0) h += notice('', esc(e.catatan.slice(4).trim()));
 
   var hk = '<div class="card pad"><div class="meta">Laba kotor</div><div class="big ' + cls(r.labaKotor) + '">' + rp(r.labaKotor) + '</div>' +
@@ -1308,51 +1308,168 @@ function htmlInvoice(e) {
   h += '<div style="margin-top:30px;color:#7a736a">Terima kasih.</div></div>';
   return {html: h, nomor: nomor};
 }
-function dataLaporanEventXlsx(e) {
-  var r = hasilEvent(e), lap = r.lap, rows = [];
-  var kv = function (arr) { arr.forEach(function (x) { rows.push(x); }); };
-  rows.push(['Laporan Event — ' + e.nama_event]);
-  kv([['Kode', e.id_event], ['Tanggal', e.tanggal], ['Status', e.status], ['Model pendapatan', e.model_pendapatan || ''], ['Lokasi', e.lokasi || ''], []]);
-  rows.push(['KEUANGAN']);
-  kv([
-    ['Pemasukan', r.masuk], ['Biaya langsung', -r.keluar],
-    ['Bahan (' + r.tercetak + ' lembar × ' + Math.round(r.bl) + ')', -r.bahan],
-    ['Alokasi per event', -r.alokasi], ['Laba kotor', r.labaKotor], ['Laba bersih', r.labaBersih]
-  ]);
-  if (r.piutang !== undefined) kv([['Nilai kontrak', num(e.nilai_kontrak)], ['Piutang', r.piutang]]);
-  rows.push([]);
-  if (r.rab.penyusutan || r.rab.jepreto || r.rab.feeCrew || r.rab.transport || r.rab.konsumsi) {
-    rows.push(['RAB VS REALISASI']);
-    rows.push(['Kategori', 'RAB', 'Realisasi']);
-    [['Penyusutan', r.rab.penyusutan, r.realisasi.penyusutan], ['Langganan Jepreto', r.rab.jepreto, r.realisasi.jepreto],
-      ['Fee crew', r.rab.feeCrew, r.realisasi.feeCrew], ['Transport', r.rab.transport, r.realisasi.transport], ['Konsumsi', r.rab.konsumsi, r.realisasi.konsumsi]]
-      .forEach(function (x) { rows.push(x); });
-    rows.push([]);
+/**
+ * Isi laporan event (Google Spreadsheet): {sheets: [{nama, lebar: [px per kolom], grid, rows: [{v: [nilai], t: gaya baris, f: [format sel], w: bungkus teks}]}]}.
+ * Gaya baris: judul | sub | bagian | head | total. Format sel: rp | n | pct | tgl (teks 'yyyy-mm-dd'). Dirapikan di server (buatLaporanEventSheet).
+ */
+function dataLaporanEvent(e) {
+  var r = hasilEvent(e), lap = r.lap, P2 = D.pengaturan, sheets = [];
+  var p = e.id_pipeline ? cari(D.pipeline, 'id', e.id_pipeline) : null;
+  var lembar = function (nama, lebar, grid) { var s = {nama: nama, lebar: lebar, grid: !!grid, rows: []}; sheets.push(s); return s; };
+  var baris = function (s, v, t, f, w) { s.rows.push({v: v, t: t || '', f: f || [], w: !!w}); };
+  var kosong = function (s) { baris(s, []); };
+  var kv = function (s, label, nilai, fmt, t) { if (nilai === '' || nilai == null) return; baris(s, [label, nilai], t, ['', fmt || ''], fmt === undefined && String(nilai).length > 40); };
+  var kepala = function (s, sub) {
+    baris(s, [(P2.NAMA_USAHA || 'Posetive Photobooth') + ' — Laporan Event'], 'sub');
+    baris(s, [e.nama_event + (sub ? ' · ' + sub : '')], 'judul');
+    baris(s, [hari(e.tanggal) + ', ' + tgl(e.tanggal) + (e.lokasi ? ' · ' + e.lokasi : '') + ' · dibuat ' + tgl(D.hariIni)], 'sub');
+    kosong(s);
+  };
+
+  // ---- Ringkasan
+  var s = lembar('Ringkasan', [240, 150, 150, 150, 150]);
+  kepala(s);
+  baris(s, ['INFORMASI EVENT'], 'bagian');
+  kv(s, 'Kode', e.id_event); kv(s, 'Tanggal', e.tanggal, 'tgl');
+  kv(s, 'Jam rencana', e.jam_buka ? e.jam_buka + '–' + (e.jam_tutup || '?') : '');
+  kv(s, 'Lokasi', [e.lokasi, e.kota].filter(Boolean).join(', ')); kv(s, 'Jenis acara', e.jenis_acara);
+  kv(s, 'Model pendapatan', e.model_pendapatan); kv(s, 'Skema kerja sama', e.skema ? e.skema + (e.parameter_skema ? ' (' + e.parameter_skema + ')' : '') : '');
+  kv(s, 'Status', e.status); kv(s, 'Penanggung jawab', e.penanggung_jawab);
+  if (p) { kv(s, 'Klien', p.nama_klien + (p.kontak ? ' · ' + p.kontak : '')); kv(s, 'Paket', p.paket); }
+  kv(s, 'Catatan', e.catatan);
+  kosong(s);
+
+  baris(s, ['KEUANGAN'], 'bagian');
+  kv(s, 'Pemasukan', r.masuk, 'rp');
+  kv(s, 'Biaya langsung (kas keluar)', -r.keluar, 'rp');
+  kv(s, 'Bahan cetak (' + r.tercetak + ' lembar × ' + rp(r.bl) + (r.lap && num(r.lap.grad_book_terjual) + num(r.lap.buku_rusak) ? ' + buku' : '') + ')', -r.bahan, 'rp');
+  kv(s, 'Laba kotor', r.labaKotor, 'rp', 'total');
+  kv(s, 'Alokasi penyusutan + Jepreto', -r.alokasi, 'rp');
+  kv(s, 'Laba bersih', r.labaBersih, 'rp', 'total');
+  if (r.masuk) kv(s, 'Margin laba kotor', r.labaKotor / r.masuk, 'pct');
+  kosong(s);
+
+  var tg = tagihan(e, r);
+  if (tg) {
+    baris(s, ['PEMBAYARAN KLIEN'], 'bagian');
+    kv(s, 'Nilai kontrak', tg.kontrak, 'rp');
+    if (tg.dp) { kv(s, 'DP', tg.dp, 'rp'); kv(s, 'Jatuh tempo DP', e.jatuh_tempo_dp, 'tgl'); }
+    kv(s, 'Jatuh tempo pelunasan', e.jatuh_tempo_pelunasan || e.tanggal, 'tgl');
+    kv(s, 'Sudah dibayar', tg.dibayar, 'rp');
+    kv(s, 'Sisa tagihan', Math.max(0, tg.kontrak - tg.dibayar), 'rp', 'total');
+    kv(s, 'Status', tg.kurang ? 'Menunggu ' + (tg.tahap === 'DP' ? 'DP' : 'pelunasan') + ' — ' + teksJatuhTempo(tg).replace(/<[^>]+>/g, '') : 'LUNAS');
+    kosong(s);
   }
+
+  var rab = [['Penyusutan', r.rab.penyusutan, r.realisasi.penyusutan], ['Langganan Jepreto', r.rab.jepreto, r.realisasi.jepreto],
+    ['Fee crew', r.rab.feeCrew, r.realisasi.feeCrew], ['Transport', r.rab.transport, r.realisasi.transport], ['Konsumsi', r.rab.konsumsi, r.realisasi.konsumsi]];
+  if (rab.some(function (x) { return x[1]; })) {
+    baris(s, ['RAB VS REALISASI'], 'bagian');
+    baris(s, ['Kategori', 'RAB', 'Realisasi', 'Selisih'], 'head');
+    rab.forEach(function (x) { baris(s, [x[0], x[1], x[2], x[2] - x[1]], '', ['', 'rp', 'rp', 'rp']); });
+    var tR = sum(rab, function (x) { return x[1]; }), tA = sum(rab, function (x) { return x[2]; });
+    baris(s, ['Total', tR, tA, tA - tR], 'total', ['', 'rp', 'rp', 'rp']);
+    kosong(s);
+  }
+
+  var tugas = D.tugas.filter(function (t) { return t.id_event === e.id_event; });
+  if (tugas.length || e.tim) {
+    baris(s, ['CREW & FEE'], 'bagian');
+    if (tugas.length) {
+      baris(s, ['Nama', 'Role', 'Fee', 'Status', 'Tanggal bayar'], 'head');
+      tugas.forEach(function (t) {
+        var c = cari(D.crew, 'id_crew', t.id_crew) || {}, k = t.id_kas ? cari(D.kas, 'id', t.id_kas) : null;
+        baris(s, [namaCrew(t.id_crew) + (t.catatan ? ' (' + t.catatan + ')' : ''), c.role || '', num(t.fee), k ? 'Dibayar' : 'Belum dibayar', k ? k.tanggal : ''], '', ['', '', 'rp', '', 'tgl']);
+      });
+      baris(s, ['Total fee', '', sum(tugas, function (t) { return t.fee; }), tugas.filter(function (t) { return !feeLunas(t); }).length + ' belum dibayar', ''], 'total', ['', '', 'rp']);
+    } else kv(s, 'Tim', e.tim);
+  }
+
+  // ---- Produksi
   if (lap) {
-    rows.push(['LAPORAN PRODUKSI']);
-    kv([
-      ['Jam buka–tutup aktual', (lap.jam_buka_aktual || '') + '–' + (lap.jam_tutup_aktual || '')],
-      ['Jumlah transaksi', num(lap.jumlah_transaksi)], ['Sesi terjual', r.sesiTerjual], ['Lembar / strip tambahan', r.lembarTambahan],
-      ['Graduation Book terjual', num(lap.grad_book_terjual)],
-      ['Counter awal', num(lap.counter_awal)], ['Counter akhir', num(lap.counter_akhir)], ['Tercetak', r.tercetak],
-      ['Lembar uji/bonus', num(lap.lembar_uji_bonus)], ['Lembar gagal', num(lap.lembar_gagal)], ['Selisih lembar', r.selisihLembar || 0],
-      ['Omzet menurut laporan', r.omzet || 0], ['Uang diterima', r.diterima || 0], ['Selisih kas', r.selisihKas || 0],
-      ['Kendala', lap.kendala || ''], ['Rekomendasi', lap.rekomendasi || ''], []
-    ]);
+    s = lembar('Produksi', [260, 170, 320]);
+    kepala(s, 'Laporan produksi');
+    var n = function (k) { return num(lap[k]); };
+    baris(s, ['WAKTU'], 'bagian');
+    kv(s, 'Jam buka–tutup aktual', (lap.jam_buka_aktual || '?') + '–' + (lap.jam_tutup_aktual || '?'));
+    kv(s, 'Jam paling ramai', lap.jam_ramai); kv(s, 'Antrean terpanjang (orang)', lap.antrean_terpanjang, 'n'); kv(s, 'Total berhenti (menit)', lap.downtime_menit, 'n');
+    kosong(s);
+    baris(s, ['PENJUALAN'], 'bagian');
+    baris(s, ['', 'Jumlah', 'Omzet'], 'head');
+    baris(s, ['Jumlah transaksi', n('jumlah_transaksi')], '', ['', 'n']);
+    baris(s, ['Sesi terjual (foto 4R)', r.sesiTerjual, r.sesiTerjual * P('HARGA_4R')], '', ['', 'n', 'rp']);
+    baris(s, ['Lembar / strip tambahan', r.lembarTambahan, r.lembarTambahan * P('HARGA_STRIP')], '', ['', 'n', 'rp']);
+    baris(s, ['Graduation Book', n('grad_book_terjual'), n('grad_book_terjual') * P('HARGA_BUKU')], '', ['', 'n', 'rp']);
+    if (n('grup_potongan')) baris(s, ['Potongan grup', n('grup_potongan'), -n('grup_potongan') * P('POTONGAN_GRUP')], '', ['', 'n', 'rp']);
+    baris(s, ['Omzet menurut laporan', '', r.omzet], 'total', ['', '', 'rp']);
+    kv(s, 'Softfile terkirim', lap.softfile_terkirim, 'n');
+    kosong(s);
+    baris(s, ['PRINTER & LEMBAR'], 'bagian');
+    [['Counter awal', n('counter_awal')], ['Counter akhir', n('counter_akhir')], ['Tercetak (counter)', r.tercetak], ['Terjual', r.lembarTerjual],
+      ['Uji / bonus', n('lembar_uji_bonus')], ['Gagal', n('lembar_gagal')]].forEach(function (x) { baris(s, x, '', ['', 'n']); });
+    baris(s, ['Selisih lembar', r.selisihLembar, r.selisihLembar ? 'Periksa' : 'Cocok'], 'total', ['', 'n']);
+    kosong(s);
+    baris(s, ['UANG'], 'bagian');
+    [['Tunai dihitung saat tutup', n('tunai_dihitung')], ['Modal kembalian', -n('modal_kembalian')], ['QRIS / transfer', n('qris_transfer')]].forEach(function (x) { baris(s, x, '', ['', 'rp']); });
+    baris(s, ['Uang diterima', r.diterima], 'total', ['', 'rp']);
+    baris(s, ['Selisih dengan omzet laporan', r.selisihKas, r.selisihKas ? 'Periksa' : 'Cocok'], '', ['', 'rp']);
+    [['Potongan admin QRIS', n('admin_qris')], ['Admin pencairan QRIS', n('admin_pencairan')]].forEach(function (x) { if (x[1]) baris(s, x, '', ['', 'rp']); });
+    kosong(s);
+    baris(s, ['STOK & BAHAN'], 'bagian');
+    kv(s, 'Kertas awal (lembar)', lap.stok_kertas_awal, 'n'); kv(s, 'Kertas akhir, hitung fisik', lap.stok_kertas_akhir_fisik, 'n');
+    kv(s, 'Graduation Book awal', lap.stok_buku_awal, 'n'); kv(s, 'Buku rusak', lap.buku_rusak, 'n');
+    kv(s, 'Level tinta terendah', lap.tinta_terendah_persen, 'pct');
+    kv(s, 'HPP per lembar (terkunci)', r.bl, 'rp'); kv(s, 'HPP per Graduation Book (terkunci)', r.biayaBuku, 'rp');
+    kosong(s);
+    if (lap.kendala || lap.keluhan_pengunjung || lap.rekomendasi || lap.catatan) {
+      baris(s, ['CATATAN'], 'bagian');
+      [['Kendala & penanganan', lap.kendala], ['Keluhan / permintaan pengunjung', lap.keluhan_pengunjung], ['Rekomendasi event berikutnya', lap.rekomendasi], ['Catatan lain', lap.catatan]]
+        .forEach(function (x) { if (x[1]) baris(s, [x[0], x[1]], '', [], true); });
+    }
   }
-  rows.push(['TRANSAKSI KAS']);
-  rows.push(['Tanggal', 'Jenis', 'Kategori', 'Keterangan', 'Metode', 'Nominal']);
-  r.kas.forEach(function (k) { rows.push([k.tanggal, k.jenis, k.kategori || '', k.keterangan || '', k.metode || '', num(k.nominal)]); });
-  var lebar = rows.reduce(function (m, x) { return Math.max(m, x.length); }, 1);
-  return rows.map(function (x) { while (x.length < lebar) x.push(''); return x; });
+
+  // ---- Kas
+  s = lembar('Kas', [95, 80, 70, 170, 260, 90, 115, 115, 230], true);
+  kepala(s, 'Transaksi kas');
+  baris(s, ['Tanggal', 'Kode', 'Jenis', 'Kategori', 'Keterangan', 'Metode', 'Masuk', 'Keluar', 'Nota'], 'head');
+  var kasUrut = r.kas.slice().sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : (a.id < b.id ? -1 : 1); });
+  kasUrut.forEach(function (k) {
+    var m = k.jenis === 'Masuk';
+    baris(s, [k.tanggal, k.id, k.jenis, k.kategori || '', k.keterangan || '', k.metode || '', m ? num(k.nominal) : '', m ? '' : num(k.nominal), /^https?:/.test(k.no_nota || '') ? k.no_nota : ''],
+      '', ['tgl', '', '', '', '', '', 'rp', 'rp']);
+  });
+  if (!kasUrut.length) baris(s, ['Belum ada transaksi kas untuk event ini.']);
+  var tMasuk = sum(kasUrut.filter(function (k) { return k.jenis === 'Masuk'; }), function (k) { return k.nominal; });
+  var tKeluar = sum(kasUrut.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
+  baris(s, ['Total', '', '', '', '', '', tMasuk, tKeluar, ''], 'total', ['', '', '', '', '', '', 'rp', 'rp']);
+  baris(s, ['Saldo event (masuk − keluar)', '', '', '', '', '', tMasuk - tKeluar, '', ''], '', ['', '', '', '', '', '', 'rp']);
+
+  // ---- Alat
+  var alat = D.pemakaian.filter(function (a) { return a.id_event === e.id_event; });
+  if (alat.length) {
+    s = lembar('Alat', [260, 120, 80, 80, 130, 260], true);
+    kepala(s, 'Checklist alat');
+    baris(s, ['Alat', 'Pemilik', 'Dibawa', 'Kembali', 'Kondisi akhir', 'Catatan'], 'head');
+    alat.forEach(function (a) { baris(s, [a.nama_alat, pemilikAlat(a) || 'Posetive', a.dibawa || '', a.dibawa === 'Ya' ? (a.kembali || 'Belum') : '', a.kondisi_akhir || '', a.catatan || '']); });
+    var dibawa = alat.filter(function (a) { return a.dibawa === 'Ya'; });
+    baris(s, [dibawa.length + ' dibawa · ' + dibawa.filter(function (a) { return a.kembali === 'Ya'; }).length + ' kembali'], 'total');
+  }
+  return {sheets: sheets};
 }
-function exportLaporanEventXlsx(id, btn) {
-  var e = cari(D.event, 'id_event', id), rows = dataLaporanEventXlsx(e);
+function unduhLaporanEvent(id, btn) {
+  var e = cari(D.event, 'id_event', id), data = dataLaporanEvent(e);
   var nama = (e.id_event + ' - ' + e.nama_event).replace(/[\/\\]/g, '-');
-  btn.disabled = true; btn.textContent = 'Membuat XLSX…';
-  panggil('buatLaporanEventXlsx', nama, rows).then(function (url) { btn.disabled = false; btn.textContent = 'Export XLSX'; bukaLink(url, nama + '.xlsx'); })
-    .catch(function (err) { btn.disabled = false; btn.textContent = 'Export XLSX'; toast('Gagal: ' + (err && err.message || err)); });
+  btn.disabled = true; btn.textContent = 'Menyiapkan…';
+  var selesai = function () { btn.disabled = false; btn.textContent = 'Unduh Laporan'; };
+  panggil('buatLaporanEventSheet', e.id_event, nama, data).then(function (hasil) {
+    selesai();
+    document.getElementById('panel').innerHTML = '<div class="grab"></div><h2>' + esc(nama) + '</h2>' +
+      '<p class="meta">Laporan tersimpan sebagai Google Spreadsheet di folder "Posetive - Laporan Event". Unduh ulang kapan saja — file yang sama diperbarui, tidak dobel.</p>' +
+      '<div class="btns"><a class="btn" style="text-decoration:none;flex:1;text-align:center" href="' + esc(hasil.url) + '" target="_blank" rel="noopener">Buka Spreadsheet</a>' +
+      '<a class="btn ghost" style="text-decoration:none;flex:1;text-align:center" href="' + esc(hasil.xlsx) + '" target="_blank" rel="noopener">Unduh .xlsx</a></div>' +
+      '<div class="btns"><button class="btn ghost" onclick="tutupForm()" style="flex:1">Tutup</button></div>';
+    document.getElementById('sheet').classList.add('open');
+  }).catch(function (err) { selesai(); toast('Gagal: ' + (err && err.message || err)); });
 }
 function buatInvoiceUI(id, btn) {
   var e = cari(D.event, 'id_event', id);
