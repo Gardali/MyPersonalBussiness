@@ -72,6 +72,14 @@ saja — berikan langsung ke orangnya; ia wajib menggantinya saat masuk pertama.
 
 "Ingat saya" menyimpan login di perangkat itu 30 hari; tanpa itu login berakhir saat tab ditutup (maks. 12 jam).
 
+**Akun crew**: Lainnya → Pengguna → **+ Pengguna** → Role **Crew** → pilih **Data crew**-nya (harus sudah ada di
+Lainnya → Crew). Crew melihat menu **Event saya**: event tempat ia ditugaskan (Event → Crew bertugas), hari ini & mendatang,
+dengan jam, lokasi, klien + WA, dan rekan crew — tanpa kontrak, fee, kas, atau HPP.
+- **Checklist alat & laporan** hanya bisa diisi pada hari event, sampai **pukul 06.00 esok harinya**. Event mendatang
+  hanya bisa dilihat. Setelah lewat 06.00 event hilang dari daftar crew; koreksi selanjutnya dilakukan admin.
+- Admin QRIS & admin pencairan tidak diisi crew — admin melengkapinya lewat Ubah laporan.
+- Crew yang dilepas dari event langsung tidak bisa melihat/mengisi event itu lagi.
+
 ## Menghubungkan Google Calendar (sekali saja)
 1. Buka aplikasi → **Lainnya → Google Calendar → Hubungkan & sinkronkan**.
 2. Kalau muncul pesan gagal soal izin: buka editor Apps Script, pilih fungsi **izinkanAkses**

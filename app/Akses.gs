@@ -9,7 +9,7 @@ var PENGGUNA_HEAD = ['username', 'nama', 'role', 'id_crew', 'pin_hash', 'salt', 
 var ROLE = { admin: 'Admin', pemantau: 'Pemantau (lihat saja)', crew: 'Crew' };
 var SESI_INGAT_HARI = 30, SESI_SINGKAT_JAM = 12, MAKS_GAGAL = 5, KUNCI_MENIT = 15;
 
-var LIHAT = ['admin', 'pemantau'], ADMIN = ['admin'], SEMUA = ['admin', 'pemantau', 'crew'];
+var LIHAT = ['admin', 'pemantau'], ADMIN = ['admin'], SEMUA = ['admin', 'pemantau', 'crew'], HANYA_CREW = ['crew'];
 /**
  * nama yang dipanggil tampilan → [fungsi server, role yang boleh, fungsi menerima pengguna sebagai argumen pertama?]
  * Dibentuk saat dipanggil (bukan saat file dimuat), karena fungsinya ada di file .gs lain yang mungkin dimuat belakangan.
@@ -29,7 +29,10 @@ function izin_() {
   sinkronSemuaKalender: [sinkronSemuaKalender_, ADMIN], putusKalender: [putusKalender_, ADMIN],
   backupSekarang: [backupSekarang, ADMIN], kirimPengingatTes: [kirimPengingatTes_, ADMIN], aturOtomatis: [aturOtomatis_, ADMIN],
   simpanPengaturan: [simpanPengaturan_, ADMIN], simpanPengaturanBanyak: [simpanPengaturanBanyak_, ADMIN],
-  daftarPengguna: [daftarPengguna_, ADMIN], simpanPengguna: [simpanPengguna_, ADMIN, true], resetPin: [resetPin_, ADMIN, true]
+  daftarPengguna: [daftarPengguna_, ADMIN], simpanPengguna: [simpanPengguna_, ADMIN, true], resetPin: [resetPin_, ADMIN, true],
+  // Crew: data sudah disaring & setiap simpan diperiksa (bertugas di event itu, hari event s.d. 06.00 besok) — EventSaya.gs.
+  dataCrew: [dataCrew_, HANYA_CREW, true], simpanLaporanCrew: [simpanLaporanCrew_, HANYA_CREW, true],
+  simpanChecklistCrew: [simpanChecklistCrew_, HANYA_CREW, true]
   };
 }
 

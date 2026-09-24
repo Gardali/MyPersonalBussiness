@@ -42,10 +42,14 @@ function hapusEvent_(id) {
 
 /**
  * Menyimpan laporan event lalu memperbarui stok otomatis: kertas keluar = lembar tercetak (counter),
- * buku keluar = terjual + rusak, dan hitung fisik kertas bila diisi.
+ * buku keluar = terjual + rusak, dan hitung fisik kertas bila diisi. HPP & alokasi dikunci di server (kunciLaporan_).
+ * Stok & admin kas dihitung dari baris laporan lengkap setelah disimpan, jadi isian yang tidak dikirim (mis. admin
+ * QRIS saat crew menyimpan) tetap dipakai, bukan dianggap nol.
  */
 function simpanLaporan_(rec) {
-  saveRecord_('LAPORAN_EVENT', rec);
+  if (!rec || !rec.id_event) throw new Error('Kode event wajib diisi.');
+  saveRecord_('LAPORAN_EVENT', kunciLaporan_(rec));
+  rec = readTab_('LAPORAN_EVENT').filter(function (l) { return l.id_event === rec.id_event; })[0] || rec;
   var ev = readTab_('EVENT').filter(function (e) { return e.id_event === rec.id_event; })[0];
   var tgl = ev && ev.tanggal ? ev.tanggal : Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
   var n = function (v) { return Number(v) || 0; };

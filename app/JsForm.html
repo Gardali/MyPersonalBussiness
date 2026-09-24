@@ -2,8 +2,10 @@
 // Posetive — formulir umum (bukaForm, simpan, hapus).
 // ---------------------------------------------------------------- formulir
 var FORM = null, FOTO_BARU = null, NOTA_BARU = null;
-function bukaForm(judul, fields, rec, onSave, extra, preview) {
-  FORM = {fields: fields, rec: Object.assign({}, rec), onSave: onSave, preview: preview};
+/** boleh: bisa disimpan? Bawaan: hanya admin. Crew mengirim true untuk laporan event hari ini (server tetap memeriksa). */
+function bukaForm(judul, fields, rec, onSave, extra, preview, boleh) {
+  var ubah = boleh === undefined ? bisaUbah() : !!boleh;
+  FORM = {fields: fields, rec: Object.assign({}, rec), onSave: onSave, preview: preview, ubah: ubah};
   fields.forEach(function (f) { if (f.n && FORM.rec[f.n] === undefined && f.def) FORM.rec[f.n] = f.def === 'today' ? D.hariIni : (typeof f.def === 'function' ? f.def() : f.def); });
   var h = '<div class="grab"></div><h2>' + esc(judul) + '</h2><form id="frm" onsubmit="simpanForm();return false">';
   fields.forEach(function (f, i) {
@@ -23,7 +25,6 @@ function bukaForm(judul, fields, rec, onSave, extra, preview) {
     h += '<div class="f' + (f.t === 'area' || f.t === 'file' || f.t === 'bukti' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
   });
   if (FORM.preview) h += '<div id="preview" class="f wide" style="margin-top:10px"></div>';
-  var ubah = bisaUbah();
   h += '<div class="btns">' + (ubah ? '<button class="btn" type="submit" style="flex:1">Simpan</button>' : '') + '<button class="btn ghost" type="button" onclick="tutupForm()"' + (ubah ? '' : ' style="flex:1"') + '>' + (ubah ? 'Batal' : 'Tutup') + '</button></div>' +
     (extra && ubah ? '<div class="btns">' + extra + '</div>' : '') + '</form>';
   document.getElementById('panel').innerHTML = h;
@@ -58,7 +59,7 @@ function tutupForm() { document.getElementById('sheet').classList.remove('open')
 document.getElementById('sheet').addEventListener('click', function (e) { if (e.target.id === 'sheet') tutupForm(); });
 
 function simpanForm() {
-  if (!bisaUbah()) return;
+  if (!FORM || !FORM.ubah) return;
   var r = bacaForm();
   var kurang = FORM.fields.filter(function (f) { return f.wajib && (r[f.n] === '' || r[f.n] == null); });
   if (kurang.length) { toast('Wajib diisi: ' + kurang.map(function (f) { return f.l; }).join(', ')); return; }

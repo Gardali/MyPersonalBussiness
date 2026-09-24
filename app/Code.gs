@@ -185,19 +185,9 @@ function siapkan_() {
 /** Semua data yang dibutuhkan aplikasi, dalam satu panggilan. */
 function getData_() {
   siapkan_();
-  var pengaturan = {};
-  readTab_('PENGATURAN').forEach(function (r) { pengaturan[r.kunci] = r.nilai; });
-
-  var pv = sheet_('PILIHAN').getDataRange().getValues();
-  var pilihan = {};
-  pv[0].forEach(function (h, c) {
-    if (!h) return;
-    pilihan[h] = pv.slice(1).map(function (r) { return r[c]; }).filter(function (v) { return v !== ''; });
-  });
-
   return {
-    pengaturan: pengaturan,
-    pilihan: pilihan,
+    pengaturan: pengaturan_(),
+    pilihan: pilihan_(),
     pipeline: readTab_('PIPELINE'),
     event: readTab_('EVENT'),
     laporan: readTab_('LAPORAN_EVENT'),
@@ -211,6 +201,23 @@ function getData_() {
     kalender: kalenderAktif_(),
     hariIni: Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
   };
+}
+
+/** Tab PENGATURAN sebagai {kunci: nilai}. */
+function pengaturan_() {
+  var o = {};
+  readTab_('PENGATURAN').forEach(function (r) { o[r.kunci] = r.nilai; });
+  return o;
+}
+
+/** Tab PILIHAN (isi dropdown) sebagai {judul kolom: [nilai]}. */
+function pilihan_() {
+  var pv = sheet_('PILIHAN').getDataRange().getValues(), o = {};
+  pv[0].forEach(function (h, c) {
+    if (!h) return;
+    o[h] = pv.slice(1).map(function (r) { return r[c]; }).filter(function (v) { return v !== ''; });
+  });
+  return o;
 }
 
 function toCell_(v, h) {

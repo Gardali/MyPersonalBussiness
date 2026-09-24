@@ -27,8 +27,15 @@ var IC = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>'
 };
 function ikon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC[n] + '</svg>'; }
-document.getElementById('nav').innerHTML = '<div class="brand"><div class="logo-gambar" role="img" aria-label="Posetive Photobooth"></div></div>' + [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas'], ['stok', 'box', 'Stok'], ['lainnya', 'gear', 'Lainnya']]
-  .map(function (x) { return '<button data-v="' + x[0] + '"' + (x[0] === 'beranda' ? ' class="on"' : '') + '>' + ikon(x[1]) + x[2] + '</button>'; }).join('');
+// Menu bawah (HP) / samping (laptop). Crew hanya punya Event saya & Akun.
+var MENU = [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas'], ['stok', 'box', 'Stok'], ['lainnya', 'gear', 'Lainnya']];
+var MENU_CREW = [['saya', 'cal', 'Event saya'], ['akun', 'user', 'Akun']];
+function aturMenu() {
+  var m = peran() === 'crew' ? MENU_CREW : MENU;
+  document.getElementById('nav').innerHTML = '<div class="brand"><div class="logo-gambar" role="img" aria-label="Posetive Photobooth"></div></div>' +
+    m.map(function (x, i) { return '<button data-v="' + x[0] + '"' + (i === 0 ? ' class="on"' : '') + '>' + ikon(x[1]) + x[2] + '</button>'; }).join('');
+}
+aturMenu();
 
 // ---------------------------------------------------------------- utilitas
 var BLN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
@@ -331,11 +338,12 @@ function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', TIPIS: 'p
 
 // ---------------------------------------------------------------- tampilan
 function tampil(v) {
-  VIEW = v; if (v !== 'event') DETAIL = null;
+  VIEW = v; if (v !== 'event' && v !== 'saya') DETAIL = null;
   document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === ((v === 'laporan' || v === 'crew' || v === 'inventaris' || v === 'hpp' || v === 'pengguna') ? 'lainnya' : v)); });
   var el = document.getElementById('view');
   try {
-    el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok, lainnya: vLainnya, laporan: vLaporan, crew: vCrew, inventaris: vInventaris, hpp: vHpp, pengguna: vPengguna}[v]();
+    el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok, lainnya: vLainnya, laporan: vLaporan, crew: vCrew, inventaris: vInventaris, hpp: vHpp, pengguna: vPengguna,
+      saya: DETAIL ? vDetailSaya : vSaya, akun: vAkun}[v]();
   } catch (err) {
     el.innerHTML = '<div class="pagetitle">Ada yang error</div>' + notice('bad', 'Halaman ini gagal ditampilkan: <b>' + esc(err && err.message || err) + '</b>. Kirim screenshot ini ke Claude.');
   }

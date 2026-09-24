@@ -1346,8 +1346,9 @@
   }
 
   /* ---- Login & hak akses ---- */
-  .lihat-saja .ubah,
-  .lihat-saja .quick {
+  /* .boleh: bagian yang tetap bisa diubah walau akun lihat-saja, mis. checklist event hari ini untuk crew */
+  .lihat-saja .ubah:not(.boleh *),
+  .lihat-saja .quick:not(.boleh *) {
     display: none !important
   }
 

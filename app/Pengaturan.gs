@@ -25,6 +25,42 @@ function biayaLembar_(p) {
   return (n('HARGA_KERTAS') / (n('ISI_KERTAS') || 1) + n('HARGA_TINTA') / (n('KAPASITAS_TINTA') || 1)) * (1 + n('CADANGAN_GAGAL'));
 }
 
+function bulanAntara_(a, b) {
+  var pa = String(a).split('-'), pb = String(b).split('-');
+  var m = (Number(pb[0]) - Number(pa[0])) * 12 + (Number(pb[1]) - Number(pa[1])) - (Number(pb[2]) < Number(pa[2]) ? 1 : 0);
+  return Math.max(0, m);
+}
+
+/**
+ * Alokasi penyusutan & Jepreto per event saat ini — rumus sama dengan totalPenyusutanBulanan() ÷ targetEventBulan()
+ * di JsDasar: hanya Aset milik Posetive, harga ≥ PENYUSUTAN_HARGA_MIN, umur manfaat terisi & belum habis.
+ */
+function alokasiPerEvent_(p, inventaris, hari) {
+  var n = function (v) { var x = Number(v); return isFinite(x) ? x : 0; };
+  var pd = function (k, def) { return p[k] === undefined || p[k] === '' ? def : n(p[k]); };
+  var target = pd('EVENT_BULAN', 4) || 1, min = pd('PENYUSUTAN_HARGA_MIN', 250000), bulanan = 0;
+  inventaris.forEach(function (x) {
+    var umur = n(x.umur_manfaat_bulan);
+    if (x.kategori !== 'Aset' || (x.pemilik && x.pemilik !== 'Posetive') || n(x.nilai_beli) < min || !umur) return;
+    if ((x.tanggal_masuk ? bulanAntara_(x.tanggal_masuk, hari) : 0) < umur) bulanan += n(x.nilai_beli) / umur;
+  });
+  return { penyusutan: bulanan / target, jepreto: n(p.JEPRETO_BULAN) / target };
+}
+
+/**
+ * Mengunci HPP & alokasi ke laporan saat laporan PERTAMA kali disimpan (dihitung di server, bukan dari tampilan).
+ * Laporan yang sudah punya angka terkunci tidak diubah lagi walau laporannya disunting ulang.
+ */
+function kunciLaporan_(rec) {
+  var lama = readTab_('LAPORAN_EVENT').filter(function (l) { return l.id_event === rec.id_event; })[0];
+  var p = pengaturan_(), a = alokasiPerEvent_(p, readTab_('INVENTARIS'), hariIni_());
+  var kunci = { realisasi_penyusutan: a.penyusutan, realisasi_jepreto: a.jepreto, realisasi_biaya_lembar: biayaLembar_(p), realisasi_biaya_buku: Number(p.BIAYA_BUKU) || 0 };
+  Object.keys(kunci).forEach(function (k) {
+    if (lama && lama[k] !== '' && lama[k] != null) delete rec[k]; else rec[k] = kunci[k];
+  });
+  return rec;
+}
+
 /** Mengubah nilai satu pengaturan; baris dibuat bila belum ada. */
 function simpanPengaturan_(kunci, nilai) {
   var o = {};

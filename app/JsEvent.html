@@ -93,7 +93,7 @@ function vDetailEvent() {
         return '<tr><td>' + x[0] + '</td><td class="r">' + rp(x[1]) + '</td><td class="r">' + rp(x[2]) + '</td><td class="r ' + (s > 0 ? 'neg' : s < 0 ? 'pos' : '') + '">' + (s ? rp(s) : '—') + '</td></tr>';
       }).join('') +
       '<tr class="total"><td>Total</td><td class="r">' + rp(rabTotal) + '</td><td class="r">' + rp(realTotal) + '</td><td class="r ' + (realTotal > rabTotal ? 'neg' : realTotal < rabTotal ? 'pos' : '') + '">' + (realTotal !== rabTotal ? rp(realTotal - rabTotal) : '—') + '</td></tr></table></div>';
-    h += sec('RAB vs Realisasi', rb + '<div class="meta" style="margin-top:8px">' + (lap ? 'Penyusutan & Jepreto terkunci sesuai kondisi Inventaris saat laporan disimpan.' : 'Penyusutan & Jepreto masih perkiraan langsung dari Inventaris — terkunci setelah laporan diisi.') + '</div>');
+    h += sec('RAB vs Realisasi', rb + '<div class="meta" style="margin-top:8px">' + (lap ? 'Penyusutan & Jepreto terkunci sesuai kondisi Inventaris saat laporan pertama kali disimpan.' : 'Penyusutan & Jepreto masih perkiraan langsung dari Inventaris — terkunci setelah laporan diisi.') + '</div>');
   }
   h += '</div><div class="col">';
   var tugas = D.tugas.filter(function (t) { return t.id_event === e.id_event; });
@@ -124,8 +124,9 @@ function bukaChecklist(idEvent) {
   D.inventaris.filter(function (x) { return x.kategori === 'Aset'; }).forEach(function (x) {
     rows[x.id_alat] = {id_alat: x.id_alat, nama_alat: x.nama, dibawa: 'Tidak', kembali: '', kondisi_akhir: x.kondisi || 'Baik', catatan: '', pemilik: x.pemilik};
   });
-  // set/alat tanpa kode dari checklist mana pun
-  D.pemakaian.filter(function (a) { return !a.id_alat; }).forEach(function (a) { rows['SET:' + a.nama_alat] = rows['SET:' + a.nama_alat] || {id_alat: '', nama_alat: a.nama_alat, dibawa: 'Tidak', kembali: '', kondisi_akhir: 'Baik', catatan: ''}; });
+  // set/alat tanpa kode dari checklist mana pun (crew: daftar nama dari server)
+  (D.setTanpaKode || D.pemakaian.filter(function (a) { return !a.id_alat; }).map(function (a) { return a.nama_alat; }))
+    .forEach(function (n) { rows['SET:' + n] = rows['SET:' + n] || {id_alat: '', nama_alat: n, dibawa: 'Tidak', kembali: '', kondisi_akhir: 'Baik', catatan: ''}; });
   ada.forEach(function (a) { var k = a.id_alat || 'SET:' + a.nama_alat; rows[k] = Object.assign(rows[k] || {}, a, {pemilik: pemilikAlat(a)}); });
   CL = {id: idEvent, rows: Object.keys(rows).map(function (k) { return rows[k]; }).sort(function (a, b) {
     return String(a.nama_alat).localeCompare(String(b.nama_alat));
@@ -134,6 +135,12 @@ function bukaChecklist(idEvent) {
   document.getElementById('sheet').classList.add('open');
 }
 function salinChecklistTerakhir() {
+  if (D.modeCrew) {
+    var s = (cari(D.event, 'id_event', CL.id) || {}).salinDari;
+    if (!s) { toast('Belum ada checklist sebelumnya'); return; }
+    CL.rows.forEach(function (r) { r.dibawa = s.kunci.indexOf(r.id_alat || 'SET:' + r.nama_alat) >= 0 ? 'Ya' : 'Tidak'; if (r.dibawa !== 'Ya') r.kembali = ''; });
+    toast('Disalin dari checklist event terakhir'); renderChecklist(); return;
+  }
   var ev = {}; D.event.forEach(function (e) { ev[e.id_event] = e; });
   var ids = Array.from(new Set(D.pemakaian.filter(function (a) { return a.id_event !== CL.id && ev[a.id_event]; }).map(function (a) { return a.id_event; })))
     .sort(function (a, b) { return ev[a].tanggal < ev[b].tanggal ? 1 : -1; });
@@ -148,18 +155,19 @@ function clTambah() { var n = prompt('Nama alat / set (mis. Set kabel & adapter)
 function clHapus(i) { if (confirm('Keluarkan "' + CL.rows[i].nama_alat + '" dari daftar checklist ini?')) { CL.rows.splice(i, 1); renderChecklist(); } }
 function renderChecklist() {
   var bawa = CL.rows.filter(function (r) { return r.dibawa === 'Ya'; }), kembali = bawa.filter(function (r) { return r.kembali === 'Ya'; });
-  var h = '<div class="grab"></div><h2>Checklist alat · ' + esc(CL.id) + '</h2>' +
+  var boleh = bolehIsi(CL.id), kunci = boleh ? '' : ' disabled', ev = cari(D.event, 'id_event', CL.id);
+  var h = '<div class="' + (boleh ? 'boleh' : '') + '"><div class="grab"></div><h2>Checklist alat · ' + esc(D.modeCrew && ev ? ev.nama_event : CL.id) + '</h2>' +
     '<div class="meta" style="margin-bottom:10px">' + bawa.length + ' dibawa · ' + kembali.length + ' kembali' + (bawa.length > kembali.length ? ' · <b class="neg">' + (bawa.length - kembali.length) + ' belum kembali</b>' : '') + '</div>' +
     '<div class="btns" style="margin:0 0 12px"><button class="ubah btn sm ghost" type="button" onclick="salinChecklistTerakhir()">Salin dari event terakhir</button><button class="ubah btn sm ghost" type="button" onclick="clSemuaKembali()">Semua kembali</button><button class="ubah btn sm ghost" type="button" onclick="clTambah()">+ Alat/set</button></div><div class="card">';
   h += CL.rows.map(function (r, i) {
     var milik = r.pemilik && r.pemilik !== 'Posetive' ? ' <span class="pill p-warn">' + esc(r.pemilik) + '</span>' : '';
     return '<div class="it" style="flex-wrap:wrap"><div class="mid" style="min-width:140px"><div class="t">' + esc(r.nama_alat) + milik + '</div></div>' +
-      '<label class="chk"><input type="checkbox" ' + (r.dibawa === 'Ya' ? 'checked' : '') + ' onchange="clSet(' + i + ',\'dibawa\',this.checked?\'Ya\':\'Tidak\')">Bawa</label>' +
-      '<label class="chk"><input type="checkbox" ' + (r.kembali === 'Ya' ? 'checked' : '') + (r.dibawa === 'Ya' ? '' : ' disabled') + ' onchange="clSet(' + i + ',\'kembali\',this.checked?\'Ya\':\'\')">Kembali</label>' +
-      (r.dibawa === 'Ya' ? '<select class="plain" style="padding:5px 8px" onchange="clSet(' + i + ',\'kondisi_akhir\',this.value)">' + (D.pilihan.Kondisi || ['Baik', 'Perlu Perbaikan', 'Rusak', 'Hilang']).map(function (k) { return '<option' + (k === r.kondisi_akhir ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select>' : '') +
+      '<label class="chk"><input type="checkbox" ' + (r.dibawa === 'Ya' ? 'checked' : '') + kunci + ' onchange="clSet(' + i + ',\'dibawa\',this.checked?\'Ya\':\'Tidak\')">Bawa</label>' +
+      '<label class="chk"><input type="checkbox" ' + (r.kembali === 'Ya' ? 'checked' : '') + (r.dibawa === 'Ya' ? kunci : ' disabled') + ' onchange="clSet(' + i + ',\'kembali\',this.checked?\'Ya\':\'\')">Kembali</label>' +
+      (r.dibawa === 'Ya' ? '<select class="plain" style="padding:5px 8px"' + kunci + ' onchange="clSet(' + i + ',\'kondisi_akhir\',this.value)">' + (D.pilihan.Kondisi || ['Baik', 'Perlu Perbaikan', 'Rusak', 'Hilang']).map(function (k) { return '<option' + (k === r.kondisi_akhir ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select>' : '') +
       '<button class="ubah btn sm ghost" type="button" title="Keluarkan dari daftar" onclick="clHapus(' + i + ')" style="padding:4px 10px">✕</button></div>';
   }).join('') + '</div>';
-  h += '<div class="btns"><button class="ubah btn" type="button" style="flex:1" onclick="simpanChecklistUI(this)">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()">Batal</button></div>';
+  h += '<div class="btns"><button class="ubah btn" type="button" style="flex:1" onclick="simpanChecklistUI(this)">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()"' + (boleh ? '>Batal' : ' style="flex:1">Tutup') + '</button></div></div>';
   var panel = document.getElementById('panel'), top = panel.scrollTop;
   panel.innerHTML = h; panel.scrollTop = top;
 }
@@ -167,7 +175,7 @@ function simpanChecklistUI(btn) {
   btn.disabled = true; btn.textContent = 'Menyimpan…';
   var rows = CL.rows.filter(function (r) { return r.dibawa === 'Ya' || D.pemakaian.some(function (a) { return a.id_event === CL.id && (a.id_alat || a.nama_alat) === (r.id_alat || r.nama_alat); }); })
     .map(function (r) { return {id_alat: r.id_alat, nama_alat: r.nama_alat, dibawa: r.dibawa, kembali: r.kembali, kondisi_akhir: r.dibawa === 'Ya' ? r.kondisi_akhir : '', catatan: r.catatan || ''}; });
-  panggil('simpanChecklist', CL.id, rows).then(function () { tutupForm(); toast('Checklist tersimpan'); return muat(true); })
+  panggil(D.modeCrew ? 'simpanChecklistCrew' : 'simpanChecklist', CL.id, rows).then(function () { tutupForm(); toast('Checklist tersimpan'); return muat(true); })
     .catch(function (e) { btn.disabled = false; btn.textContent = 'Simpan'; toast('Gagal: ' + (e && e.message || e)); });
 }
 
@@ -425,12 +433,8 @@ function formLaporan(idEvent) {
     if (b !== null) l.stok_buku_awal = b;
   }
   bukaForm('Laporan ' + idEvent, F_LAPORAN, l, function (r) {
-    r.id_event = idEvent;
-    r.realisasi_penyusutan = totalPenyusutanBulanan() / targetEventBulan();
-    r.realisasi_jepreto = P('JEPRETO_BULAN') / targetEventBulan();
-    r.realisasi_biaya_lembar = biayaLembar();
-    r.realisasi_biaya_buku = P('BIAYA_BUKU');
+    r.id_event = idEvent; // HPP & alokasi dikunci di server (kunciLaporan_)
     return panggil('simpanLaporan', r);
-  }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto, serta HPP bahan per lembar & per buku, ikut terkunci sesuai kondisi Inventaris & PENGATURAN saat ini — perubahan berikutnya tidak akan mengubah angka event ini lagi. Admin QRIS & admin pencairan otomatis tercatat sebagai transaksi Kas Keluar (sudah termasuk di "Biaya langsung"), tidak perlu dicatat manual lagi di Kas.</div>');
+  }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto, serta HPP bahan per lembar & per buku, terkunci sesuai kondisi Inventaris & PENGATURAN saat laporan pertama kali disimpan — perubahan berikutnya (termasuk menyunting laporan ini) tidak mengubah angka event ini lagi. Admin QRIS & admin pencairan otomatis tercatat sebagai transaksi Kas Keluar (sudah termasuk di "Biaya langsung"), tidak perlu dicatat manual lagi di Kas.</div>');
 }
 </script>

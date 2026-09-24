@@ -118,10 +118,8 @@ function vLainnya() {
   var bulanList = Array.from(new Set(D.event.map(function (e) { return String(e.tanggal).slice(0, 7); }).concat(D.kas.map(function (k) { return String(k.tanggal).slice(0, 7); })).concat([D.hariIni.slice(0, 7)])))
     .filter(function (b) { return /^\d{4}-\d{2}$/.test(b); }).sort().reverse();
   if (!LAP.bulan) LAP.bulan = D.hariIni.slice(0, 7);
-  var h = '<div class="pagetitle">Lainnya</div>', saya = SESI.pengguna || {};
-  h += sec('Akun saya', '<div class="card pad"><div style="display:flex;align-items:center;gap:12px"><div class="av">' + inisial(saya.nama) + '</div><div style="flex:1;min-width:0"><div style="font-weight:700">' + esc(saya.nama) + '</div>' +
-    '<div class="meta">@' + esc(saya.username) + ' · ' + labelPeran(saya.role) + (bisaUbah() ? '' : ' (lihat saja)') + '</div></div></div>' +
-    '<div class="btns"><button class="btn sm ghost" onclick="tampilGantiPin(false)">Ganti PIN</button><button class="btn sm ghost" onclick="keluarUI()">Keluar</button></div></div>');
+  var h = '<div class="pagetitle">Lainnya</div>';
+  h += sec('Akun saya', kartuAkun());
   if (bisaUbah()) h += sec('Pengguna', '<div class="card pad"><div class="meta" style="margin-bottom:10px">Akun untuk masuk ke aplikasi: admin, pemantau (lihat saja), dan crew. Reset PIN bila ada yang lupa.</div><button class="btn sm" onclick="PENGGUNA=null;tampil(\'pengguna\')">Kelola pengguna</button></div>');
   h += sec('Laporan bulanan untuk owner', '<div class="card pad"><div class="meta" style="margin-bottom:10px">Ringkasan satu halaman: event, keuangan, piutang, pipeline, stok, alat, dan keputusan penting. Bisa disimpan sebagai PDF di Drive.</div>' +
     '<div class="bar" style="margin:0"><select class="plain" id="lap_bulan">' + bulanList.map(function (b) { return '<option value="' + b + '"' + (b === LAP.bulan ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select>' +

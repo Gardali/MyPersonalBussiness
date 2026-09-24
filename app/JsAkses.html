@@ -22,6 +22,7 @@ function aturTampilanPeran() {
   document.body.classList.toggle('belum-masuk', !p);
   document.body.classList.toggle('lihat-saja', !!p && !bisaUbah());
   NAMA = p ? String(p.nama || p.username).split(' ')[0] : '';
+  aturMenu();
 }
 
 /** Dipanggil saat halaman dibuka (JsMulai): pakai sesi tersimpan bila masih berlaku, kalau tidak tampilkan halaman masuk. */
@@ -40,8 +41,7 @@ function setelahMasuk(pengguna) {
   aturTampilanPeran();
   tutupForm();
   if (pengguna.wajib_ganti) { tampilGantiPin(true); return; }
-  if (pengguna.role === 'crew') { tampilCrewBelumSiap(); return; }
-  VIEW = 'beranda'; DETAIL = null;
+  VIEW = pengguna.role === 'crew' ? 'saya' : 'beranda'; DETAIL = null;
   muat();
 }
 
@@ -82,6 +82,14 @@ function keluarUI() {
 
 // ---------------------------------------------------------------- ganti PIN
 /** wajib: login pertama / setelah PIN direset — aplikasi baru bisa dipakai setelah PIN diganti. */
+function halamanAkun() { return peran() === 'crew' ? 'akun' : 'lainnya'; }
+/** Kartu nama, role, Ganti PIN & Keluar — di Lainnya (admin/pemantau) dan Akun (crew). */
+function kartuAkun() {
+  var saya = SESI.pengguna || {};
+  return '<div class="card pad"><div style="display:flex;align-items:center;gap:12px"><div class="av">' + inisial(saya.nama) + '</div><div style="flex:1;min-width:0"><div style="font-weight:700">' + esc(saya.nama) + '</div>' +
+    '<div class="meta">@' + esc(saya.username) + ' · ' + labelPeran(saya.role) + (saya.role === 'pemantau' ? ' (lihat saja)' : '') + '</div></div></div>' +
+    '<div class="btns"><button class="btn sm ghost" onclick="tampilGantiPin(false)">Ganti PIN</button><button class="btn sm ghost" onclick="keluarUI()">Keluar</button></div></div>';
+}
 function tampilGantiPin(wajib) {
   tutupForm();
   var lamaDiketahui = wajib && PIN_TERAKHIR;
@@ -93,7 +101,7 @@ function tampilGantiPin(wajib) {
     '<div class="f"><label>Ulangi PIN baru</label><input name="u" class="pin" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="new-password" required></div>' +
     '<div class="meta" style="margin-bottom:12px">Hindari tanggal lahir, 123456, atau angka yang sama semua.</div>' +
     '<button class="btn" type="submit" style="width:100%">Simpan PIN</button>' +
-    (wajib ? '' : '<button class="btn ghost" type="button" style="width:100%;margin-top:8px" onclick="tampil(\'lainnya\')">Batal</button>') + '</form>' +
+    (wajib ? '' : '<button class="btn ghost" type="button" style="width:100%;margin-top:8px" onclick="tampil(halamanAkun())">Batal</button>') + '</form>' +
     (wajib ? '<div style="text-align:center;margin-top:12px"><button class="link" style="border:0;background:none;color:var(--muted)" onclick="hapusSesi();tampilMasuk()">Keluar</button></div>' : '') + '</div>';
   document.getElementById('view').innerHTML = h;
 }
@@ -104,15 +112,8 @@ function gantiPinUI(frm, wajib) {
   panggil('gantiPin', lama, baru).then(function (p) {
     PIN_TERAKHIR = '';
     toast('PIN baru tersimpan');
-    if (wajib) setelahMasuk(p); else { SESI.pengguna = p; tampil('lainnya'); }
+    if (wajib) setelahMasuk(p); else { SESI.pengguna = p; tampil(halamanAkun()); }
   }).catch(function (e) { btn.disabled = false; btn.textContent = 'Simpan PIN'; toast(String(e && e.message || e).replace(/^Error:\s*/, '')); });
-}
-
-// Sementara (Tahap 2 belum dipasang): akun crew sudah bisa dibuat, tapi tampilan crew belum tersedia.
-function tampilCrewBelumSiap() {
-  document.getElementById('view').innerHTML = '<div class="masuk"><div class="logo">Halo, ' + esc(NAMA) + '<small>Crew</small></div>' +
-    '<div style="margin-top:14px">' + notice('', 'Halaman crew (event hari ini, checklist, laporan) sedang disiapkan. Jadwal Anda tetap ada di Google Calendar.') + '</div>' +
-    '<button class="btn ghost" style="width:100%;margin-top:8px" onclick="keluarUI()">Keluar</button></div>';
 }
 
 // ---------------------------------------------------------------- kelola pengguna (admin)

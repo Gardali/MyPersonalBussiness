@@ -1,0 +1,95 @@
+<script>
+// Posetive — tampilan crew: Event saya (hari ini & mendatang), detail event, checklist & laporan event hari ini, Akun.
+// Data dari dataCrew (EventSaya.gs) sudah disaring di server; D.modeCrew = true. Server juga memeriksa setiap simpan.
+
+/** Boleh mengisi checklist/laporan event ini? Admin selalu; crew hanya event hari kerja ini (bisaIsi dari server). */
+function bolehIsi(idEvent) {
+  if (bisaUbah()) return true;
+  var e = D && D.modeCrew ? cari(D.event, 'id_event', idEvent) : null;
+  return !!(e && e.bisaIsi);
+}
+function bukaSaya(id) { DETAIL = id; tampil('saya'); }
+function jamEvent(e) { return e.jam_buka ? esc(e.jam_buka) + (e.jam_tutup ? '–' + esc(e.jam_tutup) : '') : ''; }
+function kapan(e) {
+  var n = selisihHari(e.tanggal, D.hariIni);
+  return n <= 0 ? 'Hari ini' : n === 1 ? 'Besok' : n + ' hari lagi';
+}
+function batasIsi(e) { return tgl(addHari(e.tanggal, 1)) + ' pukul 06.00'; }
+
+function vSaya() {
+  var urut = D.event.slice().sort(function (a, b) { return a.tanggal !== b.tanggal ? (a.tanggal < b.tanggal ? -1 : 1) : String(a.jam_buka) < String(b.jam_buka) ? -1 : 1; });
+  var kini = urut.filter(function (e) { return e.bisaIsi; }), depan = urut.filter(function (e) { return !e.bisaIsi; });
+  function baris(e) {
+    var lap = cari(D.laporan, 'id_event', e.id_event);
+    return item({lead: dt(e.tanggal), t: esc(e.nama_event), s: [jamEvent(e), esc(e.lokasi || e.kota)].filter(Boolean).join(' · ') || hari(e.tanggal),
+      end: e.bisaIsi ? (lap ? '<span class="pill p-ok">Laporan terisi</span>' : '<span class="pill p-warn">Belum laporan</span>') : '<span class="s">' + kapan(e) + '</span>',
+      on: "bukaSaya('" + e.id_event + "')"});
+  }
+  var h = '<div class="pagetitle" style="margin-bottom:2px">Halo, ' + esc(NAMA) + '</div><div class="meta" style="margin-bottom:16px">' + hari(D.hariIni) + ', ' + tgl(D.hariIni) + '</div>';
+  h += '<div class="cols"><div class="col">';
+  h += sec('Hari ini', kini.length ? '<div class="card">' + kini.map(baris).join('') + '</div><div class="meta" style="margin-top:8px">Checklist alat & laporan bisa diisi sampai pukul 06.00 esok harinya.</div>' :
+    '<div class="card"><div class="empty">Tidak ada event hari ini.</div></div>');
+  h += '</div><div class="col">';
+  h += sec('Akan datang', '<div class="card">' + (depan.length ? depan.map(baris).join('') : '<div class="empty">Belum ada jadwal.</div>') + '</div>');
+  h += '</div></div>';
+  return h + '<div class="meta" style="margin-top:14px">Hanya event tempat Anda ditugaskan. Jadwal yang salah atau belum muncul? Hubungi admin.</div>';
+}
+
+function vDetailSaya() {
+  var e = cari(D.event, 'id_event', DETAIL);
+  if (!e) { DETAIL = null; return vSaya(); }
+  var lap = cari(D.laporan, 'id_event', e.id_event), id = "'" + e.id_event + "'";
+  var h = '<button class="back" onclick="DETAIL=null;tampil(\'saya\')">‹ Event saya</button>';
+  h += '<div class="meta">' + hari(e.tanggal) + ', ' + tgl(e.tanggal) + (e.jam_buka ? ' · ' + jamEvent(e) : '') + '</div>';
+  h += '<div class="pagetitle" style="margin:2px 0 6px">' + esc(e.nama_event) + '</div>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span class="pill ' + (e.bisaIsi ? 'p-acc' : '') + '">' + kapan(e) + '</span>' + (e.jenis_acara ? '<span class="pill">' + esc(e.jenis_acara) + '</span>' : '') + '</div>';
+  if (e.bisaIsi) {
+    h += '<div class="btns" style="margin-bottom:10px"><button class="btn sm" onclick="formLaporanCrew(' + id + ')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="btn sm ghost" onclick="bukaChecklist(' + id + ')">Checklist alat</button></div>';
+    h += '<div class="meta" style="margin-bottom:20px">Bisa diisi & diubah sampai ' + batasIsi(e) + '.</div>';
+  } else {
+    h += '<div style="margin-bottom:20px">' + notice('', 'Checklist alat & laporan bisa diisi pada hari event (' + tgl(e.tanggal) + ').') + '</div>';
+  }
+
+  var info = [['Jam', jamEvent(e)], ['Lokasi', esc([e.lokasi, e.kota].filter(Boolean).join(', '))], ['Penanggung jawab', esc(e.penanggung_jawab)],
+    ['Klien', e.klien ? esc(e.klien) + (e.kontak ? '<div class="meta">' + esc(e.kontak) + '</div>' : '') : ''], ['Tim', esc(e.tim)]].filter(function (x) { return x[1]; });
+  h += '<div class="cols"><div class="col">';
+  h += sec('Info event', '<div class="card pad">' + (info.length ? '<table>' + info.map(function (x) { return '<tr><td>' + x[0] + '</td><td class="r">' + x[1] + '</td></tr>'; }).join('') + '</table>' : '<div class="meta">Belum ada detail.</div>') +
+    (e.kontak && waLink(e.kontak) ? '<div class="btns"><a class="btn sm ghost" style="text-decoration:none" href="' + waLink(e.kontak) + '" target="_blank" rel="noopener">Chat klien di WhatsApp</a></div>' : '') + '</div>');
+  if (lap) {
+    var tercetak = Math.max(0, num(lap.counter_akhir) - num(lap.counter_awal));
+    h += sec('Laporan', '<div class="card pad" style="cursor:pointer" onclick="formLaporanCrew(' + id + ')"><table>' +
+      '<tr><td>Jam aktual</td><td class="r">' + esc(lap.jam_buka_aktual || '—') + '–' + esc(lap.jam_tutup_aktual || '—') + '</td></tr>' +
+      '<tr><td>Transaksi</td><td class="r">' + num(lap.jumlah_transaksi) + '</td></tr>' +
+      '<tr><td>Sesi · Lembar tambahan · Grad Book</td><td class="r">' + num(lap.sesi_terjual) + ' · ' + num(lap.lembar_tambahan) + ' · ' + num(lap.grad_book_terjual) + '</td></tr>' +
+      '<tr><td>Tercetak (counter)</td><td class="r">' + tercetak + '</td></tr></table>' +
+      '<div class="meta" style="margin-top:8px">' + (e.bisaIsi ? 'Ketuk untuk melihat atau mengubah.' : 'Ketuk untuk melihat.') + '</div></div>');
+  }
+  h += '</div><div class="col">';
+  h += sec('Crew bertugas', '<div class="card">' + (e.rekan.length ? e.rekan.map(function (r) {
+    return item({lead: '<div class="av">' + inisial(r.nama) + '</div>', t: esc(r.nama) + (r.saya ? ' <span class="pill p-acc">Anda</span>' : ''), s: esc(r.role)});
+  }).join('') : '<div class="empty">Belum ada.</div>') + '</div>');
+  var alat = D.pemakaian.filter(function (a) { return a.id_event === e.id_event && a.dibawa === 'Ya'; }), blm = alat.filter(function (a) { return a.kembali !== 'Ya'; });
+  h += sec('Alat', '<div class="card pad" style="cursor:pointer" onclick="bukaChecklist(' + id + ')">' + (alat.length ?
+    '<div style="font-weight:700">' + alat.length + ' dibawa · ' + (alat.length - blm.length) + ' kembali</div>' + (blm.length ? '<div class="meta neg" style="margin-top:4px">Belum kembali: ' + blm.map(function (a) { return esc(a.nama_alat); }).join(', ') + '</div>' : '<div class="meta pos" style="margin-top:4px">Semua alat sudah kembali.</div>') :
+    '<div class="meta">' + (e.bisaIsi ? 'Belum ada checklist. Ketuk untuk mencentang alat yang dibawa.' : 'Belum ada checklist. Ketuk untuk melihat daftar alat.') + '</div>') + '</div>');
+  return h + '</div></div>';
+}
+
+// Laporan versi crew: tanpa admin QRIS & admin pencairan (dicatat admin ke Kas).
+var F_LAPORAN_CREW = F_LAPORAN.filter(function (f) { return f.n !== 'admin_qris' && f.n !== 'admin_pencairan'; });
+function formLaporanCrew(idEvent) {
+  var e = cari(D.event, 'id_event', idEvent), ada = cari(D.laporan, 'id_event', idEvent), l = Object.assign({}, ada || {id_event: idEvent});
+  if (!ada && D.stokAwal) {
+    if (D.stokAwal.kertas !== null) l.stok_kertas_awal = D.stokAwal.kertas;
+    if (D.stokAwal.buku !== null) l.stok_buku_awal = D.stokAwal.buku;
+  }
+  bukaForm('Laporan · ' + e.nama_event, F_LAPORAN_CREW, l, function (r) { r.id_event = idEvent; return panggil('simpanLaporanCrew', r); },
+    '<div class="meta">Isi sesuai hitungan di lokasi. Counter printer dibaca dari printer saat buka & tutup. Kertas & buku awal sudah diisi dari stok terakhir — koreksi bila hitungan Anda berbeda.</div>',
+    null, e.bisaIsi);
+}
+
+function vAkun() {
+  return '<div class="pagetitle">Akun</div>' + sec('Akun saya', kartuAkun()) +
+    '<div class="meta">Lupa PIN? Minta admin mereset PIN Anda. Jadwal event juga muncul di Google Calendar bila email Anda sudah didaftarkan admin.</div>';
+}
+</script>
