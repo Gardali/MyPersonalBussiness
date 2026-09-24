@@ -71,10 +71,15 @@ function tambahKolom_(namaTab, kolomBaru) {
 var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'id_crew', 'id_kas', 'id_kalender', 'kontak', 'no_nota', 'no_rekening', 'foto',
   'parameter_skema', 'jam_buka', 'jam_tutup', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai'];
 
+// Ikon tab browser (favicon). Apps Script hanya menerima URL publik, jadi diambil dari aset/favicon.png di repo GitHub.
+var FAVICON_URL = 'https://raw.githubusercontent.com/Gardali/MyPersonalBussiness/claude/sleepy-pascal-b7h62e/aset/favicon.png';
+
 function doGet() {
-  return HtmlService.createTemplateFromFile('Index').evaluate()
+  var out = HtmlService.createTemplateFromFile('Index').evaluate()
     .setTitle('Posetive')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  try { out.setFaviconUrl(FAVICON_URL); } catch (e) { } // ikon gagal dipasang → aplikasi tetap terbuka
+  return out;
 }
 
 /** Dipakai di Index.html (<?!= include('Css'); ?>) untuk menyisipkan isi file HTML lain apa adanya. */
