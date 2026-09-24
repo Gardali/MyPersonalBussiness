@@ -48,7 +48,7 @@ function setelahMasuk(pengguna) {
 // ---------------------------------------------------------------- masuk
 function tampilMasuk(pesan) {
   SESI.pengguna = null; aturTampilanPeran(); tutupForm();
-  document.getElementById('view').innerHTML = '<div class="masuk"><div class="logo">Posetive<small>Photobooth · masuk ke aplikasi</small></div>' +
+  document.getElementById('view').innerHTML = '<div class="masuk"><div class="logo-kartu"><div class="logo-gambar" role="img" aria-label="Posetive Photobooth"></div><small>Masuk ke aplikasi</small></div>' +
     (pesan ? '<div style="margin-top:14px">' + notice('', esc(pesan)) + '</div>' : '') +
     '<form class="card pad" style="margin-top:16px" onsubmit="masukUI(this);return false">' +
     '<div class="f"><label for="m_user">Username</label><input id="m_user" name="u" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>' +

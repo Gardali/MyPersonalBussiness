@@ -1210,21 +1210,17 @@
       gap: 4px
     }
 
+    /* Logo krem di atas kotak maroon (warna kartu saldo Beranda) */
     nav .brand {
       display: block;
-      font-weight: 700;
-      font-size: 20px;
-      letter-spacing: -.02em;
-      padding: 0 12px 20px;
-      color: var(--ink)
+      background: linear-gradient(155deg, #6E1F2C, #4E1520);
+      border-radius: 16px;
+      padding: 18px 22px;
+      margin: 0 0 18px
     }
 
-    nav .brand small {
-      display: block;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--muted);
-      letter-spacing: 0
+    nav .brand .logo-gambar {
+      width: 100%
     }
 
     nav button {
@@ -1382,6 +1378,31 @@
     font-weight: 500;
     color: var(--muted);
     letter-spacing: 0
+  }
+
+  /* Layar masuk: logo krem di kartu maroon */
+  .logo-kartu {
+    background: linear-gradient(155deg, #6E1F2C, #4E1520);
+    border-radius: 20px;
+    padding: 30px 32px 20px;
+    text-align: center;
+    box-shadow: 0 10px 26px -10px rgba(110, 31, 44, .35)
+  }
+
+  .logo-kartu .logo-gambar {
+    width: 100%;
+    max-width: 250px;
+    margin: 0 auto
+  }
+
+  .logo-kartu small {
+    display: block;
+    margin-top: 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #F4DDAB;
+    opacity: .8;
+    letter-spacing: .02em
   }
 
   .masuk .f input.pin {

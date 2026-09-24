@@ -27,7 +27,7 @@ var IC = {
   camera: '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>'
 };
 function ikon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC[n] + '</svg>'; }
-document.getElementById('nav').innerHTML = '<div class="brand">Posetive<small>Photobooth</small></div>' + [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas'], ['stok', 'box', 'Stok'], ['lainnya', 'gear', 'Lainnya']]
+document.getElementById('nav').innerHTML = '<div class="brand"><div class="logo-gambar" role="img" aria-label="Posetive Photobooth"></div></div>' + [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas'], ['stok', 'box', 'Stok'], ['lainnya', 'gear', 'Lainnya']]
   .map(function (x) { return '<button data-v="' + x[0] + '"' + (x[0] === 'beranda' ? ' class="on"' : '') + '>' + ikon(x[1]) + x[2] + '</button>'; }).join('');
 
 // ---------------------------------------------------------------- utilitas
