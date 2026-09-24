@@ -78,7 +78,32 @@ dengan jam, lokasi, klien + WA, dan rekan crew — tanpa kontrak, fee, kas, atau
 - **Checklist alat & laporan** hanya bisa diisi pada hari event, sampai **pukul 06.00 esok harinya**. Event mendatang
   hanya bisa dilihat. Setelah lewat 06.00 event hilang dari daftar crew; koreksi selanjutnya dilakukan admin.
 - Admin QRIS & admin pencairan tidak diisi crew — admin melengkapinya lewat Ubah laporan.
+- **Alur laporan**: saat buka, crew mengisi counter awal + fotonya lalu **Simpan**. Saat tutup, crew melengkapi angka,
+  memotret counter akhir (wajib), uang tunai & bukti QRIS, **Simpan**, lalu **Kirim ke admin**. Foto disimpan di folder
+  Drive **Posetive - Bukti Laporan**.
+- Setelah dikirim, admin mendapat **email ringkasan** (angka, selisih lembar & kas, foto). Penerima: isi `EMAIL_LAPORAN`
+  di tab PENGATURAN (boleh beberapa, pisahkan koma); kosong = email akun Posetive. Bila crew mengubah laporan setelah
+  dikirim, admin dapat email "laporan diubah".
+- Admin membuka event → cek foto & angka → **Setujui laporan** → event menjadi *Selesai* dan crew tidak bisa mengubah
+  laporan/checklist lagi. Salah pencet? **Batalkan persetujuan**. Admin tetap bisa mengubah laporan kapan saja.
 - Crew yang dilepas dari event langsung tidak bisa melihat/mengisi event itu lagi.
+
+## SOP event
+- Isi SOP ada di tab **SOP** (dibuat otomatis dari "SOP Event Posetive Photobooth" saat aplikasi pertama kali dibuka
+  setelah pembaruan). Ubah lewat **Lainnya → SOP event** — ketuk bagian untuk mengubah, **+ Bagian** untuk menambah.
+  - **Langkah** dicentang tim di setiap event; **Bacaan** hanya dibaca (aturan QRIS, tunai, foto basah, dst.).
+  - **Wajib = Ya** (7 poin uji coba): laporan tidak bisa dikirim crew sebelum langkah itu dicentang.
+  - **Berlaku untuk**: langkah seperti uji QRIS dan hitung tunai hanya muncul di event yang tamunya bayar di booth
+    (bukan Kontrak Klien).
+  - Langkah yang pernah dipakai sebaiknya dijadikan **Nonaktif**, bukan dihapus.
+- **Peran per event**: di Event → Crew bertugas → ketuk crew → **Peran di event** (FC / Operator Depan / Operator Cetak).
+  Satu event hanya boleh satu FC. Beranda mengingatkan event ≤ 3 hari lagi yang belum punya FC.
+- Crew membuka **SOP** (menu bawah) untuk membaca, dan **Event saya → SOP event** untuk mencentang langkah di hari event.
+  Setiap centang langsung tersimpan beserta nama & jamnya. Admin bisa mencentang dari detail event kapan saja.
+- Email laporan memuat jumlah langkah yang dicentang dan langkah yang terlewat.
+- Aturan pembayaran **tunai** di SOP masih **draf** — tinjau dan ubah di Lainnya → SOP event.
+- Isi SOP awal (`app/SopAwal.gs`) tidak masuk repo GitHub karena repo publik; hanya dikirim ke Apps Script. PIN Mini PC
+  tidak ditulis di SOP — sampaikan langsung ke crew.
 
 ## Menghubungkan Google Calendar (sekali saja)
 1. Buka aplikasi → **Lainnya → Google Calendar → Hubungkan & sinkronkan**.

@@ -14,7 +14,9 @@ var TABS = {
   INVENTARIS: { id: 'id_alat', prefix: 'ALT-', pad: 3 },
   MUTASI_STOK: { id: 'id', prefix: 'MS-', pad: 4 },
   CREW: { id: 'id_crew', prefix: 'CR-', pad: 3 },
-  TUGAS_CREW: { id: 'id', prefix: 'TC-', pad: 4 }
+  TUGAS_CREW: { id: 'id', prefix: 'TC-', pad: 4 },
+  SOP: { id: 'id', prefix: 'SOP-', pad: 3 },
+  SOP_EVENT: { id: 'id', prefix: 'SE-', pad: 5 }
 };
 var MUTASI_HEAD = ['id', 'tanggal', 'bahan', 'jenis', 'jumlah', 'id_event', 'sumber', 'catatan'];
 var CREW_HEAD = ['id_crew', 'foto', 'nama_lengkap', 'nama_panggilan', 'domisili', 'kendaraan', 'bank', 'no_rekening',
@@ -31,16 +33,22 @@ var PENGATURAN_BARU = [
   ['KONTAK_USAHA', '', 'teks', 'No. WA / email usaha di invoice'],
   ['REKENING', '', 'teks', 'Rekening pembayaran di invoice, mis. BCA 123456 a.n. ...'],
   ['NAMA_MANAJER', 'Garda Ali Rayhaan', 'teks', 'Nama penyusun laporan bulanan'],
-  ['PENYUSUTAN_HARGA_MIN', 250000, 'Rp', 'Barang Inventaris (kategori Aset, milik Posetive) di bawah harga ini tidak dihitung penyusutan']
+  ['PENYUSUTAN_HARGA_MIN', 250000, 'Rp', 'Barang Inventaris (kategori Aset, milik Posetive) di bawah harga ini tidak dihitung penyusutan'],
+  ['EMAIL_LAPORAN', '', 'teks', 'Email penerima notifikasi laporan dari crew (pisahkan dengan koma). Kosong = email akun Posetive']
 ];
 // Kolom baru di tab LAPORAN_EVENT, EVENT, INVENTARIS, dan KAS yang ditambahkan otomatis bila belum ada (di kolom paling kanan).
 var LAPORAN_KOLOM_BARU = ['sesi_terjual', 'lembar_tambahan', 'admin_qris', 'admin_pencairan', 'realisasi_penyusutan', 'realisasi_jepreto',
-  'realisasi_biaya_lembar', 'realisasi_biaya_buku'];
+  'realisasi_biaya_lembar', 'realisasi_biaya_buku',
+  // foto bukti (ID file Drive) & status kirim/setujui laporan — lihat LaporanCrew.gs
+  'foto_counter_awal', 'foto_counter_akhir', 'foto_tunai', 'foto_qris', 'status_laporan', 'dikirim_oleh', 'dikirim_pada', 'disetujui_oleh', 'disetujui_pada',
+  // dari SOP: jam setup, baterai powerstation (0–1), softfile gagal terunggah
+  'jam_setup_mulai', 'jam_setup_selesai', 'powerstation_awal', 'powerstation_akhir', 'softfile_gagal', 'cetak_ulang_voucher'];
 var EVENT_KOLOM_BARU = ['rab_penyusutan', 'rab_jepreto', 'rab_fee_crew', 'rab_transport', 'rab_konsumsi',
   'dp_nominal', 'jatuh_tempo_dp', 'jatuh_tempo_pelunasan', 'id_kalender'];
 var INVENTARIS_KOLOM_BARU = ['umur_manfaat_bulan'];
 var KAS_KOLOM_BARU = ['sumber'];
 var CREW_KOLOM_BARU = ['email'];
+var TUGAS_KOLOM_BARU = ['peran']; // FC / Operator Depan / Operator Cetak (lihat Sop.gs)
 // Pilihan dropdown baru yang ditambahkan otomatis ke tab PILIHAN bila belum ada.
 var PILIHAN_BARU = { 'Kategori Kas': ['Admin QRIS', 'Admin Pencairan QRIS'] };
 
@@ -69,7 +77,9 @@ function tambahKolom_(namaTab, kolomBaru) {
 }
 // Kolom yang harus disimpan sebagai teks (supaya 0 di depan nomor HP tidak hilang).
 var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'id_crew', 'id_kas', 'id_kalender', 'kontak', 'no_nota', 'no_rekening', 'foto',
-  'parameter_skema', 'jam_buka', 'jam_tutup', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai'];
+  'parameter_skema', 'jam_buka', 'jam_tutup', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai',
+  'foto_counter_awal', 'foto_counter_akhir', 'foto_tunai', 'foto_qris', 'dikirim_pada', 'disetujui_pada', 'jam_setup_mulai', 'jam_setup_selesai',
+  'id_langkah', 'urutan', 'dicentang_pada'];
 
 // Ikon tab browser (favicon). Apps Script hanya menerima URL publik, jadi diambil dari aset/favicon.png di repo GitHub.
 var FAVICON_URL = 'https://raw.githubusercontent.com/Gardali/MyPersonalBussiness/claude/sleepy-pascal-b7h62e/aset/favicon.png';
@@ -161,6 +171,8 @@ function siapkan_() {
     shT.getRange('A2:C1000').setNumberFormat('@');
     shT.getRange('E2:E1000').setNumberFormat('@');
   }
+  tambahKolom_('TUGAS_CREW', TUGAS_KOLOM_BARU);
+  siapkanSop_();
 
   if (ss.getSheetByName('MUTASI_STOK')) return;
   var sh = ss.insertSheet('MUTASI_STOK');
@@ -203,6 +215,8 @@ function getData_() {
     keputusan: readTab_('LOG_KEPUTUSAN'),
     crew: readTab_('CREW'),
     tugas: readTab_('TUGAS_CREW'),
+    sop: readTab_('SOP'),
+    sopEvent: readTab_('SOP_EVENT'),
     kalender: kalenderAktif_(),
     hariIni: Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
   };

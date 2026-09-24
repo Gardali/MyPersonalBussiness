@@ -90,7 +90,17 @@ function vBeranda() {
   });
   var feeLewat = feeBelumDibayar(true);
   if (feeLewat.length) n += '<div onclick="tampil(\'crew\')" style="cursor:pointer">' + notice('', '<b>Fee crew belum dibayar ' + rp(sum(feeLewat, function (t) { return t.fee; })) + '</b> — ' + feeLewat.length + ' penugasan dari event yang sudah lewat.') + '</div>';
-  D.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal && e.tanggal < now; }).forEach(function (e) {
+  D.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal >= now && selisihHari(e.tanggal, now) <= 3; }).forEach(function (e) {
+    var t = D.tugas.filter(function (x) { return x.id_event === e.id_event; });
+    if (!t.some(function (x) { return x.peran === 'FC'; })) n += '<div onclick="bukaEvent(\'' + e.id_event + '\')" style="cursor:pointer">' + notice('', '<b>' + esc(e.nama_event) + ' (' + tgl(e.tanggal) + ') belum punya FC</b> — ' + (t.length ? 'tunjuk salah satu crew sebagai FC.' : 'tugaskan crew & tunjuk FC.')) + '</div>';
+  });
+  var masuk = {};
+  D.laporan.filter(function (l) { return l.status_laporan === 'Menunggu dicek'; }).forEach(function (l) {
+    var e = cari(D.event, 'id_event', l.id_event); if (!e) return;
+    masuk[e.id_event] = true;
+    n += '<div onclick="bukaEvent(\'' + e.id_event + '\')" style="cursor:pointer">' + notice('', '<b>Laporan ' + esc(e.nama_event) + ' masuk</b> dari ' + esc(l.dikirim_oleh || 'crew') + ' — cek foto & angka, lalu setujui.') + '</div>';
+  });
+  D.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal && e.tanggal < now && !masuk[e.id_event]; }).forEach(function (e) {
     n += '<div onclick="bukaEvent(\'' + e.id_event + '\')" style="cursor:pointer">' + notice('', '<b>' + esc(e.nama_event) + ' (' + tgl(e.tanggal) + ')</b> sudah lewat — isi laporan & tutup event.') + '</div>';
   });
   if (n) h += sec('Perlu perhatian', n);

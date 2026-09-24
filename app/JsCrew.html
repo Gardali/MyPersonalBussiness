@@ -39,21 +39,10 @@ function vCrew() {
 }
 function pilihFoto(inp) {
   var f = inp.files[0]; if (!f) return;
-  var reader = new FileReader();
-  reader.onload = function () {
-    var img = new Image();
-    img.onload = function () {
-      var max = 640, w = img.width, h = img.height;
-      if (w > max || h > max) { if (w > h) { h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; } }
-      var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-      cv.getContext('2d').drawImage(img, 0, 0, w, h);
-      var dataUrl = cv.toDataURL('image/jpeg', 0.82);
-      FOTO_BARU = {base64: dataUrl.split(',')[1], mime: 'image/jpeg', nama: (f.name || 'foto') + '.jpg'};
-      var prev = document.getElementById('foto_prev'); if (prev) { prev.src = dataUrl; prev.style.visibility = 'visible'; }
-    };
-    img.src = reader.result;
-  };
-  reader.readAsDataURL(f);
+  kecilkanFoto(f, 640, 0.82).then(function (dataUrl) {
+    FOTO_BARU = {base64: dataUrl.split(',')[1], mime: 'image/jpeg', nama: (f.name || 'foto') + '.jpg'};
+    var prev = document.getElementById('foto_prev'); if (prev) { prev.src = dataUrl; prev.style.visibility = 'visible'; }
+  }).catch(function (e) { toast(e.message); });
 }
 var F_CREW = [
   {n: '_foto', l: 'Foto profil', t: 'file'},
@@ -90,6 +79,7 @@ var F_TUGAS = [
       return [c.id_crew, (c.nama_panggilan || c.nama_lengkap) + (c.role ? ' · ' + c.role : '') + (bt.length ? ' — sudah di ' + bt[0].nama_event : '')];
     });
   }},
+  {n: 'peran', l: 'Peran di event (SOP)', t: 'sel', o: function () { return [['FC', 'FC — Field Coordinator (pengambil keputusan di lokasi)'], ['Operator Depan', 'Operator Depan'], ['Operator Cetak', 'Operator Cetak']]; }},
   {n: 'fee', l: 'Fee (Rp)', t: 'num', wajib: 1, def: function () { return P('FEE_CREW'); }},
   {n: 'catatan', l: 'Catatan (mis. lembur, jadi PJ)', t: 'area'}
 ];
@@ -104,6 +94,8 @@ function formTugas(id, idEvent) {
   bukaForm(id ? 'Tugas ' + namaCrew(t.id_crew) : 'Tugaskan crew', F_TUGAS, t, function (r) {
     var dobel = D.tugas.filter(function (x) { return x.id_event === r.id_event && x.id_crew === r.id_crew && x.id !== r.id; });
     if (dobel.length) return Promise.reject(new Error(namaCrew(r.id_crew) + ' sudah ditugaskan di event ini'));
+    var fcLain = r.peran === 'FC' ? D.tugas.filter(function (x) { return x.id_event === r.id_event && x.peran === 'FC' && x.id !== r.id; })[0] : null;
+    if (fcLain) return Promise.reject(new Error(namaCrew(fcLain.id_crew) + ' sudah jadi FC di event ini. Ubah perannya dulu.'));
     var ev = cari(D.event, 'id_event', r.id_event), bt = ev ? bentrokCrew(r.id_crew, ev) : [];
     if (bt.length && !confirm(namaCrew(r.id_crew) + ' sudah bertugas di ' + bt.map(function (x) { return x.nama_event + (x.jam_buka ? ' (' + x.jam_buka + '–' + (x.jam_tutup || '?') + ')' : ''); }).join(', ') + ' pada ' + tgl(ev.tanggal) + '. Tetap tugaskan?')) return Promise.reject(new Error('dibatalkan'));
     return panggil('simpanTugasCrew', r);

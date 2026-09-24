@@ -1345,6 +1345,79 @@
     font-size: 14px
   }
 
+  /* ---- SOP ---- */
+  .sop-isi {
+    white-space: pre-line;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.5;
+    margin-top: 2px
+  }
+
+  .sop-no {
+    flex: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700
+  }
+
+  .sop-baca .t {
+    margin-bottom: 4px
+  }
+
+  .sop-langkah {
+    align-items: flex-start;
+    cursor: pointer
+  }
+
+  .sop-langkah input {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    accent-color: var(--accent)
+  }
+
+  .sop-langkah.selesai .t {
+    opacity: .7
+  }
+
+  /* ---- Foto bukti laporan ---- */
+  .foto-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px
+  }
+
+  .foto-grid a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 12px
+  }
+
+  .foto-grid img,
+  .foto-kosong {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: 12px;
+    background: var(--soft);
+    margin-bottom: 4px
+  }
+
+  .foto-kosong {
+    display: flex;
+    align-items: center;
+    justify-content: center
+  }
+
   /* ---- Login & hak akses ---- */
   /* .boleh: bagian yang tetap bisa diubah walau akun lihat-saja, mis. checklist event hari ini untuk crew */
   .lihat-saja .ubah:not(.boleh *),

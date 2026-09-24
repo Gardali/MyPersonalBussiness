@@ -44,10 +44,13 @@ function hapusEvent_(id) {
  * Menyimpan laporan event lalu memperbarui stok otomatis: kertas keluar = lembar tercetak (counter),
  * buku keluar = terjual + rusak, dan hitung fisik kertas bila diisi. HPP & alokasi dikunci di server (kunciLaporan_).
  * Stok & admin kas dihitung dari baris laporan lengkap setelah disimpan, jadi isian yang tidak dikirim (mis. admin
- * QRIS saat crew menyimpan) tetap dipakai, bukan dianggap nol.
+ * QRIS saat crew menyimpan) tetap dipakai, bukan dianggap nol. fotos: foto bukti baru, lihat simpanFotoLaporan_.
  */
-function simpanLaporan_(rec) {
+function simpanLaporan_(rec, fotos) {
   if (!rec || !rec.id_event) throw new Error('Kode event wajib diisi.');
+  LAPORAN_SISTEM.forEach(function (k) { delete rec[k]; }); // foto & status hanya diisi server
+  kolomLaporan_();
+  Object.assign(rec, simpanFotoLaporan_(rec.id_event, fotos));
   saveRecord_('LAPORAN_EVENT', kunciLaporan_(rec));
   rec = readTab_('LAPORAN_EVENT').filter(function (l) { return l.id_event === rec.id_event; })[0] || rec;
   var ev = readTab_('EVENT').filter(function (e) { return e.id_event === rec.id_event; })[0];

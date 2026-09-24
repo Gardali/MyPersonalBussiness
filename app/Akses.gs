@@ -20,6 +20,8 @@ function izin_() {
   gantiPin: [gantiPin_, SEMUA, true],
   getData: [getData_, LIHAT], getFotoCrew: [getFotoCrew_, LIHAT], statusOtomatis: [statusOtomatis_, LIHAT],
   buatLaporanPdf: [buatLaporanPdf_, LIHAT], buatInvoice: [buatInvoice_, LIHAT], buatLaporanEventSheet: [buatLaporanEventSheet_, LIHAT],
+  fotoLaporan: [fotoLaporan_, LIHAT], setujuiLaporan: [setujuiLaporan_, ADMIN, true], batalSetujuiLaporan: [batalSetujuiLaporan_, ADMIN, true],
+  centangSop: [centangSop_, ADMIN, true],
   saveRecord: [saveRecord_, ADMIN], deleteRecord: [deleteRecord_, ADMIN],
   dealKeEvent: [dealKeEvent_, ADMIN], simpanEvent: [simpanEvent_, ADMIN], hapusEvent: [hapusEvent_, ADMIN],
   simpanLaporan: [simpanLaporan_, ADMIN], simpanMutasi: [simpanMutasi_, ADMIN], simpanChecklist: [simpanChecklist_, ADMIN],
@@ -32,7 +34,8 @@ function izin_() {
   daftarPengguna: [daftarPengguna_, ADMIN], simpanPengguna: [simpanPengguna_, ADMIN, true], resetPin: [resetPin_, ADMIN, true],
   // Crew: data sudah disaring & setiap simpan diperiksa (bertugas di event itu, hari event s.d. 06.00 besok) — EventSaya.gs.
   dataCrew: [dataCrew_, HANYA_CREW, true], simpanLaporanCrew: [simpanLaporanCrew_, HANYA_CREW, true],
-  simpanChecklistCrew: [simpanChecklistCrew_, HANYA_CREW, true]
+  simpanChecklistCrew: [simpanChecklistCrew_, HANYA_CREW, true], kirimLaporanCrew: [kirimLaporanCrew_, HANYA_CREW, true],
+  centangSopCrew: [centangSopCrew_, HANYA_CREW, true]
   };
 }
 

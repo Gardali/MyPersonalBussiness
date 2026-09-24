@@ -1,11 +1,12 @@
 <script>
 // Posetive — formulir umum (bukaForm, simpan, hapus).
 // ---------------------------------------------------------------- formulir
-var FORM = null, FOTO_BARU = null, NOTA_BARU = null;
+var FORM = null, FOTO_BARU = null, NOTA_BARU = null, FOTO_FORM = {};
 /** boleh: bisa disimpan? Bawaan: hanya admin. Crew mengirim true untuk laporan event hari ini (server tetap memeriksa). */
 function bukaForm(judul, fields, rec, onSave, extra, preview, boleh) {
   var ubah = boleh === undefined ? bisaUbah() : !!boleh;
   FORM = {fields: fields, rec: Object.assign({}, rec), onSave: onSave, preview: preview, ubah: ubah};
+  FOTO_FORM = {};
   fields.forEach(function (f) { if (f.n && FORM.rec[f.n] === undefined && f.def) FORM.rec[f.n] = f.def === 'today' ? D.hariIni : (typeof f.def === 'function' ? f.def() : f.def); });
   var h = '<div class="grab"></div><h2>' + esc(judul) + '</h2><form id="frm" onsubmit="simpanForm();return false">';
   fields.forEach(function (f, i) {
@@ -16,13 +17,17 @@ function bukaForm(judul, fields, rec, onSave, extra, preview, boleh) {
     if (f.t === 'sel') inp = '<select name="' + f.n + '"><option value="">— pilih —</option>' + f.o().map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(v) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
     else if (f.t === 'area') inp = '<textarea name="' + f.n + '">' + esc(v) + '</textarea>';
     else if (f.t === 'file') inp = '<div style="display:flex;align-items:center;gap:12px"><img id="foto_prev" style="width:56px;height:56px;border-radius:50%;object-fit:cover;background:var(--soft);visibility:hidden;flex:none"><input type="file" accept="image/*" onchange="pilihFoto(this)"></div>';
+    else if (f.t === 'foto') inp = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><img id="fp_' + f.n + '" alt="" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--soft);display:none;flex:none">' +
+      '<label class="btn sm ghost" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px"><span style="width:16px;height:16px;display:inline-flex">' + ikon('camera') + '</span>' + (v ? 'Ganti foto' : 'Pilih / ambil foto') +
+      '<input type="file" accept="image/*" style="display:none" onchange="pilihFotoForm(this,\'' + f.n + '\')"></label><span id="fs_' + f.n + '" class="meta">' +
+      (v ? '✓ Sudah ada' + (peran() !== 'crew' ? ' · <a href="' + urlDrive(v) + '" target="_blank" rel="noopener">lihat</a>' : '') : 'Belum ada foto') + '</span></div>';
     else if (f.t === 'bukti') inp = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' + (/^https?:\/\//.test(v) ? '<a class="btn sm ghost" href="' + esc(v) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">Lihat nota</a>' : '') +
       '<input type="file" accept="image/png,image/jpeg,application/pdf" onchange="pilihBukti(this)"><span id="bukti_nama" class="meta"></span></div>';
     else {
       var type = {date: 'date', time: 'time', num: 'number', pct: 'number', tel: 'tel', email: 'email'}[f.t] || 'text';
       inp = '<input name="' + f.n + '" type="' + type + '"' + (type === 'number' ? ' inputmode="decimal" step="any"' : '') + ' value="' + esc(v) + '">';
     }
-    h += '<div class="f' + (f.t === 'area' || f.t === 'file' || f.t === 'bukti' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
+    h += '<div class="f' + (f.t === 'area' || f.t === 'file' || f.t === 'bukti' || f.t === 'foto' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
   });
   if (FORM.preview) h += '<div id="preview" class="f wide" style="margin-top:10px"></div>';
   h += '<div class="btns">' + (ubah ? '<button class="btn" type="submit" style="flex:1">Simpan</button>' : '') + '<button class="btn ghost" type="button" onclick="tutupForm()"' + (ubah ? '' : ' style="flex:1"') + '>' + (ubah ? 'Batal' : 'Tutup') + '</button></div>' +
@@ -35,6 +40,37 @@ function bukaForm(judul, fields, rec, onSave, extra, preview, boleh) {
   if (preview) document.getElementById('frm').addEventListener('input', function () { FORM.preview(bacaForm()); });
   aturTampil();
 }
+/** Mengecilkan foto di HP sebelum diunggah (sisi terpanjang max px, JPEG). Hasil: Promise data URI. */
+function kecilkanFoto(file, max, mutu) {
+  return new Promise(function (ok, gagal) {
+    var reader = new FileReader();
+    reader.onerror = function () { gagal(new Error('Foto tidak bisa dibaca')); };
+    reader.onload = function () {
+      var img = new Image();
+      img.onerror = function () { gagal(new Error('Format foto tidak didukung')); };
+      img.onload = function () {
+        var w = img.width, h = img.height;
+        if (w > max || h > max) { if (w > h) { h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; } }
+        var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        ok(cv.toDataURL('image/jpeg', mutu));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+/** Isian foto (t: 'foto'): disimpan di FOTO_FORM[n] lalu dikirim bersama form (ambilFotoForm). */
+function pilihFotoForm(inp, n) {
+  var f = inp.files[0], info = document.getElementById('fs_' + n); if (!f) return;
+  if (info) info.textContent = 'Menyiapkan foto…';
+  kecilkanFoto(f, 1280, 0.8).then(function (dataUrl) {
+    FOTO_FORM[n] = {base64: dataUrl.split(',')[1], mime: 'image/jpeg'};
+    var img = document.getElementById('fp_' + n); if (img) { img.src = dataUrl; img.style.display = 'block'; }
+    if (info) info.textContent = 'Foto baru (' + Math.round(dataUrl.length * 0.75 / 1024) + ' KB) — terunggah saat disimpan';
+  }).catch(function (e) { inp.value = ''; if (info) info.textContent = ''; toast(e.message); });
+}
+function ambilFotoForm() { return Object.keys(FOTO_FORM).length ? FOTO_FORM : null; }
 function bacaForm() {
   var frm = document.getElementById('frm'), r = Object.assign({}, FORM.rec);
   FORM.fields.forEach(function (f) {

@@ -7,10 +7,11 @@
 var JAM_TUTUP_ISI = 6; // event hari ini masih bisa diisi sampai pukul 06.00 besok (event malam / laporan setelah bongkar)
 
 // Isian laporan yang boleh dikirim crew. Admin QRIS & admin pencairan (masuk ke KAS) tetap diisi admin.
-var LAPORAN_CREW_TEKS = ['jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai', 'kendala', 'keluhan_pengunjung', 'rekomendasi', 'catatan'];
+var LAPORAN_CREW_TEKS = ['jam_setup_mulai', 'jam_setup_selesai', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai', 'kendala', 'keluhan_pengunjung', 'rekomendasi', 'catatan'];
 var LAPORAN_CREW_ANGKA = ['antrean_terpanjang', 'downtime_menit', 'jumlah_transaksi', 'sesi_terjual', 'lembar_tambahan', 'grad_book_terjual',
   'grup_potongan', 'softfile_terkirim', 'counter_awal', 'counter_akhir', 'lembar_uji_bonus', 'lembar_gagal', 'tunai_dihitung',
-  'modal_kembalian', 'qris_transfer', 'stok_kertas_awal', 'stok_kertas_akhir_fisik', 'stok_buku_awal', 'buku_rusak', 'tinta_terendah_persen'];
+  'modal_kembalian', 'qris_transfer', 'stok_kertas_awal', 'stok_kertas_akhir_fisik', 'stok_buku_awal', 'buku_rusak', 'tinta_terendah_persen',
+  'powerstation_awal', 'powerstation_akhir', 'softfile_gagal', 'cetak_ulang_voucher'];
 var KONDISI_DEFAULT = ['Baik', 'Perlu Perbaikan', 'Rusak', 'Hilang'];
 
 function hariIni_() { return Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd'); }
@@ -21,6 +22,7 @@ function bisaIsiTanggal_(tanggal) { tanggal = String(tanggal); return tanggal ==
 
 /** Semua yang dibutuhkan tampilan crew, dalam satu panggilan. */
 function dataCrew_(u) {
+  siapkanSop_();
   var hari = hariKerja_(), idc = String(u.id_crew || '');
   var tugas = readTab_('TUGAS_CREW'), nama = {}, peranCrew = {};
   readTab_('CREW').forEach(function (c) { nama[c.id_crew] = c.nama_panggilan || c.nama_lengkap || c.id_crew; peranCrew[c.id_crew] = c.role || ''; });
@@ -45,9 +47,12 @@ function dataCrew_(u) {
   });
   var urutChecklist = Object.keys(perEvent).sort(function (a, b) { return tglEvent[a] < tglEvent[b] ? 1 : -1; });
 
+  var disetujui = {};
+  var sop = sopAktif_();
   var laporan = readTab_('LAPORAN_EVENT').filter(function (l) { return ids[l.id_event]; }).map(function (l) {
     var o = { id_event: l.id_event };
-    LAPORAN_CREW_TEKS.concat(LAPORAN_CREW_ANGKA).forEach(function (k) { o[k] = l[k] == null ? '' : l[k]; });
+    LAPORAN_CREW_TEKS.concat(LAPORAN_CREW_ANGKA, LAPORAN_SISTEM).forEach(function (k) { o[k] = l[k] == null ? '' : l[k]; });
+    if (l.status_laporan === STATUS_LAPORAN.setuju) disetujui[l.id_event] = true;
     return o;
   });
 
@@ -65,10 +70,12 @@ function dataCrew_(u) {
         lokasi: e.lokasi || '', kota: e.kota || '', jenis_acara: e.jenis_acara || '', status: e.status || '',
         penanggung_jawab: e.penanggung_jawab || '', tim: e.tim || '',
         klien: p ? String(p.nama_klien || '') : '', kontak: p ? String(p.kontak || '') : '',
-        bisaIsi: bisaIsiTanggal_(e.tanggal),
+        bisaIsi: bisaIsiTanggal_(e.tanggal) && !disetujui[e.id_event],
         rekan: tugas.filter(function (t) { return t.id_event === e.id_event; }).map(function (t) {
-          return { nama: nama[t.id_crew] || t.id_crew, role: peranCrew[t.id_crew] || '', saya: String(t.id_crew) === idc };
+          return { nama: nama[t.id_crew] || t.id_crew, role: peranTugas_(t) || peranCrew[t.id_crew] || '', peran: peranTugas_(t), saya: String(t.id_crew) === idc };
         }),
+        peranSaya: tugas.filter(function (t) { return t.id_event === e.id_event && String(t.id_crew) === idc; }).map(peranTugas_)[0] || '',
+        sopLangkah: sop.filter(function (s) { return s.jenis === 'langkah' && sopBerlaku_(s, e); }).map(function (s) { return s.id; }),
         salinDari: dari ? { id_event: dari, kunci: perEvent[dari].filter(function (a) { return a.dibawa === 'Ya'; }).map(function (a) { return a.id_alat || 'SET:' + a.nama_alat; }) } : null
       };
     }),
@@ -78,6 +85,8 @@ function dataCrew_(u) {
       return { id_alat: x.id_alat, nama: x.nama, kategori: x.kategori, kondisi: x.kondisi || '', pemilik: x.pemilik || '' };
     }),
     setTanpaKode: Object.keys(set).sort(),
+    sop: sop.map(function (s) { return { id: s.id, fase: s.fase, jenis: s.jenis, peran: s.peran, judul: s.judul, isi: s.isi, wajib: s.wajib }; }),
+    sopEvent: readTab_('SOP_EVENT').filter(function (c) { return ids[c.id_event]; }),
     stokAwal: { kertas: stokSekarang_('Kertas 4R'), buku: stokSekarang_('Graduation Book') }
   };
 }
@@ -90,6 +99,8 @@ function cekBisaIsi_(u, idEvent) {
   if (!bertugas || !e) throw new Error('Anda tidak bertugas di event ini.');
   if (e.status === 'Batal') throw new Error('Event ini sudah dibatalkan.');
   if (!bisaIsiTanggal_(e.tanggal)) throw new Error('Checklist & laporan hanya bisa diisi pada hari event, sampai pukul 0' + JAM_TUTUP_ISI + '.00 esok harinya. Hubungi admin bila perlu mengubah.');
+  var l = laporanEvent_(idEvent);
+  if (l && l.status_laporan === STATUS_LAPORAN.setuju) throw new Error('Laporan event ini sudah disetujui admin, tidak bisa diubah lagi. Hubungi admin bila ada koreksi.');
   return e;
 }
 
@@ -105,15 +116,20 @@ function angkaAman_(v) {
   return n;
 }
 
-function simpanLaporanCrew_(u, rec) {
+/** Menyimpan laporan dari crew (+ foto bukti baru). Bila laporan sudah dikirim ke admin, admin diberi email "diubah". */
+function simpanLaporanCrew_(u, rec, fotos) {
   rec = rec || {};
   cekBisaIsi_(u, rec.id_event);
   var bersih = { id_event: rec.id_event };
   LAPORAN_CREW_TEKS.forEach(function (k) { if (k in rec) bersih[k] = teksAman_(rec[k]); });
   LAPORAN_CREW_ANGKA.forEach(function (k) { if (k in rec) bersih[k] = angkaAman_(rec[k]); });
-  if (bersih.tinta_terendah_persen !== '' && bersih.tinta_terendah_persen != null && (bersih.tinta_terendah_persen < 0 || bersih.tinta_terendah_persen > 1))
-    throw new Error('Level tinta harus 0–100%.');
-  return simpanLaporan_(bersih);
+  [['tinta_terendah_persen', 'Level tinta'], ['powerstation_awal', 'Powerstation awal'], ['powerstation_akhir', 'Powerstation akhir']].forEach(function (x) {
+    var v = bersih[x[0]];
+    if (v !== '' && v != null && (v < 0 || v > 1)) throw new Error(x[1] + ' harus 0–100%.');
+  });
+  simpanLaporan_(bersih, fotos);
+  var l = laporanEvent_(rec.id_event);
+  return { id: rec.id_event, email: l && l.status_laporan === STATUS_LAPORAN.dikirim ? cobaEmailLaporan_(rec.id_event, true) : '' };
 }
 
 function simpanChecklistCrew_(u, idEvent, rows) {

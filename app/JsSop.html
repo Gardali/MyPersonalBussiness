@@ -1,0 +1,129 @@
+<script>
+// Posetive — SOP event: halaman bacaan (semua), panel centang per event (crew & admin), ubah SOP (admin).
+// Data: D.sop (tab SOP) & D.sopEvent (tab SOP_EVENT). Server: Sop.gs.
+var PERAN_SOP = ['Semua', 'FC', 'Operator Depan', 'Operator Cetak'];
+var SOPE = null; // panel SOP event yang sedang terbuka: {id, saya}
+
+function urutSop(list) { return list.slice().sort(function (a, b) { return num(a.urutan) - num(b.urutan); }); }
+function sopBerlaku(s, e) {
+  var b = String(s.berlaku || '');
+  return !b || (b === 'Kontrak Klien' ? e.model_pendapatan === 'Kontrak Klien' : b === 'Berbayar di booth' ? e.model_pendapatan !== 'Kontrak Klien' : true);
+}
+/** Langkah yang berlaku untuk event ini. Crew: daftar dari server (e.sopLangkah); admin: dihitung dari jenis event. */
+function langkahEvent(e) {
+  var sop = urutSop(D.sop || []);
+  if (e.sopLangkah) return sop.filter(function (s) { return e.sopLangkah.indexOf(s.id) >= 0; });
+  return sop.filter(function (s) { return s.jenis === 'langkah' && s.aktif !== 'Tidak' && sopBerlaku(s, e); });
+}
+function centangEvent(idEvent) {
+  var o = {};
+  (D.sopEvent || []).forEach(function (c) { if (c.id_event === idEvent) o[c.id_langkah] = c; });
+  return o;
+}
+function progresSop(e) {
+  var l = langkahEvent(e), c = centangEvent(e.id_event), belum = l.filter(function (s) { return !c[s.id]; });
+  var wajib = l.filter(function (s) { return s.wajib === 'Ya'; });
+  return {total: l.length, selesai: l.length - belum.length, wajib: wajib.length, wajibSelesai: wajib.filter(function (s) { return c[s.id]; }).length,
+    wajibKurang: belum.filter(function (s) { return s.wajib === 'Ya'; }).map(function (s) { return s.judul; }), terlewat: belum.map(function (s) { return s.judul; })};
+}
+/** Mengelompokkan per fase, urutan fase = urutan kemunculan pertama. */
+function perFase(list) {
+  var urut = [], per = {};
+  list.forEach(function (s) { var f = s.fase || 'Lainnya'; if (!per[f]) { per[f] = []; urut.push(f); } per[f].push(s); });
+  return urut.map(function (f) { return {fase: f, isi: per[f]}; });
+}
+function pillPeran(p, saya) {
+  if (!p || p === 'Semua') return '<span class="pill">Semua</span>';
+  return '<span class="pill' + (p === saya ? ' p-acc' : '') + '">' + esc(p) + '</span>';
+}
+function teksSop(s) { return '<div class="sop-isi">' + esc(s.isi) + '</div>'; }
+
+// ---------------------------------------------------------------- halaman bacaan
+function vSop() {
+  var admin = bisaUbah(), sop = urutSop(D.sop || []).filter(function (s) { return admin || s.aktif !== 'Tidak'; });
+  var h = (peran() === 'crew' ? '' : '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button>') +
+    '<div class="bar"><div class="pagetitle" style="margin:0">SOP Event</div><button class="ubah btn sm" onclick="formSop()">+ Bagian</button></div>';
+  h += '<div class="meta" style="margin-bottom:14px">' + (admin ? 'Ketuk bagian untuk mengubah. <b>Langkah</b> dicentang tim di setiap event; langkah <b>wajib</b> harus dicentang sebelum crew bisa mengirim laporan.' :
+    'Langkah bertanda peran dikerjakan orang dengan peran itu. Centang langkah di event hari ini lewat Event saya → SOP event.') + '</div>';
+  if (!sop.length) return h + '<div class="card"><div class="empty">SOP belum diisi.</div></div>';
+  perFase(sop).forEach(function (g) {
+    var no = 0;
+    h += sec(esc(g.fase), '<div class="card">' + g.isi.map(function (s) {
+      var tap = admin ? ' tap" onclick="formSop(\'' + s.id + '\')' : '', mati = s.aktif === 'Tidak' ? ' style="opacity:.45"' : '';
+      if (s.jenis !== 'langkah') return '<div class="it sop-baca' + tap + '"' + mati + '><div class="mid"><div class="t">' + esc(s.judul) + (s.aktif === 'Tidak' ? ' <span class="pill">Nonaktif</span>' : '') + '</div>' + teksSop(s) + '</div></div>';
+      no++;
+      return '<div class="it' + tap + '"' + mati + '><div class="sop-no">' + no + '</div><div class="mid"><div class="t">' + esc(s.judul) + '</div>' +
+        '<div style="display:flex;gap:4px;flex-wrap:wrap;margin:4px 0">' + pillPeran(s.peran) + (s.wajib === 'Ya' ? '<span class="pill p-warn">Wajib</span>' : '') +
+        (s.berlaku ? '<span class="pill">' + esc(s.berlaku) + '</span>' : '') + (s.aktif === 'Tidak' ? '<span class="pill">Nonaktif</span>' : '') + '</div>' + (s.isi ? teksSop(s) : '') + '</div></div>';
+    }).join('') + '</div>');
+  });
+  return h;
+}
+
+// ---------------------------------------------------------------- ringkasan di detail event
+function ringkasSop(e) {
+  if (!langkahEvent(e).length) return '';
+  var p = progresSop(e), pct = Math.round(p.selesai / (p.total || 1) * 100);
+  return '<div class="card pad" style="cursor:pointer" onclick="bukaSopEvent(\'' + e.id_event + '\')" id="sop_ringkas">' +
+    '<div style="font-weight:700">' + p.selesai + ' dari ' + p.total + ' langkah' + (p.wajib ? ' · uji wajib ' + p.wajibSelesai + '/' + p.wajib : '') + '</div>' +
+    '<div style="height:8px;border-radius:8px;background:var(--soft);overflow:hidden;margin:8px 0"><div style="height:100%;width:' + pct + '%;background:' + (p.selesai === p.total ? 'var(--ok)' : 'var(--accent)') + '"></div></div>' +
+    '<div class="meta">' + (p.wajibKurang.length ? 'Wajib belum dicentang: ' + p.wajibKurang.map(esc).join(', ') : p.selesai === p.total ? 'Semua langkah sudah dicentang.' : 'Ketuk untuk membuka & mencentang langkah.') + '</div></div>';
+}
+
+// ---------------------------------------------------------------- panel centang per event
+function bukaSopEvent(idEvent) { SOPE = {id: idEvent, saya: false}; renderSopEvent(); document.getElementById('sheet').classList.add('open'); }
+function renderSopEvent() {
+  var e = cari(D.event, 'id_event', SOPE.id); if (!e) return;
+  var boleh = bolehIsi(SOPE.id), c = centangEvent(SOPE.id), p = progresSop(e), saya = e.peranSaya || '';
+  var list = langkahEvent(e).filter(function (s) { return !SOPE.saya || !saya || s.peran === saya || !s.peran || s.peran === 'Semua'; });
+  var h = '<div class="grab"></div><h2>SOP · ' + esc(e.nama_event) + '</h2>' +
+    '<div class="meta" style="margin-bottom:10px">' + p.selesai + ' dari ' + p.total + ' langkah' + (saya ? ' · peran Anda: <b>' + esc(saya) + '</b>' : '') +
+    (boleh ? '' : ' · <b>lihat saja</b>' + (peran() === 'crew' ? ' (bisa dicentang pada hari event)' : '')) + '</div>' +
+    '<div class="btns" style="margin:0 0 12px">' + (saya ? '<button class="btn sm ghost" type="button" onclick="SOPE.saya=!SOPE.saya;renderSopEvent()">' + (SOPE.saya ? 'Tampilkan semua' : 'Hanya langkah saya') + '</button>' : '') +
+    '<button class="btn sm ghost" type="button" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button><button class="btn sm ghost" type="button" onclick="tutupForm();tampil(\'sop\')">Baca SOP lengkap</button></div>';
+  perFase(list).forEach(function (g) {
+    h += '<div class="grp">' + esc(g.fase) + '</div><div class="card" style="margin-bottom:10px">' + g.isi.map(function (s) {
+      var x = c[s.id];
+      return '<label class="it sop-langkah' + (x ? ' selesai' : '') + '"><input type="checkbox"' + (x ? ' checked' : '') + (boleh ? '' : ' disabled') + ' onchange="centangSopUI(\'' + s.id + '\',this)">' +
+        '<div class="mid"><div class="t">' + esc(s.judul) + ' ' + pillPeran(s.peran, saya) + (s.wajib === 'Ya' ? ' <span class="pill p-warn">Wajib</span>' : '') + '</div>' +
+        (s.isi ? teksSop(s) : '') + (x ? '<div class="meta pos">✓ ' + esc(x.dicentang_oleh) + ' · ' + esc(String(x.dicentang_pada).slice(11) || x.dicentang_pada) + '</div>' : '') + '</div></label>';
+    }).join('') + '</div>';
+  });
+  h += '<div class="btns"><button class="btn ghost" type="button" style="flex:1" onclick="tutupForm()">Tutup</button></div>';
+  var panel = document.getElementById('panel'), top = panel.scrollTop;
+  panel.innerHTML = h; panel.scrollTop = top;
+}
+/** Disimpan langsung per centang (tidak perlu tombol Simpan) — cocok dipakai sambil bekerja di lokasi. */
+function centangSopUI(idLangkah, el) {
+  var id = SOPE.id, cek = el.checked;
+  el.disabled = true;
+  panggil(D.modeCrew ? 'centangSopCrew' : 'centangSop', id, idLangkah, cek, '').then(function (rows) {
+    D.sopEvent = (D.sopEvent || []).filter(function (c) { return c.id_event !== id; }).concat(rows);
+    if (SOPE && SOPE.id === id) renderSopEvent();
+    var r = document.getElementById('sop_ringkas'), e = cari(D.event, 'id_event', id);
+    if (r && e) r.outerHTML = ringkasSop(e);
+  }).catch(function (err) { el.checked = !cek; el.disabled = false; toast('Gagal: ' + (err && err.message || err)); });
+}
+
+// ---------------------------------------------------------------- ubah SOP (admin)
+var F_SOP = [
+  {n: 'fase', l: 'Fase / bagian (mis. Fase 2 — Tiba, bongkar, dan setup)', wajib: 1},
+  {n: 'urutan', l: 'Urutan (kecil = di atas)', t: 'num'},
+  {n: 'jenis', l: 'Jenis', t: 'sel', wajib: 1, o: function () { return [['langkah', 'Langkah — dicentang tim per event'], ['baca', 'Bacaan — aturan / penjelasan']]; }},
+  {n: 'judul', l: 'Judul', wajib: 1},
+  {n: 'isi', l: 'Isi / rincian (baris baru tetap tampil)', t: 'area'},
+  {n: 'peran', l: 'Dikerjakan oleh', t: 'sel', o: function () { return PERAN_SOP.map(function (p) { return [p, p]; }); }},
+  {n: 'wajib', l: 'Wajib dicentang sebelum laporan dikirim?', t: 'sel', o: function () { return [['Tidak', 'Tidak'], ['Ya', 'Ya — mis. poin uji coba']]; }, show: function (r) { return r.jenis === 'langkah'; }},
+  {n: 'berlaku', l: 'Berlaku untuk', t: 'sel', o: function () { return [['', 'Semua event'], ['Berbayar di booth', 'Tamu bayar di booth (selain Kontrak Klien)'], ['Kontrak Klien', 'Hanya Kontrak Klien']]; }, show: function (r) { return r.jenis === 'langkah'; }},
+  {n: 'aktif', l: 'Status', t: 'sel', o: function () { return [['Ya', 'Aktif'], ['Tidak', 'Nonaktif (disembunyikan, riwayat tetap)']]; }}
+];
+function formSop(id) {
+  var s = id ? cari(D.sop, 'id', id) : null, akhir = urutSop(D.sop || []).slice(-1)[0] || {};
+  var rec = s || {fase: akhir.fase || '', urutan: num(akhir.urutan) + 10, jenis: 'langkah', peran: 'Semua', wajib: 'Tidak', berlaku: '', aktif: 'Ya'};
+  var extra = id ? '<button class="ubah btn danger" type="button" onclick="hapus(\'SOP\',\'' + id + '\')">Hapus</button>' : '';
+  bukaForm(s ? 'Ubah SOP' : 'Bagian SOP baru', F_SOP, rec, function (r) {
+    if (r.jenis !== 'langkah') { r.wajib = ''; r.berlaku = ''; }
+    return panggil('saveRecord', 'SOP', r);
+  }, extra + '<div class="meta">Lebih baik <b>Nonaktif</b> daripada Hapus untuk langkah yang pernah dicentang, supaya riwayat event lama tetap terbaca.</div>');
+}
+</script>

@@ -1,3 +1,5 @@
 *.xlsx
 __pycache__/
 node_modules/
+# Isi SOP awal: hanya dikirim ke Apps Script (clasp), tidak ke repo GitHub publik
+app/SopAwal.gs

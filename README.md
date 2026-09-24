@@ -7,12 +7,13 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 - `app/` — kode Google Apps Script, dikirim ke Apps Script dengan clasp (`bun run kirim`).
   - Server (`.gs`, digabung otomatis oleh Apps Script):
     `Code.gs` (inti: baca/tulis tab, `doGet`, `include`), `Akses.gs` (login, sesi, `api()` + tabel izin), `Event.gs` (event, laporan, kas, stok, checklist),
-    `EventSaya.gs` (tampilan crew: data tersaring & simpan yang dijaga),
+    `EventSaya.gs` (tampilan crew: data tersaring & simpan yang dijaga), `LaporanCrew.gs` (foto bukti, kirim ke admin + email, persetujuan),
+    `Sop.gs` (SOP event & centang per event; isi awalnya di `SopAwal.gs`, yang sengaja tidak masuk repo),
     `Crew.gs` (crew & fee), `Kalender.gs` (Google Calendar), `Laporan.gs` (PDF, Unduh Laporan, backup),
     `Pengingat.gs` (email harian & pemicu), `Pengaturan.gs` (pengaturan & HPP).
   - Tampilan: `Index.html` hanya kerangka yang memanggil `Css.html` dan `Js*.html` lewat `include()`.
     `JsDasar` (utilitas & semua perhitungan, dimuat pertama), `JsBeranda`, `JsPipeline`, `JsEvent`, `JsKasStok`,
-    `JsCrew`, `JsLainnya`, `JsEventSaya` (tampilan crew), `JsForm`, `JsAkses` (masuk & pengguna), dan `JsMulai` (menjalankan aplikasi, dimuat terakhir).
+    `JsCrew`, `JsLainnya`, `JsEventSaya` (tampilan crew), `JsSop` (SOP), `JsForm`, `JsAkses` (masuk & pengguna), dan `JsMulai` (menjalankan aplikasi, dimuat terakhir).
 - `app/PANDUAN_PASANG.md` — langkah memasang & memperbarui aplikasi.
 - `package.json` — perintah clasp: `bun run masuk` (login Google), `bun run kirim` (kirim kode ke Apps Script).
 
@@ -29,3 +30,5 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 10. Tombol "Unduh Laporan" di event: laporan lengkap & rapi sebagai Google Spreadsheet (Ringkasan, Produksi, Kas, Alat), satu file per event, bisa diunduh .xlsx — selesai.
 11. Login username + PIN, role admin / pemantau (lihat saja) / crew, hak akses diperiksa di server (`Akses.gs`), kelola pengguna — selesai.
 12. Tampilan crew "Event saya": hanya event tempat ia bertugas (hari ini & mendatang), info klien & rekan crew tanpa angka uang; checklist alat & laporan event hari ini bisa diisi sampai 06.00 esok harinya, diperiksa di server. HPP & alokasi kini dikunci di server saat laporan pertama kali disimpan — selesai.
+13. Foto bukti di laporan (counter awal/akhir, uang tunai, QRIS) tersimpan di Drive; crew "Kirim ke admin" → email ringkasan (selisih lembar & kas, foto); admin "Setujui laporan" → event Selesai & laporan terkunci untuk crew — selesai.
+14. SOP event di aplikasi (tab SOP): bacaan + langkah per fase & per peran (FC / Operator Depan / Operator Cetak) yang dicentang tim per event; 7 poin uji coba wajib sebelum laporan dikirim; peran ditunjuk per penugasan; jam setup, powerstation, softfile gagal di laporan — selesai.

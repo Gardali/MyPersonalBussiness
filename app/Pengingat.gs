@@ -36,6 +36,10 @@ function isiPengingat_() {
   d.event.forEach(function (e) { lewat[e.id_event] = e; });
   var hilang = d.pemakaian.filter(function (a) { var e = lewat[a.id_event]; return e && e.tanggal < now && a.dibawa === 'Ya' && a.kembali !== 'Ya'; });
   if (hilang.length) bag.push('<h3>Alat belum kembali</h3>' + li(hilang.map(function (a) { return a.nama_alat + ' — ' + a.id_event; })));
+  var dicek = d.laporan.filter(function (l) { return l.status_laporan === 'Menunggu dicek' && lewat[l.id_event]; });
+  if (dicek.length) bag.push('<h3>Laporan crew menunggu dicek</h3>' + li(dicek.map(function (l) {
+    return lewat[l.id_event].nama_event + ' (' + lewat[l.id_event].tanggal + ') — dikirim ' + (l.dikirim_oleh || 'crew') + ' ' + (l.dikirim_pada || '') + '. Buka event → Setujui laporan';
+  })));
   var tutup = d.event.filter(function (e) { return e.status === 'Terkonfirmasi' && e.tanggal && e.tanggal < now; });
   if (tutup.length) bag.push('<h3>Event belum ditutup</h3>' + li(tutup.map(function (e) { return e.nama_event + ' (' + e.tanggal + ') — isi laporan'; })));
   var tagih = tagihanJatuhTempo_(d, addHari_(now, 3));

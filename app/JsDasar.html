@@ -29,7 +29,7 @@ var IC = {
 function ikon(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + IC[n] + '</svg>'; }
 // Menu bawah (HP) / samping (laptop). Crew hanya punya Event saya & Akun.
 var MENU = [['beranda', 'home', 'Beranda'], ['pipeline', 'funnel', 'Pipeline'], ['event', 'cal', 'Event'], ['kas', 'wallet', 'Kas'], ['stok', 'box', 'Stok'], ['lainnya', 'gear', 'Lainnya']];
-var MENU_CREW = [['saya', 'cal', 'Event saya'], ['akun', 'user', 'Akun']];
+var MENU_CREW = [['saya', 'cal', 'Event saya'], ['sop', 'nota', 'SOP'], ['akun', 'user', 'Akun']];
 function aturMenu() {
   var m = peran() === 'crew' ? MENU_CREW : MENU;
   document.getElementById('nav').innerHTML = '<div class="brand"><div class="logo-gambar" role="img" aria-label="Posetive Photobooth"></div></div>' +
@@ -140,7 +140,9 @@ function hasilEvent(ev) {
   h.bepTotal = h.untungLembar > 0 ? Math.ceil((h.keluar + h.alokasi) / h.untungLembar) : null;
   if (lap) {
     var adaSplit = lap.sesi_terjual !== '' && lap.sesi_terjual != null;
-    h.sesiTerjual = adaSplit ? num(lap.sesi_terjual) : num(lap.foto_4r_terjual);
+    // sesi_terjual = jumlah sesi di Jepreto, termasuk sesi cetak ulang pakai voucher (diskon penuh, Rp0) → dikurangi.
+    h.sesiVoucher = num(lap.cetak_ulang_voucher);
+    h.sesiTerjual = Math.max(0, (adaSplit ? num(lap.sesi_terjual) : num(lap.foto_4r_terjual)) - h.sesiVoucher);
     // Lembar tambahan = strip tambahan (produk yang sama, harga HARGA_STRIP). strip_terjual hanya ada di laporan lama.
     h.lembarTambahan = num(lap.lembar_tambahan) + Math.ceil(num(lap.strip_terjual) * (P('LEMBAR_PER_STRIP') || 1));
     h.omzet = h.sesiTerjual * P('HARGA_4R') + h.lembarTambahan * P('HARGA_STRIP') + num(lap.grad_book_terjual) * P('HARGA_BUKU') -
@@ -152,6 +154,28 @@ function hasilEvent(ev) {
   }
   if (ev.model_pendapatan === 'Kontrak Klien' && num(ev.nilai_kontrak) > 0) h.piutang = num(ev.nilai_kontrak) - h.masuk;
   return h;
+}
+
+// ---- laporan: foto bukti & status kirim/setujui (server: LaporanCrew.gs)
+var FOTO_KOLOM = [['foto_counter_awal', 'Counter awal'], ['foto_counter_akhir', 'Counter akhir'], ['foto_tunai', 'Uang tunai'], ['foto_qris', 'Bukti QRIS']];
+function urlDrive(id) { return 'https://drive.google.com/file/d/' + encodeURIComponent(id) + '/view'; }
+/** Yang masih kurang sebelum laporan bisa dikirim crew ke admin — sama dengan kurangLaporan_ + langkah SOP wajib di server. */
+function kurangLaporan(l, e) {
+  var kosong = function (k) { return !l || l[k] === '' || l[k] == null; }, kurang = [];
+  if (kosong('counter_awal')) kurang.push('counter awal');
+  if (kosong('counter_akhir')) kurang.push('counter akhir');
+  if (!kosong('counter_awal') && !kosong('counter_akhir') && num(l.counter_akhir) < num(l.counter_awal)) kurang.push('counter akhir lebih kecil dari counter awal');
+  if (kosong('foto_counter_awal')) kurang.push('foto counter awal');
+  if (kosong('foto_counter_akhir')) kurang.push('foto counter akhir');
+  if (e && typeof progresSop === 'function') progresSop(e).wajibKurang.forEach(function (j) { kurang.push('SOP ' + j); });
+  return kurang;
+}
+/** Peran di penugasan: FC / Operator Depan / Operator Cetak. */
+function pillTugas(p) { return p ? ' <span class="pill' + (p === 'FC' ? ' p-acc' : '') + '">' + esc(p) + '</span>' : ''; }
+function pillLaporan(lap) {
+  var st = lap && lap.status_laporan;
+  return st === 'Disetujui' ? '<span class="pill p-ok">Disetujui</span>' : st === 'Menunggu dicek' ? '<span class="pill p-acc">Menunggu dicek</span>' :
+    lap ? '<span class="pill">Belum dikirim</span>' : '<span class="pill p-warn">Belum laporan</span>';
 }
 
 // ---- tagihan klien (DP → pelunasan)
@@ -339,11 +363,11 @@ function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', TIPIS: 'p
 // ---------------------------------------------------------------- tampilan
 function tampil(v) {
   VIEW = v; if (v !== 'event' && v !== 'saya') DETAIL = null;
-  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === ((v === 'laporan' || v === 'crew' || v === 'inventaris' || v === 'hpp' || v === 'pengguna') ? 'lainnya' : v)); });
+  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === (peran() !== 'crew' && ['laporan', 'crew', 'inventaris', 'hpp', 'pengguna', 'sop'].indexOf(v) >= 0 ? 'lainnya' : v)); });
   var el = document.getElementById('view');
   try {
     el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok, lainnya: vLainnya, laporan: vLaporan, crew: vCrew, inventaris: vInventaris, hpp: vHpp, pengguna: vPengguna,
-      saya: DETAIL ? vDetailSaya : vSaya, akun: vAkun}[v]();
+      saya: DETAIL ? vDetailSaya : vSaya, akun: vAkun, sop: vSop}[v]();
   } catch (err) {
     el.innerHTML = '<div class="pagetitle">Ada yang error</div>' + notice('bad', 'Halaman ini gagal ditampilkan: <b>' + esc(err && err.message || err) + '</b>. Kirim screenshot ini ke Claude.');
   }

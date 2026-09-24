@@ -5,9 +5,9 @@ function vEvent() {
   var depan = D.event.filter(function (e) { return e.tanggal >= now && e.status !== 'Batal'; }).sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : 1; });
   var lalu = D.event.filter(function (e) { return !(e.tanggal >= now && e.status !== 'Batal'); }).sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : -1; });
   function baris(e) {
-    var r = hasilEvent(e), perlu = e.status === 'Terkonfirmasi' && e.tanggal < now;
+    var r = hasilEvent(e), perlu = e.status === 'Terkonfirmasi' && e.tanggal < now, masuk = r.lap && r.lap.status_laporan === 'Menunggu dicek';
     return item({lead: dt(e.tanggal), t: esc(e.nama_event), s: esc(e.model_pendapatan || 'Model belum diisi'),
-      end: waBtn(kontakEvent(e)) + (e.status === 'Selesai' ? '<span class="' + cls(r.labaKotor) + '">' + rpSingkat(r.labaKotor) + '</span><div class="s">laba kotor</div>' : perlu ? '<span class="pill p-warn">Perlu laporan</span>' : statusPill(e.status)),
+      end: waBtn(kontakEvent(e)) + (masuk ? '<span class="pill p-acc">Cek laporan</span>' : e.status === 'Selesai' ? '<span class="' + cls(r.labaKotor) + '">' + rpSingkat(r.labaKotor) + '</span><div class="s">laba kotor</div>' : perlu ? '<span class="pill p-warn">Perlu laporan</span>' : statusPill(e.status)),
       on: "bukaEvent('" + e.id_event + "')"});
   }
   var h = '<div class="bar"><div class="pagetitle" style="margin:0">Event</div><button class="ubah btn sm" onclick="formEvent()">+ Event</button></div>';
@@ -19,6 +19,45 @@ function vEvent() {
 }
 
 function bukaEvent(id) { DETAIL = id; tampil('event'); }
+
+// ---- foto bukti & persetujuan laporan (admin/pemantau)
+var FOTO_LAP = {kunci: '', isi: null};
+/** Foto dimuat dari server sekali per set foto (kunci = ID file), lalu disimpan sementara di FOTO_LAP. */
+function htmlFotoBukti(lap) {
+  var kunci = lap.id_event + ':' + FOTO_KOLOM.map(function (x) { return lap[x[0]] || ''; }).join('|');
+  if (!FOTO_KOLOM.some(function (x) { return lap[x[0]]; })) return '<div class="meta">Belum ada foto. Crew memotret counter printer & uang lewat form laporan.</div>';
+  if (FOTO_LAP.kunci === kunci && FOTO_LAP.isi) return isiFotoBukti(FOTO_LAP.isi);
+  if (FOTO_LAP.kunci !== kunci) {
+    FOTO_LAP = {kunci: kunci, isi: null};
+    panggil('fotoLaporan', lap.id_event).then(function (list) {
+      if (FOTO_LAP.kunci !== kunci) return;
+      FOTO_LAP.isi = list;
+      var el = document.getElementById('foto_bukti'); if (el) el.innerHTML = isiFotoBukti(list);
+    }).catch(function (err) { FOTO_LAP.kunci = ''; var el = document.getElementById('foto_bukti'); if (el) el.innerHTML = '<div class="meta neg">Foto gagal dimuat: ' + esc(err && err.message || err) + '</div>'; });
+  }
+  return '<div class="meta">Memuat foto…</div>';
+}
+function isiFotoBukti(list) {
+  if (!list.length) return '<div class="meta">Belum ada foto.</div>';
+  return '<div class="foto-grid">' + list.map(function (f) {
+    return '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + (f.data ? '<img src="' + f.data + '" alt="' + esc(f.label) + '">' : '<div class="foto-kosong">Buka di Drive</div>') + '<span>' + esc(f.label) + '</span></a>';
+  }).join('') + '</div>';
+}
+function setujuiLaporanUI(id, btn) {
+  var e = cari(D.event, 'id_event', id), lap = cari(D.laporan, 'id_event', id), r = hasilEvent(e), cat = [];
+  if (r.selisihLembar) cat.push('selisih lembar ' + r.selisihLembar);
+  if (r.selisihKas) cat.push('selisih kas ' + rp(r.selisihKas));
+  if (!confirm('Setujui laporan ' + e.nama_event + '?' + (cat.length ? '\n\nMasih ada ' + cat.join(' & ') + '.' : '') + (e.status === 'Terkonfirmasi' ? '\n\nEvent akan ditandai Selesai' : '') + (lap.dikirim_oleh ? ' dan crew tidak bisa mengubah laporan lagi.' : '.'))) return;
+  btn.disabled = true; btn.textContent = 'Menyimpan…';
+  panggil('setujuiLaporan', id).then(function () { toast('Laporan disetujui'); return muat(true); })
+    .catch(function (err) { btn.disabled = false; btn.textContent = 'Setujui laporan'; toast('Gagal: ' + (err && err.message || err)); });
+}
+function batalSetujuiUI(id, btn) {
+  if (!confirm('Batalkan persetujuan laporan ini? Status event tidak berubah — ubah lewat tombol Ubah bila perlu.')) return;
+  btn.disabled = true;
+  panggil('batalSetujuiLaporan', id).then(function () { toast('Persetujuan dibatalkan'); return muat(true); })
+    .catch(function (err) { btn.disabled = false; toast('Gagal: ' + (err && err.message || err)); });
+}
 
 function vDetailEvent() {
   var e = D.event.filter(function (x) { return x.id_event === DETAIL; })[0];
@@ -66,10 +105,17 @@ function vDetailEvent() {
   h += '<div class="cols"><div class="col">' + sec('Keuangan', hk);
 
   if (lap) {
-    var lp = '<div class="card pad"><table>' +
+    var st = lap.status_laporan;
+    var lp = '<div class="card pad">' + (st || lap.dikirim_oleh ? '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">' + pillLaporan(lap) + '<span class="meta">' +
+        [lap.dikirim_oleh ? 'dikirim ' + esc(lap.dikirim_oleh) + ' · ' + esc(lap.dikirim_pada) : '', st === 'Disetujui' ? 'disetujui ' + esc(lap.disetujui_oleh) + ' · ' + esc(lap.disetujui_pada) : ''].filter(Boolean).join(' · ') + '</span></div>' : '') +
+      '<table>' +
+      (lap.jam_setup_mulai || lap.jam_setup_selesai ? '<tr><td>Jam setup</td><td class="r">' + esc(lap.jam_setup_mulai || '—') + '–' + esc(lap.jam_setup_selesai || '—') + '</td></tr>' : '') +
       '<tr><td>Jam aktual</td><td class="r">' + esc(lap.jam_buka_aktual || '—') + '–' + esc(lap.jam_tutup_aktual || '—') + '</td></tr>' +
       '<tr><td>Transaksi</td><td class="r">' + num(lap.jumlah_transaksi) + '</td></tr>' +
-      '<tr><td>Sesi · Lembar/strip tambahan · Grad Book</td><td class="r">' + r.sesiTerjual + ' · ' + r.lembarTambahan + ' · ' + num(lap.grad_book_terjual) + '</td></tr>' +
+      (lap.powerstation_awal !== '' && lap.powerstation_awal != null ? '<tr><td>Powerstation awal → akhir</td><td class="r">' + Math.round(num(lap.powerstation_awal) * 100) + '% → ' + (lap.powerstation_akhir !== '' && lap.powerstation_akhir != null ? Math.round(num(lap.powerstation_akhir) * 100) + '%' : '—') + '</td></tr>' : '') +
+      (num(lap.softfile_gagal) ? '<tr><td>Softfile gagal terunggah</td><td class="r neg">' + num(lap.softfile_gagal) + '</td></tr>' : '') +
+      (num(lap.cetak_ulang_voucher) ? '<tr><td>Cetak ulang voucher · lembar gagal</td><td class="r' + (num(lap.cetak_ulang_voucher) > num(lap.lembar_gagal) ? ' neg' : '') + '">' + num(lap.cetak_ulang_voucher) + ' · ' + num(lap.lembar_gagal) + '</td></tr>' : '') +
+      '<tr><td>Sesi berbayar · Lembar/strip tambahan · Grad Book</td><td class="r">' + r.sesiTerjual + ' · ' + r.lembarTambahan + ' · ' + num(lap.grad_book_terjual) + (r.sesiVoucher ? ' <span class="meta">(+' + r.sesiVoucher + ' voucher)</span>' : '') + '</td></tr>' +
       '<tr><td>Tercetak (counter)</td><td class="r">' + r.tercetak + '</td></tr>' +
       '<tr><td>Terjual + uji + gagal</td><td class="r">' + r.lembarTerjual + ' + ' + num(lap.lembar_uji_bonus) + ' + ' + num(lap.lembar_gagal) + '</td></tr>' +
       '<tr class="total"><td>Selisih lembar</td><td class="r ' + (r.selisihLembar ? 'neg' : 'pos') + '">' + (r.selisihLembar ? r.selisihLembar + ' · periksa' : 'Cocok') + '</td></tr>' +
@@ -78,7 +124,12 @@ function vDetailEvent() {
       '<tr class="total"><td>Selisih kas</td><td class="r ' + (r.selisihKas ? 'neg' : 'pos') + '">' + (r.selisihKas ? rp(r.selisihKas) : 'Cocok') + '</td></tr></table>';
     if (lap.rekomendasi) lp += '<div class="meta" style="margin-top:10px"><b>Rekomendasi</b><br>' + esc(lap.rekomendasi) + '</div>';
     if (lap.kendala) lp += '<div class="meta" style="margin-top:8px"><b>Kendala</b><br>' + esc(lap.kendala) + '</div>';
+    lp += st === 'Disetujui' ? '<div class="btns"><button class="ubah btn sm ghost" onclick="batalSetujuiUI(\'' + e.id_event + '\',this)">Batalkan persetujuan</button></div>' :
+      '<div class="meta ubah" style="margin-top:10px">Sebelum menyetujui: cocokkan jumlah sesi & pemakaian voucher cetak ulang dengan Jepreto.</div>' +
+      '<div class="btns"><button class="ubah btn sm" onclick="setujuiLaporanUI(\'' + e.id_event + '\',this)">Setujui laporan' + (e.status === 'Terkonfirmasi' ? ' & tutup event' : '') + '</button></div>';
     lp += '</div>';
+    lp += '<div class="card pad" style="margin-top:8px"><div class="meta" style="margin-bottom:8px">Foto bukti</div><div id="foto_bukti">' + htmlFotoBukti(lap) + '</div></div>';
+    if (num(lap.cetak_ulang_voucher) > num(lap.lembar_gagal)) lp += '<div style="margin-top:8px">' + notice('bad', 'Cetak ulang pakai voucher (' + num(lap.cetak_ulang_voucher) + ') lebih banyak dari lembar gagal (' + num(lap.lembar_gagal) + '). Setiap cetak ulang harus punya satu lembar gagal — tanyakan ke tim.') + '</div>';
     if (Math.abs(r.omzet - r.masuk) > 0) lp += '<div style="margin-top:8px">' + notice('', 'Omzet laporan ' + rp(r.omzet) + ' ≠ pemasukan di Kas ' + rp(r.masuk) + '. Pastikan penjualan sudah dicatat.') + '</div>';
     h += sec('Laporan produksi', lp);
   }
@@ -100,7 +151,7 @@ function vDetailEvent() {
   var totalFee = sum(tugas, function (t) { return t.fee; }), belumFee = tugas.filter(function (t) { return !feeLunas(t); });
   h += sec('Crew bertugas', '<div class="card">' + (tugas.length ? tugas.map(function (t) {
     var lunas = feeLunas(t), nm = namaCrew(t.id_crew), bt = e.status === 'Batal' ? [] : bentrokCrew(t.id_crew, e);
-    return item({lead: '<div class="av">' + inisial(nm) + '</div>', t: esc(nm) + (bt.length ? ' <span class="pill p-bad">Bentrok</span>' : ''),
+    return item({lead: '<div class="av">' + inisial(nm) + '</div>', t: esc(nm) + pillTugas(t.peran) + (bt.length ? ' <span class="pill p-bad">Bentrok</span>' : ''),
       s: (bt.length ? '<span class="neg">Juga di ' + bt.map(function (x) { return esc(x.nama_event); }).join(', ') + '</span><br>' : '') + 'Fee ' + rp(t.fee) + (t.catatan ? ' · ' + esc(t.catatan) : ''),
       end: lunas ? '<span class="pill p-ok">Dibayar</span>' : '<button class="ubah btn sm" onclick="event.stopPropagation();formBayarFee([\'' + t.id + '\'])">Bayar</button>',
       on: "formTugas('" + t.id + "')"});
@@ -108,6 +159,9 @@ function vDetailEvent() {
     tugas.length + (num(e.jumlah_crew) ? ' dari ' + num(e.jumlah_crew) : '') + ' crew · total fee ' + rp(totalFee) + (r.rab.feeCrew ? ' (RAB ' + rp(r.rab.feeCrew) + ')' : '') +
     (belumFee.length > 1 ? ' · <button class="ubah link" style="border:0;background:none;color:var(--accent);font-weight:600;padding:0" onclick="formBayarFee(' + esc(JSON.stringify(belumFee.map(function (t) { return t.id; }))) + ')">Bayar semua (' + rp(sum(belumFee, function (t) { return t.fee; })) + ')</button>' : '') + '</div>',
     '<button class="ubah link" onclick="formTugas(null,\'' + e.id_event + '\')">+ Crew</button>');
+  if (tugas.length && !tugas.some(function (t) { return t.peran === 'FC'; }) && e.status !== 'Batal') h += '<div style="margin:-6px 0 16px">' + notice('', '<b>Belum ada FC.</b> Ketuk salah satu crew → Peran di event → FC.') + '</div>';
+  var rsop = ringkasSop(e);
+  if (rsop) h += sec('SOP event', rsop);
   var alat = D.pemakaian.filter(function (a) { return a.id_event === e.id_event && a.dibawa === 'Ya'; }), blm = alat.filter(function (a) { return a.kembali !== 'Ya'; });
   h += sec('Alat', '<div class="card pad" style="cursor:pointer" onclick="bukaChecklist(\'' + e.id_event + '\')">' + (alat.length ?
     '<div style="font-weight:700">' + alat.length + ' dibawa · ' + (alat.length - blm.length) + ' kembali</div>' + (blm.length ? '<div class="meta neg" style="margin-top:4px">Belum kembali: ' + blm.map(function (a) { return esc(a.nama_alat); }).join(', ') + '</div>' : '<div class="meta pos" style="margin-top:4px">Semua alat sudah kembali.</div>') :
@@ -282,13 +336,16 @@ function dataLaporanEvent(e) {
     kepala(s, 'Laporan produksi');
     var n = function (k) { return num(lap[k]); };
     baris(s, ['WAKTU'], 'bagian');
+    if (lap.jam_setup_mulai || lap.jam_setup_selesai) kv(s, 'Jam setup', (lap.jam_setup_mulai || '?') + '–' + (lap.jam_setup_selesai || '?'));
     kv(s, 'Jam buka–tutup aktual', (lap.jam_buka_aktual || '?') + '–' + (lap.jam_tutup_aktual || '?'));
+    kv(s, 'Powerstation awal', lap.powerstation_awal, 'pct'); kv(s, 'Powerstation akhir', lap.powerstation_akhir, 'pct'); kv(s, 'Softfile gagal terunggah', lap.softfile_gagal, 'n'); kv(s, 'Cetak ulang pakai voucher', lap.cetak_ulang_voucher, 'n');
     kv(s, 'Jam paling ramai', lap.jam_ramai); kv(s, 'Antrean terpanjang (orang)', lap.antrean_terpanjang, 'n'); kv(s, 'Total berhenti (menit)', lap.downtime_menit, 'n');
     kosong(s);
     baris(s, ['PENJUALAN'], 'bagian');
     baris(s, ['', 'Jumlah', 'Omzet'], 'head');
     baris(s, ['Jumlah transaksi', n('jumlah_transaksi')], '', ['', 'n']);
     baris(s, ['Sesi terjual (foto 4R)', r.sesiTerjual, r.sesiTerjual * P('HARGA_4R')], '', ['', 'n', 'rp']);
+    if (r.sesiVoucher) baris(s, ['Sesi cetak ulang pakai voucher (gratis)', r.sesiVoucher, 0], '', ['', 'n', 'rp']);
     baris(s, ['Lembar / strip tambahan', r.lembarTambahan, r.lembarTambahan * P('HARGA_STRIP')], '', ['', 'n', 'rp']);
     baris(s, ['Graduation Book', n('grad_book_terjual'), n('grad_book_terjual') * P('HARGA_BUKU')], '', ['', 'n', 'rp']);
     if (n('grup_potongan')) baris(s, ['Potongan grup', n('grup_potongan'), -n('grup_potongan') * P('POTONGAN_GRUP')], '', ['', 'n', 'rp']);
@@ -312,6 +369,17 @@ function dataLaporanEvent(e) {
     kv(s, 'Level tinta terendah', lap.tinta_terendah_persen, 'pct');
     kv(s, 'HPP per lembar (terkunci)', r.bl, 'rp'); kv(s, 'HPP per Graduation Book (terkunci)', r.biayaBuku, 'rp');
     kosong(s);
+    var adaFoto = FOTO_KOLOM.filter(function (x) { return lap[x[0]]; });
+    if (lap.status_laporan || lap.dikirim_oleh || adaFoto.length) {
+      baris(s, ['STATUS & FOTO BUKTI'], 'bagian');
+      kv(s, 'Status laporan', lap.status_laporan || 'Belum dikirim / diisi admin');
+      kv(s, 'Dikirim crew', lap.dikirim_oleh ? lap.dikirim_oleh + ' · ' + lap.dikirim_pada : '');
+      kv(s, 'Disetujui', lap.disetujui_oleh ? lap.disetujui_oleh + ' · ' + lap.disetujui_pada : '');
+      adaFoto.forEach(function (x) { kv(s, 'Foto ' + x[1].toLowerCase(), urlDrive(lap[x[0]])); });
+      var ps = progresSop(e);
+      if (ps.total) { kv(s, 'SOP dicentang', ps.selesai + ' dari ' + ps.total + ' langkah'); kv(s, 'Langkah SOP terlewat', ps.terlewat.join(', ')); }
+      kosong(s);
+    }
     if (lap.kendala || lap.keluhan_pengunjung || lap.rekomendasi || lap.catatan) {
       baris(s, ['CATATAN'], 'bagian');
       [['Kendala & penanganan', lap.kendala], ['Keluhan / permintaan pengunjung', lap.keluhan_pengunjung], ['Rekomendasi event berikutnya', lap.rekomendasi], ['Catatan lain', lap.catatan]]
@@ -391,17 +459,23 @@ var F_EVENT = [
   {n: 'catatan', l: 'Catatan', t: 'area'}
 ];
 var F_LAPORAN = [
-  {g: 'Waktu'}, {n: 'jam_buka_aktual', l: 'Jam buka aktual', t: 'time'}, {n: 'jam_tutup_aktual', l: 'Jam tutup aktual', t: 'time'},
+  {g: 'Waktu'}, {n: 'jam_setup_mulai', l: 'Jam mulai setup', t: 'time'}, {n: 'jam_setup_selesai', l: 'Jam selesai setup', t: 'time'},
+  {n: 'jam_buka_aktual', l: 'Jam buka aktual', t: 'time'}, {n: 'jam_tutup_aktual', l: 'Jam tutup aktual', t: 'time'},
   {n: 'jam_ramai', l: 'Jam paling ramai'}, {n: 'antrean_terpanjang', l: 'Antrean terpanjang (orang)', t: 'num'},
   {n: 'downtime_menit', l: 'Total berhenti (menit)', t: 'num'},
   {g: 'Penjualan'}, {n: 'jumlah_transaksi', l: 'Jumlah transaksi', t: 'num'},
-  {n: 'sesi_terjual', l: 'Sesi terjual (1 sesi = 1 lembar)', t: 'num'}, {n: 'lembar_tambahan', l: 'Lembar / strip tambahan (di luar sesi)', t: 'num'},
+  {n: 'sesi_terjual', l: 'Jumlah sesi di Jepreto, apa adanya (termasuk sesi voucher cetak ulang; 1 sesi = 1 lembar)', t: 'num'}, {n: 'lembar_tambahan', l: 'Lembar / strip tambahan (di luar sesi)', t: 'num'},
   {n: 'grad_book_terjual', l: 'Graduation Book terjual', t: 'num'},
   {n: 'grup_potongan', l: 'Grup dapat potongan', t: 'num'}, {n: 'softfile_terkirim', l: 'Softfile terkirim', t: 'num'},
-  {g: 'Printer'}, {n: 'counter_awal', l: 'Counter awal', t: 'num'}, {n: 'counter_akhir', l: 'Counter akhir', t: 'num'},
+  {g: 'Printer'}, {n: 'counter_awal', l: 'Counter awal', t: 'num'}, {n: 'foto_counter_awal', l: 'Foto counter awal (layar printer saat buka)', t: 'foto'},
+  {n: 'counter_akhir', l: 'Counter akhir', t: 'num'}, {n: 'foto_counter_akhir', l: 'Foto counter akhir (layar printer saat tutup)', t: 'foto'},
   {n: 'lembar_uji_bonus', l: 'Lembar uji / bonus', t: 'num'}, {n: 'lembar_gagal', l: 'Lembar gagal', t: 'num'},
-  {g: 'Uang'}, {n: 'tunai_dihitung', l: 'Tunai dihitung saat tutup (Rp)', t: 'num'}, {n: 'modal_kembalian', l: 'Modal kembalian (Rp)', t: 'num'},
-  {n: 'qris_transfer', l: 'QRIS / transfer (Rp)', t: 'num'},
+  {n: 'cetak_ulang_voucher', l: 'Sesi cetak ulang pakai voucher (dari Jepreto) — otomatis dikurangi dari sesi berbayar; maksimal sama dengan lembar gagal', t: 'num'},
+  {g: 'Daya & softfile'}, {n: 'powerstation_awal', l: 'Powerstation awal, saat uji coba (%)', t: 'pct'}, {n: 'powerstation_akhir', l: 'Powerstation akhir, sebelum dimatikan (%)', t: 'pct'},
+  {n: 'softfile_gagal', l: 'Softfile gagal terunggah (dikirim lewat WA)', t: 'num'},
+  {g: 'Uang'}, {n: 'tunai_dihitung', l: 'Tunai dihitung saat tutup (Rp)', t: 'num'}, {n: 'foto_tunai', l: 'Foto uang tunai saat tutup', t: 'foto'},
+  {n: 'modal_kembalian', l: 'Modal kembalian (Rp)', t: 'num'},
+  {n: 'qris_transfer', l: 'QRIS / transfer (Rp)', t: 'num'}, {n: 'foto_qris', l: 'Foto / screenshot bukti QRIS', t: 'foto'},
   {n: 'admin_qris', l: 'Potongan admin QRIS, total (Rp) — otomatis dicatat sebagai Kas Keluar', t: 'num'},
   {n: 'admin_pencairan', l: 'Admin transfer pencairan QRIS (Rp) — otomatis dicatat sebagai Kas Keluar', t: 'num'},
   {g: 'Stok'}, {n: 'stok_kertas_awal', l: 'Kertas awal (lembar)', t: 'num'}, {n: 'stok_kertas_akhir_fisik', l: 'Kertas akhir, hitung fisik', t: 'num'},
@@ -434,7 +508,7 @@ function formLaporan(idEvent) {
   }
   bukaForm('Laporan ' + idEvent, F_LAPORAN, l, function (r) {
     r.id_event = idEvent; // HPP & alokasi dikunci di server (kunciLaporan_)
-    return panggil('simpanLaporan', r);
+    return panggil('simpanLaporan', r, ambilFotoForm());
   }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto, serta HPP bahan per lembar & per buku, terkunci sesuai kondisi Inventaris & PENGATURAN saat laporan pertama kali disimpan — perubahan berikutnya (termasuk menyunting laporan ini) tidak mengubah angka event ini lagi. Admin QRIS & admin pencairan otomatis tercatat sebagai transaksi Kas Keluar (sudah termasuk di "Biaya langsung"), tidak perlu dicatat manual lagi di Kas.</div>');
 }
 </script>

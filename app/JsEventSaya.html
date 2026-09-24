@@ -18,11 +18,12 @@ function batasIsi(e) { return tgl(addHari(e.tanggal, 1)) + ' pukul 06.00'; }
 
 function vSaya() {
   var urut = D.event.slice().sort(function (a, b) { return a.tanggal !== b.tanggal ? (a.tanggal < b.tanggal ? -1 : 1) : String(a.jam_buka) < String(b.jam_buka) ? -1 : 1; });
-  var kini = urut.filter(function (e) { return e.bisaIsi; }), depan = urut.filter(function (e) { return !e.bisaIsi; });
+  // Hari ini = tanggal ≤ hari ini (termasuk event kemarin sebelum pukul 06.00, yang masih dikirim server).
+  var kini = urut.filter(function (e) { return e.tanggal <= D.hariIni; }), depan = urut.filter(function (e) { return e.tanggal > D.hariIni; });
   function baris(e) {
     var lap = cari(D.laporan, 'id_event', e.id_event);
     return item({lead: dt(e.tanggal), t: esc(e.nama_event), s: [jamEvent(e), esc(e.lokasi || e.kota)].filter(Boolean).join(' · ') || hari(e.tanggal),
-      end: e.bisaIsi ? (lap ? '<span class="pill p-ok">Laporan terisi</span>' : '<span class="pill p-warn">Belum laporan</span>') : '<span class="s">' + kapan(e) + '</span>',
+      end: e.tanggal <= D.hariIni ? pillLaporan(lap) : '<span class="s">' + kapan(e) + '</span>',
       on: "bukaSaya('" + e.id_event + "')"});
   }
   var h = '<div class="pagetitle" style="margin-bottom:2px">Halo, ' + esc(NAMA) + '</div><div class="meta" style="margin-bottom:16px">' + hari(D.hariIni) + ', ' + tgl(D.hariIni) + '</div>';
@@ -42,10 +43,20 @@ function vDetailSaya() {
   var h = '<button class="back" onclick="DETAIL=null;tampil(\'saya\')">‹ Event saya</button>';
   h += '<div class="meta">' + hari(e.tanggal) + ', ' + tgl(e.tanggal) + (e.jam_buka ? ' · ' + jamEvent(e) : '') + '</div>';
   h += '<div class="pagetitle" style="margin:2px 0 6px">' + esc(e.nama_event) + '</div>';
-  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span class="pill ' + (e.bisaIsi ? 'p-acc' : '') + '">' + kapan(e) + '</span>' + (e.jenis_acara ? '<span class="pill">' + esc(e.jenis_acara) + '</span>' : '') + '</div>';
-  if (e.bisaIsi) {
-    h += '<div class="btns" style="margin-bottom:10px"><button class="btn sm" onclick="formLaporanCrew(' + id + ')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="btn sm ghost" onclick="bukaChecklist(' + id + ')">Checklist alat</button></div>';
+  h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"><span class="pill ' + (e.bisaIsi ? 'p-acc' : '') + '">' + kapan(e) + '</span>' + (e.jenis_acara ? '<span class="pill">' + esc(e.jenis_acara) + '</span>' : '') +
+    (e.peranSaya ? '<span class="pill p-acc">Peran Anda: ' + esc(e.peranSaya) + '</span>' : '') + '</div>';
+  var st = lap ? lap.status_laporan : '', kurang = kurangLaporan(lap, e);
+  if (st === 'Disetujui') {
+    h += '<div style="margin-bottom:20px">' + notice('', '<b>Laporan sudah disetujui admin</b>' + (lap.disetujui_oleh ? ' (' + esc(lap.disetujui_oleh) + ', ' + esc(lap.disetujui_pada) + ')' : '') + '. Terima kasih! Laporan & checklist tidak bisa diubah lagi.') + '</div>';
+  } else if (e.bisaIsi) {
+    h += '<div class="btns" style="margin-bottom:10px"><button class="btn sm' + (lap ? ' ghost' : '') + '" onclick="formLaporanCrew(' + id + ')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="btn sm ghost" onclick="bukaChecklist(' + id + ')">Checklist alat</button>' +
+      (lap && st !== 'Menunggu dicek' ? '<button class="btn sm" onclick="kirimLaporanUI(' + id + ',this)">Kirim ke admin</button>' : '') + '</div>';
+    if (st === 'Menunggu dicek') h += '<div style="margin-bottom:10px">' + notice('', '<b>Terkirim ke admin</b> · ' + esc(lap.dikirim_pada) + '. Kalau masih ada yang diubah, admin otomatis diberi tahu.') + '</div>';
+    else if (lap && kurang.length) h += '<div class="meta" style="margin-bottom:6px">Sebelum dikirim, lengkapi: <b>' + kurang.join(', ') + '</b>.</div>';
+    else if (!lap) h += '<div class="meta" style="margin-bottom:6px">Saat buka: isi counter awal + fotonya lalu simpan. Saat tutup: lengkapi sisanya, simpan, lalu <b>Kirim ke admin</b>.</div>';
     h += '<div class="meta" style="margin-bottom:20px">Bisa diisi & diubah sampai ' + batasIsi(e) + '.</div>';
+  } else if (e.tanggal <= D.hariIni) {
+    h += '<div style="margin-bottom:20px">' + notice('', 'Batas mengisi laporan sudah lewat. Hubungi admin bila ada koreksi.') + '</div>';
   } else {
     h += '<div style="margin-bottom:20px">' + notice('', 'Checklist alat & laporan bisa diisi pada hari event (' + tgl(e.tanggal) + ').') + '</div>';
   }
@@ -57,10 +68,12 @@ function vDetailSaya() {
     (e.kontak && waLink(e.kontak) ? '<div class="btns"><a class="btn sm ghost" style="text-decoration:none" href="' + waLink(e.kontak) + '" target="_blank" rel="noopener">Chat klien di WhatsApp</a></div>' : '') + '</div>');
   if (lap) {
     var tercetak = Math.max(0, num(lap.counter_akhir) - num(lap.counter_awal));
-    h += sec('Laporan', '<div class="card pad" style="cursor:pointer" onclick="formLaporanCrew(' + id + ')"><table>' +
+    var nFoto = FOTO_KOLOM.filter(function (x) { return lap[x[0]]; }).length;
+    h += sec('Laporan', '<div class="card pad" style="cursor:pointer" onclick="formLaporanCrew(' + id + ')"><div style="margin-bottom:8px">' + pillLaporan(lap) + ' <span class="meta">' + nFoto + ' foto bukti</span></div><table>' +
       '<tr><td>Jam aktual</td><td class="r">' + esc(lap.jam_buka_aktual || '—') + '–' + esc(lap.jam_tutup_aktual || '—') + '</td></tr>' +
       '<tr><td>Transaksi</td><td class="r">' + num(lap.jumlah_transaksi) + '</td></tr>' +
-      '<tr><td>Sesi · Lembar tambahan · Grad Book</td><td class="r">' + num(lap.sesi_terjual) + ' · ' + num(lap.lembar_tambahan) + ' · ' + num(lap.grad_book_terjual) + '</td></tr>' +
+      '<tr><td>Sesi Jepreto · Lembar tambahan · Grad Book</td><td class="r">' + num(lap.sesi_terjual) + ' · ' + num(lap.lembar_tambahan) + ' · ' + num(lap.grad_book_terjual) + '</td></tr>' +
+      (num(lap.cetak_ulang_voucher) ? '<tr><td>Sesi voucher cetak ulang</td><td class="r">' + num(lap.cetak_ulang_voucher) + '</td></tr>' : '') +
       '<tr><td>Tercetak (counter)</td><td class="r">' + tercetak + '</td></tr></table>' +
       '<div class="meta" style="margin-top:8px">' + (e.bisaIsi ? 'Ketuk untuk melihat atau mengubah.' : 'Ketuk untuk melihat.') + '</div></div>');
   }
@@ -68,6 +81,8 @@ function vDetailSaya() {
   h += sec('Crew bertugas', '<div class="card">' + (e.rekan.length ? e.rekan.map(function (r) {
     return item({lead: '<div class="av">' + inisial(r.nama) + '</div>', t: esc(r.nama) + (r.saya ? ' <span class="pill p-acc">Anda</span>' : ''), s: esc(r.role)});
   }).join('') : '<div class="empty">Belum ada.</div>') + '</div>');
+  var rs = ringkasSop(e);
+  if (rs) h += sec('SOP event', rs);
   var alat = D.pemakaian.filter(function (a) { return a.id_event === e.id_event && a.dibawa === 'Ya'; }), blm = alat.filter(function (a) { return a.kembali !== 'Ya'; });
   h += sec('Alat', '<div class="card pad" style="cursor:pointer" onclick="bukaChecklist(' + id + ')">' + (alat.length ?
     '<div style="font-weight:700">' + alat.length + ' dibawa · ' + (alat.length - blm.length) + ' kembali</div>' + (blm.length ? '<div class="meta neg" style="margin-top:4px">Belum kembali: ' + blm.map(function (a) { return esc(a.nama_alat); }).join(', ') + '</div>' : '<div class="meta pos" style="margin-top:4px">Semua alat sudah kembali.</div>') :
@@ -83,9 +98,19 @@ function formLaporanCrew(idEvent) {
     if (D.stokAwal.kertas !== null) l.stok_kertas_awal = D.stokAwal.kertas;
     if (D.stokAwal.buku !== null) l.stok_buku_awal = D.stokAwal.buku;
   }
-  bukaForm('Laporan · ' + e.nama_event, F_LAPORAN_CREW, l, function (r) { r.id_event = idEvent; return panggil('simpanLaporanCrew', r); },
-    '<div class="meta">Isi sesuai hitungan di lokasi. Counter printer dibaca dari printer saat buka & tutup. Kertas & buku awal sudah diisi dari stok terakhir — koreksi bila hitungan Anda berbeda.</div>',
+  bukaForm('Laporan · ' + e.nama_event, F_LAPORAN_CREW, l, function (r) {
+    r.id_event = idEvent;
+    return panggil('simpanLaporanCrew', r, ambilFotoForm()).then(function (h) { if (h && h.email) alert(h.email); });
+  }, '<div class="meta">Isi sesuai hitungan di lokasi. Foto layar counter printer saat buka & tutup (wajib sebelum dikirim), juga uang tunai & bukti QRIS. Kertas & buku awal sudah diisi dari stok terakhir — koreksi bila hitungan Anda berbeda.</div>',
     null, e.bisaIsi);
+}
+function kirimLaporanUI(idEvent, btn) {
+  var kurang = kurangLaporan(cari(D.laporan, 'id_event', idEvent), cari(D.event, 'id_event', idEvent));
+  if (kurang.length) { alert('Laporan belum lengkap: ' + kurang.join(', ') + '.\n\nBuka Ubah laporan, lengkapi, lalu simpan.'); return; }
+  if (!confirm('Kirim laporan ke admin sekarang? Pastikan angka & foto sudah benar.')) return;
+  btn.disabled = true; btn.textContent = 'Mengirim…';
+  panggil('kirimLaporanCrew', idEvent).then(function (h) { toast('Laporan terkirim ke admin'); if (h && h.email) alert(h.email); return muat(true); })
+    .catch(function (err) { btn.disabled = false; btn.textContent = 'Kirim ke admin'; toast('Gagal: ' + (err && err.message || err)); });
 }
 
 function vAkun() {
