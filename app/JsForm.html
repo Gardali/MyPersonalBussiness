@@ -23,8 +23,12 @@ function bukaForm(judul, fields, rec, onSave, extra, preview) {
     h += '<div class="f' + (f.t === 'area' || f.t === 'file' || f.t === 'bukti' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
   });
   if (FORM.preview) h += '<div id="preview" class="f wide" style="margin-top:10px"></div>';
-  h += '<div class="btns"><button class="btn" type="submit" style="flex:1">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()">Batal</button></div>' + (extra ? '<div class="btns">' + extra + '</div>' : '') + '</form>';
+  var ubah = bisaUbah();
+  h += '<div class="btns">' + (ubah ? '<button class="btn" type="submit" style="flex:1">Simpan</button>' : '') + '<button class="btn ghost" type="button" onclick="tutupForm()"' + (ubah ? '' : ' style="flex:1"') + '>' + (ubah ? 'Batal' : 'Tutup') + '</button></div>' +
+    (extra && ubah ? '<div class="btns">' + extra + '</div>' : '') + '</form>';
   document.getElementById('panel').innerHTML = h;
+  // Pemantau (lihat saja): form tampil sebagai detail, semua isian dikunci.
+  if (!ubah) document.querySelectorAll('#frm input, #frm select, #frm textarea').forEach(function (el) { el.disabled = true; });
   document.getElementById('sheet').classList.add('open');
   document.getElementById('frm').addEventListener('change', aturTampil);
   if (preview) document.getElementById('frm').addEventListener('input', function () { FORM.preview(bacaForm()); });
@@ -54,6 +58,7 @@ function tutupForm() { document.getElementById('sheet').classList.remove('open')
 document.getElementById('sheet').addEventListener('click', function (e) { if (e.target.id === 'sheet') tutupForm(); });
 
 function simpanForm() {
+  if (!bisaUbah()) return;
   var r = bacaForm();
   var kurang = FORM.fields.filter(function (f) { return f.wajib && (r[f.n] === '' || r[f.n] == null); });
   if (kurang.length) { toast('Wajib diisi: ' + kurang.map(function (f) { return f.l; }).join(', ')); return; }

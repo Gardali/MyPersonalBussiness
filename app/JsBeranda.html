@@ -75,7 +75,7 @@ function vBeranda() {
   h += '<div class="top"><div><div class="hi">' + salam() + ', <br>' + esc(NAMA) + '</div><div class="date">' + hari(now) + ', ' + tgl(now) + '</div></div><div class="iconbtns"><button class="iconbtn" onclick="tampil(\'lainnya\')" aria-label="Lainnya">' + ikon('gear') + '</button><button class="iconbtn" onclick="muat()" aria-label="Muat ulang">' + ikon('refresh') + '</button></div></div>';
   h += '<div class="head2 head2b"><div class="hcard"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div>' +
     (saldo < 0 ? '<div class="note">Ada biaya yang ditalangi dari luar kas divisi.</div>' : '') + '</div>';
-  h += '<div class="quick"><button onclick="formKas()"><span>' + ikon('wallet') + '</span>Catat kas</button><button onclick="formPipeline()"><span>' + ikon('user') + '</span>Prospek</button><button onclick="formEvent()"><span>' + ikon('cal') + '</span>Event</button></div></div><div class="cols"><div class="col">';
+  h += '<div class="quick"><button class="ubah" onclick="formKas()"><span>' + ikon('wallet') + '</span>Catat kas</button><button class="ubah" onclick="formPipeline()"><span>' + ikon('user') + '</span>Prospek</button><button class="ubah" onclick="formEvent()"><span>' + ikon('cal') + '</span>Event</button></div></div><div class="cols"><div class="col">';
 
   var n = '';
   alatBelumKembali().forEach(function (a) { n += '<div onclick="bukaEvent(\'' + a.id_event + '\')" style="cursor:pointer">' + notice('bad', '<b>' + esc(a.nama_alat) + ' belum kembali</b> dari ' + esc(namaEvent(a.id_event)) + (a.pemilik && a.pemilik !== 'Posetive' ? ' · milik ' + esc(a.pemilik) : '') + '.') + '</div>'; });

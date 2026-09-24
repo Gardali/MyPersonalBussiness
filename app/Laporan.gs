@@ -8,8 +8,8 @@ function buatPdf_(html, nama, folderNama) {
   var blob = Utilities.newBlob(html, 'text/html', nama + '.html').getAs('application/pdf').setName(nama + '.pdf');
   return folder_(folderNama).createFile(blob).getUrl();
 }
-function buatLaporanPdf(html, bulan) { return buatPdf_(html, 'Laporan Posetive ' + bulan, 'Posetive - Laporan'); }
-function buatInvoice(html, nomor) { return buatPdf_(html, String(nomor).replace(/\//g, '-'), 'Posetive - Invoice'); }
+function buatLaporanPdf_(html, bulan) { return buatPdf_(html, 'Laporan Posetive ' + bulan, 'Posetive - Laporan'); }
+function buatInvoice_(html, nomor) { return buatPdf_(html, String(nomor).replace(/\//g, '-'), 'Posetive - Invoice'); }
 
 var FORMAT_LAPORAN = { rp: '"Rp"#,##0;[Red]-"Rp"#,##0', n: '#,##0', pct: '0%', tgl: 'dd mmm yyyy' };
 var WARNA_LAPORAN = { utama: '#6E1F2C', lembut: '#F2E1E1', garis: '#D9CFC7', redup: '#7A736A' };
@@ -67,7 +67,7 @@ function tulisSheetLaporan_(sh, def) {
  * Laporan event sebagai Google Spreadsheet (beberapa sheet, sudah dirapikan) di folder "Posetive - Laporan Event".
  * Satu file per event: diunduh ulang → file yang sama ditimpa & diberi nama terbaru. Mengembalikan link buka & link unduh .xlsx.
  */
-function buatLaporanEventSheet(idEvent, nama, data) {
+function buatLaporanEventSheet_(idEvent, nama, data) {
   var folder = folder_('Posetive - Laporan Event'), ss = null;
   var it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
   while (it.hasNext() && !ss) {

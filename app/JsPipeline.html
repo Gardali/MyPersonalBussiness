@@ -6,7 +6,7 @@ function vPipeline() {
     return f === 'Semua' || (f === 'Aktif' && aktif(p)) || (f === 'Deal' && p.status === 'Deal') || (f === 'Kalah/Batal' && (p.status === 'Kalah' || p.status === 'Batal'));
   }).sort(function (a, b) { return String(a.follow_up || '9') < String(b.follow_up || '9') ? -1 : 1; });
   var nilai = sum(D.pipeline.filter(aktif), function (p) { return p.harga_deal || p.harga_penawaran; });
-  var h = '<div class="bar" style="margin-bottom:6px"><div class="pagetitle" style="margin:0">Pipeline</div><div style="display:flex;gap:8px"><button class="btn sm ghost" onclick="bukaKalkulator()">Kalkulator</button><button class="btn sm" onclick="formPipeline()">+ Prospek</button></div></div>';
+  var h = '<div class="bar" style="margin-bottom:6px"><div class="pagetitle" style="margin:0">Pipeline</div><div style="display:flex;gap:8px"><button class="btn sm ghost" onclick="bukaKalkulator()">Kalkulator</button><button class="ubah btn sm" onclick="formPipeline()">+ Prospek</button></div></div>';
   h += '<div class="meta" style="margin-bottom:14px">' + D.pipeline.filter(aktif).length + ' prospek aktif' + (nilai ? ' · nilai ' + rp(nilai) : '') + '</div>';
   h += '<div class="chips" style="margin-bottom:14px">' + ['Aktif', 'Deal', 'Kalah/Batal', 'Semua'].map(function (c) {
     return '<button class="chip ' + (c === f ? 'on' : '') + '" onclick="FILTER.pipeline=\'' + c + '\';tampil(\'pipeline\')">' + c + '</button>';
@@ -87,9 +87,9 @@ var F_PIPELINE = [
 function formPipeline(id) {
   var p = id ? cari(D.pipeline, 'id', id) : {};
   var extra = '';
-  if (id && !p.id_event && p.status !== 'Kalah' && p.status !== 'Batal') extra += '<button class="btn ghost" type="button" onclick="jadiEvent(\'' + id + '\')">Deal → buat event</button>';
+  if (id && !p.id_event && p.status !== 'Kalah' && p.status !== 'Batal') extra += '<button class="ubah btn ghost" type="button" onclick="jadiEvent(\'' + id + '\')">Deal → buat event</button>';
   if (p.id_event) extra += '<button class="btn ghost" type="button" onclick="tutupForm();bukaEvent(\'' + p.id_event + '\')">Lihat ' + esc(p.id_event) + '</button>';
-  if (id) extra += '<button class="btn danger" type="button" onclick="hapus(\'PIPELINE\',\'' + id + '\')">Hapus</button>';
+  if (id) extra += '<button class="ubah btn danger" type="button" onclick="hapus(\'PIPELINE\',\'' + id + '\')">Hapus</button>';
   bukaForm(id ? 'Prospek ' + id : 'Prospek baru', F_PIPELINE, p, function (r) { return panggil('saveRecord', 'PIPELINE', r); }, extra, previewPipeline);
 }
 function jadiEvent(id) {

@@ -1,0 +1,172 @@
+<script>
+// Posetive — halaman masuk, ganti PIN, keluar, dan kelola pengguna (admin).
+// Token sesi disimpan di perangkat: localStorage bila "ingat saya" (30 hari), sessionStorage bila tidak (sampai tab ditutup).
+var KUNCI_SESI = 'posetive_sesi', PIN_TERAKHIR = '';
+
+function simpanSesi(s, ingat) {
+  SESI = s;
+  try {
+    (ingat ? localStorage : sessionStorage).setItem(KUNCI_SESI, JSON.stringify({token: s.token}));
+    (ingat ? sessionStorage : localStorage).removeItem(KUNCI_SESI);
+  } catch (e) { }
+}
+function bacaSesi() {
+  try { var raw = sessionStorage.getItem(KUNCI_SESI) || localStorage.getItem(KUNCI_SESI); return raw ? JSON.parse(raw).token || '' : ''; } catch (e) { return ''; }
+}
+function hapusSesi() {
+  SESI = {token: '', pengguna: null};
+  try { localStorage.removeItem(KUNCI_SESI); sessionStorage.removeItem(KUNCI_SESI); } catch (e) { }
+}
+function aturTampilanPeran() {
+  var p = SESI.pengguna;
+  document.body.classList.toggle('belum-masuk', !p);
+  document.body.classList.toggle('lihat-saja', !!p && !bisaUbah());
+  NAMA = p ? String(p.nama || p.username).split(' ')[0] : '';
+}
+
+/** Dipanggil saat halaman dibuka (JsMulai): pakai sesi tersimpan bila masih berlaku, kalau tidak tampilkan halaman masuk. */
+function mulai() {
+  var token = bacaSesi();
+  if (!token) { tampilMasuk(); return; }
+  SESI.token = token;
+  document.getElementById('view').innerHTML = '<div id="loading">Memuat…</div>';
+  panggil('sesiSaya').then(setelahMasuk).catch(function (e) {
+    // Sesi habis sudah ditangani panggil() (halaman masuk + pesannya); selain itu mis. koneksi putus.
+    if (String(e && e.message) !== 'Sesi berakhir') tampilMasuk('Gagal memeriksa sesi: ' + String(e && e.message || e));
+  });
+}
+function setelahMasuk(pengguna) {
+  SESI.pengguna = pengguna;
+  aturTampilanPeran();
+  tutupForm();
+  if (pengguna.wajib_ganti) { tampilGantiPin(true); return; }
+  if (pengguna.role === 'crew') { tampilCrewBelumSiap(); return; }
+  VIEW = 'beranda'; DETAIL = null;
+  muat();
+}
+
+// ---------------------------------------------------------------- masuk
+function tampilMasuk(pesan) {
+  SESI.pengguna = null; aturTampilanPeran(); tutupForm();
+  document.getElementById('view').innerHTML = '<div class="masuk"><div class="logo">Posetive<small>Photobooth · masuk ke aplikasi</small></div>' +
+    (pesan ? '<div style="margin-top:14px">' + notice('', esc(pesan)) + '</div>' : '') +
+    '<form class="card pad" style="margin-top:16px" onsubmit="masukUI(this);return false">' +
+    '<div class="f"><label for="m_user">Username</label><input id="m_user" name="u" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>' +
+    '<div class="f"><label for="m_pin">PIN (6 angka)</label><input id="m_pin" name="p" class="pin" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="current-password" required></div>' +
+    '<label class="chk" style="margin:4px 0 14px"><input type="checkbox" name="i" checked>Ingat saya di perangkat ini (30 hari)</label>' +
+    '<button class="btn" type="submit" style="width:100%">Masuk</button></form>' +
+    '<div class="meta" style="margin-top:12px;text-align:center">Lupa PIN? Minta admin mereset PIN Anda.</div></div>';
+  var u = document.getElementById('m_user'); if (u) u.focus();
+}
+function masukUI(frm) {
+  var btn = frm.querySelector('button'), un = frm.u.value.trim(), pin = frm.p.value, ingat = frm.i.checked;
+  btn.disabled = true; btn.textContent = 'Memeriksa…';
+  google.script.run.withSuccessHandler(function (hasil) {
+    PIN_TERAKHIR = pin;
+    simpanSesi({token: hasil.token, pengguna: hasil.pengguna}, ingat);
+    setelahMasuk(hasil.pengguna);
+  }).withFailureHandler(function (e) {
+    btn.disabled = false; btn.textContent = 'Masuk';
+    frm.p.value = ''; frm.p.focus();
+    toast(String(e && e.message || e).replace(/^Error:\s*/, ''));
+  }).masuk(un, pin, ingat);
+}
+function keluarUI() {
+  if (!confirm('Keluar dari aplikasi di perangkat ini?')) return;
+  var t = SESI.token;
+  hapusSesi();
+  google.script.run.withSuccessHandler(function () { }).withFailureHandler(function () { }).keluar(t);
+  D = null; VIEW = 'beranda'; DETAIL = null;
+  tampilMasuk('Anda sudah keluar.');
+}
+
+// ---------------------------------------------------------------- ganti PIN
+/** wajib: login pertama / setelah PIN direset — aplikasi baru bisa dipakai setelah PIN diganti. */
+function tampilGantiPin(wajib) {
+  tutupForm();
+  var lamaDiketahui = wajib && PIN_TERAKHIR;
+  var h = '<div class="masuk"><div class="logo">' + (wajib ? 'Buat PIN baru' : 'Ganti PIN') + '<small>' + esc(SESI.pengguna ? SESI.pengguna.nama : '') + '</small></div>' +
+    (wajib ? '<div style="margin-top:14px">' + notice('', 'PIN Anda masih PIN sementara dari admin. Buat PIN baru yang hanya Anda ketahui.') + '</div>' : '') +
+    '<form class="card pad" style="margin-top:16px" onsubmit="gantiPinUI(this,' + !!wajib + ');return false">' +
+    (lamaDiketahui ? '' : '<div class="f"><label>PIN lama</label><input name="l" class="pin" type="password" inputmode="numeric" maxlength="6" autocomplete="current-password" required></div>') +
+    '<div class="f"><label>PIN baru (6 angka)</label><input name="b" class="pin" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="new-password" required></div>' +
+    '<div class="f"><label>Ulangi PIN baru</label><input name="u" class="pin" type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="new-password" required></div>' +
+    '<div class="meta" style="margin-bottom:12px">Hindari tanggal lahir, 123456, atau angka yang sama semua.</div>' +
+    '<button class="btn" type="submit" style="width:100%">Simpan PIN</button>' +
+    (wajib ? '' : '<button class="btn ghost" type="button" style="width:100%;margin-top:8px" onclick="tampil(\'lainnya\')">Batal</button>') + '</form>' +
+    (wajib ? '<div style="text-align:center;margin-top:12px"><button class="link" style="border:0;background:none;color:var(--muted)" onclick="hapusSesi();tampilMasuk()">Keluar</button></div>' : '') + '</div>';
+  document.getElementById('view').innerHTML = h;
+}
+function gantiPinUI(frm, wajib) {
+  var lama = frm.l ? frm.l.value : PIN_TERAKHIR, baru = frm.b.value;
+  if (baru !== frm.u.value) { toast('PIN baru dan ulangannya tidak sama'); return; }
+  var btn = frm.querySelector('button[type=submit]'); btn.disabled = true; btn.textContent = 'Menyimpan…';
+  panggil('gantiPin', lama, baru).then(function (p) {
+    PIN_TERAKHIR = '';
+    toast('PIN baru tersimpan');
+    if (wajib) setelahMasuk(p); else { SESI.pengguna = p; tampil('lainnya'); }
+  }).catch(function (e) { btn.disabled = false; btn.textContent = 'Simpan PIN'; toast(String(e && e.message || e).replace(/^Error:\s*/, '')); });
+}
+
+// Sementara (Tahap 2 belum dipasang): akun crew sudah bisa dibuat, tapi tampilan crew belum tersedia.
+function tampilCrewBelumSiap() {
+  document.getElementById('view').innerHTML = '<div class="masuk"><div class="logo">Halo, ' + esc(NAMA) + '<small>Crew</small></div>' +
+    '<div style="margin-top:14px">' + notice('', 'Halaman crew (event hari ini, checklist, laporan) sedang disiapkan. Jadwal Anda tetap ada di Google Calendar.') + '</div>' +
+    '<button class="btn ghost" style="width:100%;margin-top:8px" onclick="keluarUI()">Keluar</button></div>';
+}
+
+// ---------------------------------------------------------------- kelola pengguna (admin)
+var PENGGUNA = null;
+function labelPeran(r) { return {admin: 'Admin', pemantau: 'Pemantau', crew: 'Crew'}[r] || r; }
+function vPengguna() {
+  var h = '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button><div class="bar"><div class="pagetitle" style="margin:0">Pengguna</div><button class="ubah btn sm" onclick="formPengguna()">+ Pengguna</button></div>';
+  h += '<div class="meta" style="margin-bottom:14px"><b>Admin</b> bisa mengubah semua data. <b>Pemantau</b> hanya melihat (tidak bisa mengubah). <b>Crew</b> hanya melihat event tempat ia bertugas dan mengisi checklist & laporan event hari ini.</div>';
+  h += '<div class="card" id="daftar_pengguna">' + (PENGGUNA ? isiDaftarPengguna() : '<div class="empty">Memuat…</div>') + '</div>';
+  if (!PENGGUNA) panggil('daftarPengguna').then(function (l) { PENGGUNA = l; var el = document.getElementById('daftar_pengguna'); if (el) el.innerHTML = isiDaftarPengguna(); })
+    .catch(function (e) { var el = document.getElementById('daftar_pengguna'); if (el) el.innerHTML = '<div class="empty">Gagal memuat: ' + esc(e && e.message || e) + '</div>'; });
+  return h;
+}
+function isiDaftarPengguna() {
+  if (!PENGGUNA.length) return '<div class="empty">Belum ada pengguna.</div>';
+  return PENGGUNA.slice().sort(function (a, b) { return (a.aktif === b.aktif ? 0 : a.aktif ? -1 : 1) || String(a.nama).localeCompare(String(b.nama)); }).map(function (u) {
+    var crew = u.id_crew ? namaCrew(u.id_crew) : '';
+    var status = !u.aktif ? '<span class="pill">Nonaktif</span>' : u.terkunci ? '<span class="pill p-bad">Terkunci</span>' : u.wajib_ganti ? '<span class="pill p-warn">Belum ganti PIN</span>' : '';
+    return item({lead: '<div class="av">' + inisial(u.nama) + '</div>', t: esc(u.nama) + (u.username === SESI.pengguna.username ? ' <span class="pill p-acc">Anda</span>' : ''),
+      s: '@' + esc(u.username) + ' · ' + labelPeran(u.role) + (crew ? ' · ' + esc(crew) : '') + (u.terakhir_login ? ' · masuk ' + esc(u.terakhir_login) : ''),
+      end: status + '<div class="s">' + labelPeran(u.role) + '</div>', on: "formPengguna('" + u.username + "')"});
+  }).join('');
+}
+var F_PENGGUNA = [
+  {n: 'username', l: 'Username (huruf kecil, tanpa spasi)', wajib: 1, show: function (r) { return !r._lama; }},
+  {n: 'nama', l: 'Nama', wajib: 1},
+  {n: 'role', l: 'Role', t: 'sel', wajib: 1, o: function () { return [['admin', 'Admin — bisa mengubah semua'], ['pemantau', 'Pemantau — lihat saja (mis. bos)'], ['crew', 'Crew — event sendiri']]; }},
+  {n: 'id_crew', l: 'Data crew', t: 'sel', o: function () { return D.crew.map(function (c) { return [c.id_crew, (c.nama_panggilan || c.nama_lengkap) + ' (' + c.id_crew + ')']; }); }, show: function (r) { return r.role === 'crew'; }},
+  {n: 'aktif', l: 'Status', t: 'sel', o: function () { return [['Ya', 'Aktif'], ['Tidak', 'Nonaktif (tidak bisa masuk)']]; }, show: function (r) { return r._lama; }},
+  {n: 'catatan', l: 'Catatan', t: 'area'}
+];
+function formPengguna(username) {
+  var u = username ? cari(PENGGUNA || [], 'username', username) : null;
+  var rec = u ? {username: u.username, nama: u.nama, role: u.role, id_crew: u.id_crew, aktif: u.aktif ? 'Ya' : 'Tidak', catatan: u.catatan, _lama: true} : {role: 'pemantau'};
+  var extra = u && u.username !== SESI.pengguna.username ? '<button class="btn ghost" type="button" onclick="resetPinUI(\'' + u.username + '\')">Reset PIN</button>' : '';
+  bukaForm(u ? '@' + u.username : 'Pengguna baru', F_PENGGUNA, rec, function (r) {
+    if (r._lama) r.username = u.username;
+    return panggil('simpanPengguna', r).then(function (hasil) {
+      PENGGUNA = null;
+      if (hasil.pinSementara) setTimeout(function () { tampilPinSementara(hasil.username, hasil.pinSementara, 'Akun dibuat'); }, 50);
+    });
+  }, extra);
+}
+function resetPinUI(username) {
+  if (!confirm('Buat PIN sementara baru untuk @' + username + '? PIN lamanya tidak berlaku lagi dan ia harus masuk ulang.')) return;
+  panggil('resetPin', username).then(function (hasil) { PENGGUNA = null; tampilPinSementara(hasil.username, hasil.pinSementara, 'PIN direset'); })
+    .catch(function (e) { toast('Gagal: ' + (e && e.message || e)); });
+}
+function tampilPinSementara(username, pin, judul) {
+  document.getElementById('panel').innerHTML = '<div class="grab"></div><h2>' + esc(judul) + '</h2>' +
+    '<div class="meta">Berikan ke pemilik akun secara langsung (jangan di grup). PIN ini hanya tampil sekali dan wajib diganti saat masuk pertama.</div>' +
+    '<table style="margin-top:12px"><tr><td>Username</td><td class="r"><b>' + esc(username) + '</b></td></tr></table>' +
+    '<div class="pin-besar">' + esc(pin) + '</div>' +
+    '<div class="btns"><button class="btn" style="flex:1" onclick="tutupForm();tampil(\'pengguna\')">Selesai</button></div>';
+  document.getElementById('sheet').classList.add('open');
+}
+</script>

@@ -45,16 +45,36 @@ Di folder proyek jalankan **`bun run pasang`**. Perintah ini mengirim semua file
 deployment aplikasi web ke versi baru. URL tidak berubah; buka ulang aplikasi di HP untuk memakai kode baru.
 
 Kalau Google meminta izin baru (mis. fitur baru memakai Kalender/Drive), buka editor Apps Script,
-jalankan fungsi apa saja sekali (mis. `statusOtomatis`), lalu **Izinkan**.
+jalankan fungsi **izinkanAkses** sekali, lalu **Izinkan**.
 
 **Mengembalikan versi lama** bila pembaruan bermasalah:
 1. `bun run versi-aplikasi` → lihat nomor versi (mis. versi 31 terbaru, 30 sebelumnya).
 2. `bunx @google/clasp update-deployment AKfycbzLnJOrqLzFUCmo91fog8eyVVl2F86RWW5Jtn0DaX-RPMHybQ2_AH-VCqFWYVBBU9zP -V 30`
    (ganti 30 dengan versi yang diinginkan). Aplikasi langsung kembali ke versi itu.
 
+## Login & akun
+Semua orang masuk dengan **username + PIN 6 angka**. Tiga role:
+- **Admin** — bisa mengubah semua data dan mengelola akun.
+- **Pemantau** (mis. bos) — melihat semua halaman, laporan, PDF, dan Unduh Laporan, tapi tidak bisa mengubah apa pun.
+- **Crew** — hanya event tempat ia bertugas (hari ini & yang akan datang); mengisi checklist & laporan event hari ini.
+
+Pengecekan hak akses dilakukan di server (`Akses.gs`), bukan hanya disembunyikan di tampilan.
+
+**Akun admin pertama** (sekali saja): buka editor Apps Script → pilih fungsi **buatAdminPertama** → **Jalankan**.
+Buka **Log eksekusi**: tertulis username `garda` dan PIN sementara. Masuk ke aplikasi dengan itu, lalu buat PIN
+baru. Fungsi ini menolak dijalankan lagi bila sudah ada admin.
+
+**Menambah akun** (bos, crew): Lainnya → Pengguna → **+ Pengguna**. Aplikasi menampilkan PIN sementara sekali
+saja — berikan langsung ke orangnya; ia wajib menggantinya saat masuk pertama.
+
+**Lupa PIN / terkunci** (5× salah PIN = terkunci 15 menit): admin membuka akunnya di Lainnya → Pengguna →
+**Reset PIN**. **Keluarkan seseorang**: ubah Status jadi Nonaktif — ia langsung keluar di semua perangkat.
+
+"Ingat saya" menyimpan login di perangkat itu 30 hari; tanpa itu login berakhir saat tab ditutup (maks. 12 jam).
+
 ## Menghubungkan Google Calendar (sekali saja)
 1. Buka aplikasi → **Lainnya → Google Calendar → Hubungkan & sinkronkan**.
-2. Kalau muncul pesan gagal soal izin: buka editor Apps Script, pilih fungsi **sinkronSemuaKalender**
+2. Kalau muncul pesan gagal soal izin: buka editor Apps Script, pilih fungsi **izinkanAkses**
    di daftar fungsi (atas), klik **Jalankan**, lalu **Izinkan** akses Kalender. Setelah itu klik lagi
    tombolnya di aplikasi.
 3. Kalender baru **Posetive Photobooth** muncul di Google Calendar. Tiap event yang disimpan otomatis

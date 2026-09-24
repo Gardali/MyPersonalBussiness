@@ -3,11 +3,11 @@
  */
 
 /** Prospek jadi deal: buat event baru dari data pipeline, lalu tandai pipeline Deal + kode event. */
-function dealKeEvent(pipelineId) {
+function dealKeEvent_(pipelineId) {
   var p = readTab_('PIPELINE').filter(function (r) { return r.id === pipelineId; })[0];
   if (!p) throw new Error('Prospek ' + pipelineId + ' tidak ditemukan.');
   if (p.id_event) return p.id_event;
-  var idEvent = saveRecord('EVENT', {
+  var idEvent = saveRecord_('EVENT', {
     id_pipeline: p.id,
     nama_event: p.referensi || p.nama_klien,
     tanggal: p.tanggal_event,
@@ -20,32 +20,32 @@ function dealKeEvent(pipelineId) {
     status: 'Terkonfirmasi',
     catatan: 'Dari pipeline ' + p.id + ' (' + p.nama_klien + ')'
   });
-  saveRecord('PIPELINE', { id: p.id, status: 'Deal', id_event: idEvent });
+  saveRecord_('PIPELINE', { id: p.id, status: 'Deal', id_event: idEvent });
   cobaSinkron_(idEvent);
   return idEvent;
 }
 
 /** Menyimpan event lalu menyamakan jadwalnya di Google Calendar. Gagal sinkron tidak membatalkan simpan. */
-function simpanEvent(rec) {
-  var id = saveRecord('EVENT', rec);
+function simpanEvent_(rec) {
+  var id = saveRecord_('EVENT', rec);
   return { id: id, peringatan: cobaSinkron_(id) };
 }
 
 /** Menghapus event beserta jadwalnya di Google Calendar. */
-function hapusEvent(id) {
+function hapusEvent_(id) {
   var e = readTab_('EVENT').filter(function (x) { return x.id_event === id; })[0];
   if (e && e.id_kalender && kalenderAktif_()) {
     try { var ce = kalender_().getEventById(e.id_kalender); if (ce) ce.deleteEvent(); } catch (err) { }
   }
-  return deleteRecord('EVENT', id);
+  return deleteRecord_('EVENT', id);
 }
 
 /**
  * Menyimpan laporan event lalu memperbarui stok otomatis: kertas keluar = lembar tercetak (counter),
  * buku keluar = terjual + rusak, dan hitung fisik kertas bila diisi.
  */
-function simpanLaporan(rec) {
-  saveRecord('LAPORAN_EVENT', rec);
+function simpanLaporan_(rec) {
+  saveRecord_('LAPORAN_EVENT', rec);
   var ev = readTab_('EVENT').filter(function (e) { return e.id_event === rec.id_event; })[0];
   var tgl = ev && ev.tanggal ? ev.tanggal : Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
   var n = function (v) { return Number(v) || 0; };
@@ -79,7 +79,7 @@ function sinkronAdminKas_(rec, tgl) {
         id_event: rec.id_event, keterangan: x.kategori, catatan: 'Otomatis dari laporan ' + rec.id_event });
     } else {
       var ada = readTab_('KAS').filter(function (k) { return String(k.sumber) === sumber; })[0];
-      if (ada) deleteRecord('KAS', ada.id);
+      if (ada) deleteRecord_('KAS', ada.id);
     }
   });
 }
@@ -101,11 +101,11 @@ function migrasiAdminKas() {
 }
 
 /** Mencatat mutasi stok. Pembelian (Masuk) dengan harga ikut dicatat di KAS sebagai Media Cetak. */
-function simpanMutasi(rec, harga) {
+function simpanMutasi_(rec, harga) {
   var baru = !rec.id;
-  var id = saveRecord('MUTASI_STOK', rec);
+  var id = saveRecord_('MUTASI_STOK', rec);
   if (baru && rec.jenis === 'Masuk' && Number(harga) > 0) {
-    saveRecord('KAS', { tanggal: rec.tanggal, jenis: 'Keluar', kategori: 'Media Cetak', nominal: Number(harga),
+    saveRecord_('KAS', { tanggal: rec.tanggal, jenis: 'Keluar', kategori: 'Media Cetak', nominal: Number(harga),
       keterangan: 'Beli ' + rec.bahan + ' (' + rec.jumlah + ')', catatan: 'Otomatis dari stok ' + id });
   }
   return id;
@@ -114,7 +114,7 @@ function simpanMutasi(rec, harga) {
 // ---------------------------------------------------------------- checklist alat
 
 /** Mengganti seluruh checklist alat satu event. Kondisi akhir alat ikut diperbarui di INVENTARIS. */
-function simpanChecklist(idEvent, rows) {
+function simpanChecklist_(idEvent, rows) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -136,15 +136,15 @@ function simpanChecklist(idEvent, rows) {
     lock.releaseLock();
   }
   rows.forEach(function (r) {
-    if (r.id_alat && r.dibawa === 'Ya' && r.kondisi_akhir) saveRecord('INVENTARIS', { id_alat: r.id_alat, kondisi: r.kondisi_akhir });
+    if (r.id_alat && r.dibawa === 'Ya' && r.kondisi_akhir) saveRecord_('INVENTARIS', { id_alat: r.id_alat, kondisi: r.kondisi_akhir });
   });
   return idEvent;
 }
 
 /** Menyimpan file nota/bukti kas ke Drive (nama file sudah dibentuk di klien), lalu mengaitkan URL-nya ke catatan KAS. */
-function simpanNotaKas(idKas, base64, mime, namaFile) {
+function simpanNotaKas_(idKas, base64, mime, namaFile) {
   var blob = Utilities.newBlob(Utilities.base64Decode(base64), mime, namaFile);
   var file = folder_('Posetive - Nota Kas').createFile(blob);
-  saveRecord('KAS', { id: idKas, no_nota: file.getUrl() });
+  saveRecord_('KAS', { id: idKas, no_nota: file.getUrl() });
   return file.getUrl();
 }

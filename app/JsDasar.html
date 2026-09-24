@@ -1,7 +1,12 @@
 <script>
 // Posetive — status, ikon & menu, utilitas, komponen, dan semua perhitungan (HPP, tagihan, fee, bentrok, stok, skema).
 var D = null, VIEW = 'beranda', FILTER = {pipeline: 'Aktif', kas: '', kasSumber: '', inventaris: ''}, DETAIL = null;
-var NAMA = 'Garda', CEK_SEMUA = false;
+var NAMA = '', CEK_SEMUA = false;
+// Sesi login: {token, pengguna: {username, nama, role, id_crew, wajib_ganti}} — lihat JsAkses.
+var SESI = {token: '', pengguna: null};
+function peran() { return SESI.pengguna ? SESI.pengguna.role : ''; }
+/** Hanya admin yang boleh mengubah data; pemantau (bos) lihat saja. Server juga menolak — ini hanya untuk tampilan. */
+function bisaUbah() { return peran() === 'admin'; }
 
 // ---------------------------------------------------------------- ikon
 var IC = {
@@ -48,9 +53,20 @@ function waLink(kontak) {
   if (d.slice(0, 2) !== '62') d = '62' + d;
   return 'https://wa.me/' + d;
 }
+/**
+ * Memanggil server lewat satu pintu api(token, fn, args) — server memeriksa sesi & hak akses.
+ * Sesi habis → kembali ke halaman masuk; PIN sementara belum diganti → halaman ganti PIN.
+ */
 function panggil(fn) {
   var args = Array.prototype.slice.call(arguments, 1);
-  return new Promise(function (ok, gagal) { var r = google.script.run.withSuccessHandler(ok).withFailureHandler(gagal); r[fn].apply(r, args); });
+  return new Promise(function (ok, gagal) {
+    google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) {
+      var m = String(e && e.message || e);
+      if (m.indexOf('SESI_HABIS') >= 0) { hapusSesi(); tampilMasuk('Sesi berakhir. Silakan masuk lagi.'); gagal(new Error('Sesi berakhir')); return; }
+      if (m.indexOf('WAJIB_GANTI_PIN') >= 0) { tampilGantiPin(true); gagal(new Error('Ganti PIN dulu')); return; }
+      gagal(e);
+    }).api(SESI.token, fn, args);
+  });
 }
 
 // ---------------------------------------------------------------- komponen
@@ -316,10 +332,10 @@ function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', TIPIS: 'p
 // ---------------------------------------------------------------- tampilan
 function tampil(v) {
   VIEW = v; if (v !== 'event') DETAIL = null;
-  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === ((v === 'laporan' || v === 'crew' || v === 'inventaris' || v === 'hpp') ? 'lainnya' : v)); });
+  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === ((v === 'laporan' || v === 'crew' || v === 'inventaris' || v === 'hpp' || v === 'pengguna') ? 'lainnya' : v)); });
   var el = document.getElementById('view');
   try {
-    el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok, lainnya: vLainnya, laporan: vLaporan, crew: vCrew, inventaris: vInventaris, hpp: vHpp}[v]();
+    el.innerHTML = {beranda: vBeranda, pipeline: vPipeline, event: DETAIL ? vDetailEvent : vEvent, kas: vKas, stok: vStok, lainnya: vLainnya, laporan: vLaporan, crew: vCrew, inventaris: vInventaris, hpp: vHpp, pengguna: vPengguna}[v]();
   } catch (err) {
     el.innerHTML = '<div class="pagetitle">Ada yang error</div>' + notice('bad', 'Halaman ini gagal ditampilkan: <b>' + esc(err && err.message || err) + '</b>. Kirim screenshot ini ke Claude.');
   }

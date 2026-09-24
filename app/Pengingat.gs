@@ -22,7 +22,7 @@ function stok_(mutasi, bahan) {
 
 /** Daftar hal yang perlu diingat hari ini (HTML), atau '' bila tidak ada. */
 function isiPengingat_() {
-  var d = getData(), now = d.hariIni, besok = addHari_(now, 1), P = d.pengaturan, bag = [];
+  var d = getData_(), now = d.hariIni, besok = addHari_(now, 1), P = d.pengaturan, bag = [];
   var li = function (arr) { return '<ul>' + arr.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul>'; };
   var ev = d.event.filter(function (e) { return e.status === 'Terkonfirmasi' && (e.tanggal === now || e.tanggal === besok); });
   if (ev.length) bag.push('<h3>Event hari ini & besok</h3>' + li(ev.map(function (e) {
@@ -99,19 +99,19 @@ function kirim_(isi, paksa) {
 }
 /** Dipanggil pemicu harian. Email hanya dikirim bila ada yang perlu diingat. */
 function kirimPengingat() { kirim_(isiPengingat_(), false); }
-function kirimPengingatTes() { kirim_(isiPengingat_(), true); return Session.getEffectiveUser().getEmail(); }
+function kirimPengingatTes_() { kirim_(isiPengingat_(), true); return Session.getEffectiveUser().getEmail(); }
 
 // ---------------------------------------------------------------- pemicu otomatis
 
 var PEMICU = { pengingat: 'kirimPengingat', backup: 'backupSekarang' };
 
-function statusOtomatis() {
+function statusOtomatis_() {
   var t = ScriptApp.getProjectTriggers().map(function (x) { return x.getHandlerFunction(); });
   return { pengingat: t.indexOf(PEMICU.pengingat) >= 0, backup: t.indexOf(PEMICU.backup) >= 0, email: Session.getEffectiveUser().getEmail() };
 }
 
 /** Menyalakan/mematikan pengingat harian (07.00) atau backup mingguan (Minggu 21.00). */
-function aturOtomatis(nama, aktif) {
+function aturOtomatis_(nama, aktif) {
   var fn = PEMICU[nama];
   if (!fn) throw new Error('Tidak dikenal: ' + nama);
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === fn) ScriptApp.deleteTrigger(t); });
@@ -120,5 +120,5 @@ function aturOtomatis(nama, aktif) {
     if (nama === 'pengingat') b.everyDays(1).atHour(7).create();
     else b.onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(21).create();
   }
-  return statusOtomatis();
+  return statusOtomatis_();
 }

@@ -10,7 +10,7 @@ function vEvent() {
       end: waBtn(kontakEvent(e)) + (e.status === 'Selesai' ? '<span class="' + cls(r.labaKotor) + '">' + rpSingkat(r.labaKotor) + '</span><div class="s">laba kotor</div>' : perlu ? '<span class="pill p-warn">Perlu laporan</span>' : statusPill(e.status)),
       on: "bukaEvent('" + e.id_event + "')"});
   }
-  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Event</div><button class="btn sm" onclick="formEvent()">+ Event</button></div>';
+  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Event</div><button class="ubah btn sm" onclick="formEvent()">+ Event</button></div>';
   h += '<div class="cols"><div class="col">';
   h += sec('Akan datang', '<div class="card">' + (depan.length ? depan.map(baris).join('') : '<div class="empty">Belum ada.</div>') + '</div>');
   h += '</div><div class="col">';
@@ -30,7 +30,7 @@ function vDetailEvent() {
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">' + statusPill(e.status) + '<span class="pill">' + esc(e.model_pendapatan || 'Model belum diisi') + '</span>' + (e.skema ? '<span class="pill">' + esc(e.skema) + '</span>' : '') + '</div>';
   var kEv = kontakEvent(e);
   h += '<div class="meta">' + esc(e.lokasi || '') + (e.tim ? ' · ' + esc(e.tim) : '') + (kEv ? ' · ' + esc(kEv) + ' ' + waBtn(kEv) : '') + '</div>';
-  h += '<div class="btns" style="margin-bottom:20px"><button class="btn sm" onclick="formLaporan(\'' + e.id_event + '\')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="btn sm ghost" onclick="formKas(null,\'' + e.id_event + '\')">+ Kas</button><button class="btn sm ghost" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button><button class="btn sm ghost" onclick="unduhLaporanEvent(\'' + e.id_event + '\',this)">Unduh Laporan</button>' + (e.model_pendapatan === 'Kontrak Klien' ? '<button class="btn sm ghost" onclick="buatInvoiceUI(\'' + e.id_event + '\',this)">Invoice PDF</button>' : '') + '<button class="btn sm ghost" onclick="formEvent(\'' + e.id_event + '\')">Ubah</button></div>';
+  h += '<div class="btns" style="margin-bottom:20px"><button class="ubah btn sm" onclick="formLaporan(\'' + e.id_event + '\')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="ubah btn sm ghost" onclick="formKas(null,\'' + e.id_event + '\')">+ Kas</button><button class="btn sm ghost" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button><button class="btn sm ghost" onclick="unduhLaporanEvent(\'' + e.id_event + '\',this)">Unduh Laporan</button>' + (e.model_pendapatan === 'Kontrak Klien' ? '<button class="btn sm ghost" onclick="buatInvoiceUI(\'' + e.id_event + '\',this)">Invoice PDF</button>' : '') + '<button class="ubah btn sm ghost" onclick="formEvent(\'' + e.id_event + '\')">Ubah</button></div>';
   if (String(e.catatan || '').indexOf('CEK:') === 0) h += notice('', esc(e.catatan.slice(4).trim()));
 
   var hk = '<div class="card pad"><div class="meta">Laba kotor</div><div class="big ' + cls(r.labaKotor) + '">' + rp(r.labaKotor) + '</div>' +
@@ -53,7 +53,7 @@ function vDetailEvent() {
       (tg.dp ? tahapBaris('DP', tg.dp, tg.dibayar >= tg.dp, e.jatuh_tempo_dp) : '') +
       tahapBaris(tg.dp ? 'Pelunasan' : 'Pembayaran penuh', tg.kontrak - tg.dp, tg.dibayar >= tg.kontrak, e.jatuh_tempo_pelunasan || e.tanggal) + '</table>' +
       (tg.kurang ? '<div class="meta ' + (tg.sisaHari !== null && tg.sisaHari < 0 ? 'neg' : '') + '" style="margin:8px 0 10px">Tagih ' + (tg.tahap === 'DP' ? 'DP' : 'pelunasan') + ' <b>' + rp(tg.kurang) + '</b> · ' + teksJatuhTempo(tg) + '</div>' +
-        '<button class="btn sm" onclick="formKas(null,\'' + e.id_event + '\',{jenis:\'Masuk\',kategori:\'DP / Pelunasan Kontrak\',nominal:' + tg.kurang + ',keterangan:\'' + (tg.tahap === 'DP' ? 'DP' : 'Pelunasan') + ' ' + esc(String(e.nama_event).replace(/['\\]/g, '')) + '\'})">+ Catat pembayaran</button>' : '') + '</div>';
+        '<button class="ubah btn sm" onclick="formKas(null,\'' + e.id_event + '\',{jenis:\'Masuk\',kategori:\'DP / Pelunasan Kontrak\',nominal:' + tg.kurang + ',keterangan:\'' + (tg.tahap === 'DP' ? 'DP' : 'Pelunasan') + ' ' + esc(String(e.nama_event).replace(/['\\]/g, '')) + '\'})">+ Catat pembayaran</button>' : '') + '</div>';
   }
   if (openBooth && r.bepLapangan !== null) {
     var terjual = lap ? r.lembarTerjual : 0, pct = Math.min(100, Math.round(terjual / (r.bepTotal || 1) * 100)), pctL = Math.min(100, Math.round(r.bepLapangan / (r.bepTotal || 1) * 100));
@@ -102,12 +102,12 @@ function vDetailEvent() {
     var lunas = feeLunas(t), nm = namaCrew(t.id_crew), bt = e.status === 'Batal' ? [] : bentrokCrew(t.id_crew, e);
     return item({lead: '<div class="av">' + inisial(nm) + '</div>', t: esc(nm) + (bt.length ? ' <span class="pill p-bad">Bentrok</span>' : ''),
       s: (bt.length ? '<span class="neg">Juga di ' + bt.map(function (x) { return esc(x.nama_event); }).join(', ') + '</span><br>' : '') + 'Fee ' + rp(t.fee) + (t.catatan ? ' · ' + esc(t.catatan) : ''),
-      end: lunas ? '<span class="pill p-ok">Dibayar</span>' : '<button class="btn sm" onclick="event.stopPropagation();formBayarFee([\'' + t.id + '\'])">Bayar</button>',
+      end: lunas ? '<span class="pill p-ok">Dibayar</span>' : '<button class="ubah btn sm" onclick="event.stopPropagation();formBayarFee([\'' + t.id + '\'])">Bayar</button>',
       on: "formTugas('" + t.id + "')"});
   }).join('') : '<div class="empty">Belum ada crew yang ditugaskan.</div>') + '</div><div class="meta" style="margin-top:8px">' +
     tugas.length + (num(e.jumlah_crew) ? ' dari ' + num(e.jumlah_crew) : '') + ' crew · total fee ' + rp(totalFee) + (r.rab.feeCrew ? ' (RAB ' + rp(r.rab.feeCrew) + ')' : '') +
-    (belumFee.length > 1 ? ' · <button class="link" style="border:0;background:none;color:var(--accent);font-weight:600;padding:0" onclick="formBayarFee(' + esc(JSON.stringify(belumFee.map(function (t) { return t.id; }))) + ')">Bayar semua (' + rp(sum(belumFee, function (t) { return t.fee; })) + ')</button>' : '') + '</div>',
-    '<button class="link" onclick="formTugas(null,\'' + e.id_event + '\')">+ Crew</button>');
+    (belumFee.length > 1 ? ' · <button class="ubah link" style="border:0;background:none;color:var(--accent);font-weight:600;padding:0" onclick="formBayarFee(' + esc(JSON.stringify(belumFee.map(function (t) { return t.id; }))) + ')">Bayar semua (' + rp(sum(belumFee, function (t) { return t.fee; })) + ')</button>' : '') + '</div>',
+    '<button class="ubah link" onclick="formTugas(null,\'' + e.id_event + '\')">+ Crew</button>');
   var alat = D.pemakaian.filter(function (a) { return a.id_event === e.id_event && a.dibawa === 'Ya'; }), blm = alat.filter(function (a) { return a.kembali !== 'Ya'; });
   h += sec('Alat', '<div class="card pad" style="cursor:pointer" onclick="bukaChecklist(\'' + e.id_event + '\')">' + (alat.length ?
     '<div style="font-weight:700">' + alat.length + ' dibawa · ' + (alat.length - blm.length) + ' kembali</div>' + (blm.length ? '<div class="meta neg" style="margin-top:4px">Belum kembali: ' + blm.map(function (a) { return esc(a.nama_alat); }).join(', ') + '</div>' : '<div class="meta pos" style="margin-top:4px">Semua alat sudah kembali.</div>') :
@@ -150,16 +150,16 @@ function renderChecklist() {
   var bawa = CL.rows.filter(function (r) { return r.dibawa === 'Ya'; }), kembali = bawa.filter(function (r) { return r.kembali === 'Ya'; });
   var h = '<div class="grab"></div><h2>Checklist alat · ' + esc(CL.id) + '</h2>' +
     '<div class="meta" style="margin-bottom:10px">' + bawa.length + ' dibawa · ' + kembali.length + ' kembali' + (bawa.length > kembali.length ? ' · <b class="neg">' + (bawa.length - kembali.length) + ' belum kembali</b>' : '') + '</div>' +
-    '<div class="btns" style="margin:0 0 12px"><button class="btn sm ghost" type="button" onclick="salinChecklistTerakhir()">Salin dari event terakhir</button><button class="btn sm ghost" type="button" onclick="clSemuaKembali()">Semua kembali</button><button class="btn sm ghost" type="button" onclick="clTambah()">+ Alat/set</button></div><div class="card">';
+    '<div class="btns" style="margin:0 0 12px"><button class="ubah btn sm ghost" type="button" onclick="salinChecklistTerakhir()">Salin dari event terakhir</button><button class="ubah btn sm ghost" type="button" onclick="clSemuaKembali()">Semua kembali</button><button class="ubah btn sm ghost" type="button" onclick="clTambah()">+ Alat/set</button></div><div class="card">';
   h += CL.rows.map(function (r, i) {
     var milik = r.pemilik && r.pemilik !== 'Posetive' ? ' <span class="pill p-warn">' + esc(r.pemilik) + '</span>' : '';
     return '<div class="it" style="flex-wrap:wrap"><div class="mid" style="min-width:140px"><div class="t">' + esc(r.nama_alat) + milik + '</div></div>' +
       '<label class="chk"><input type="checkbox" ' + (r.dibawa === 'Ya' ? 'checked' : '') + ' onchange="clSet(' + i + ',\'dibawa\',this.checked?\'Ya\':\'Tidak\')">Bawa</label>' +
       '<label class="chk"><input type="checkbox" ' + (r.kembali === 'Ya' ? 'checked' : '') + (r.dibawa === 'Ya' ? '' : ' disabled') + ' onchange="clSet(' + i + ',\'kembali\',this.checked?\'Ya\':\'\')">Kembali</label>' +
       (r.dibawa === 'Ya' ? '<select class="plain" style="padding:5px 8px" onchange="clSet(' + i + ',\'kondisi_akhir\',this.value)">' + (D.pilihan.Kondisi || ['Baik', 'Perlu Perbaikan', 'Rusak', 'Hilang']).map(function (k) { return '<option' + (k === r.kondisi_akhir ? ' selected' : '') + '>' + esc(k) + '</option>'; }).join('') + '</select>' : '') +
-      '<button class="btn sm ghost" type="button" title="Keluarkan dari daftar" onclick="clHapus(' + i + ')" style="padding:4px 10px">✕</button></div>';
+      '<button class="ubah btn sm ghost" type="button" title="Keluarkan dari daftar" onclick="clHapus(' + i + ')" style="padding:4px 10px">✕</button></div>';
   }).join('') + '</div>';
-  h += '<div class="btns"><button class="btn" type="button" style="flex:1" onclick="simpanChecklistUI(this)">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()">Batal</button></div>';
+  h += '<div class="btns"><button class="ubah btn" type="button" style="flex:1" onclick="simpanChecklistUI(this)">Simpan</button><button class="btn ghost" type="button" onclick="tutupForm()">Batal</button></div>';
   var panel = document.getElementById('panel'), top = panel.scrollTop;
   panel.innerHTML = h; panel.scrollTop = top;
 }
@@ -404,7 +404,7 @@ var F_LAPORAN = [
 ];
 function formEvent(id) {
   var e = id ? cari(D.event, 'id_event', id) : {};
-  var extra = id ? '<button class="btn danger" type="button" onclick="hapus(\'EVENT\',\'' + id + '\')">Hapus</button>' : '';
+  var extra = id ? '<button class="ubah btn danger" type="button" onclick="hapus(\'EVENT\',\'' + id + '\')">Hapus</button>' : '';
   bukaForm(id ? 'Ubah ' + id : 'Event baru', F_EVENT, e, function (r) {
     var sama = D.event.filter(function (x) { return x.tanggal === r.tanggal && x.id_event !== r.id_event && x.status !== 'Batal'; });
     if (sama.length && r.status !== 'Batal' && !confirm('Tanggal ini sudah terisi: ' + sama.map(function (x) { return x.nama_event; }).join(', ') + '. Tetap simpan?')) return Promise.reject(new Error('dibatalkan'));

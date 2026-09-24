@@ -20,7 +20,7 @@ function vKas() {
   var keluar = sum(list.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
   var saldo = saldoKas();
   var h = '<div class="bar"><div class="pagetitle" style="margin:0">Kas</div><div style="display:flex;gap:8px;align-items:center"><select class="plain" onchange="FILTER.kas=this.value;tampil(\'kas\')"><option value="">Semua bulan</option>' +
-    bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select><button class="btn sm" onclick="formKas()">+ Catat</button></div></div>';
+    bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select><button class="ubah btn sm" onclick="formKas()">+ Catat</button></div></div>';
   h += '<div class="head2"><div class="hero" style="margin-top:0"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div></div>';
   h += '<div class="stats" style="grid-template-columns:repeat(2,1fr)"><div class="stat"><div class="k">Kas Posetive (operasional)</div><div class="v">' + rpSingkat(saldoPosetive()) + '</div></div>' +
     '<div class="stat"><div class="k">Dari event</div><div class="v">' + rpSingkat(saldoEvent()) + '</div></div></div>';
@@ -37,7 +37,7 @@ function vKas() {
 
 function vStok() {
   if (D.serverLama) return '<div class="pagetitle">Stok</div>' + notice('bad', '<b>Code.gs di Apps Script masih versi lama.</b> Halaman Stok butuh Code.gs terbaru (281 baris). Tempel ulang Code.gs, simpan, lalu Terapkan → Kelola deployment → Versi baru.');
-  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Stok</div><div style="display:flex;gap:8px"><button class="btn sm ghost" onclick="formMutasi(null,\'Hitung Fisik\')">Hitung fisik</button><button class="btn sm" onclick="formMutasi(null,\'Masuk\')">+ Beli</button></div></div>';
+  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Stok</div><div style="display:flex;gap:8px"><button class="ubah btn sm ghost" onclick="formMutasi(null,\'Hitung Fisik\')">Hitung fisik</button><button class="ubah btn sm" onclick="formMutasi(null,\'Masuk\')">+ Beli</button></div></div>';
   var tk = tintaTerakhir();
   var kartu = BAHAN.map(function (b) {
     var n = stok(b), min = b === 'Kertas 4R' ? Pd('STOK_MIN_KERTAS', 100) : Pd('STOK_MIN_BUKU', 5), sat = b === 'Kertas 4R' ? 'lembar' : 'buku';
@@ -72,7 +72,7 @@ var F_MUTASI = [
 ];
 function formMutasi(id, jenis) {
   var m = id ? cari(D.mutasi, 'id', id) : {jenis: jenis};
-  var extra = id ? '<button class="btn danger" type="button" onclick="hapus(\'MUTASI_STOK\',\'' + id + '\')">Hapus</button>' : '';
+  var extra = id ? '<button class="ubah btn danger" type="button" onclick="hapus(\'MUTASI_STOK\',\'' + id + '\')">Hapus</button>' : '';
   if (m && String(m.sumber || '').indexOf('LAPORAN:') === 0) extra = '<div class="meta">Dibuat otomatis dari laporan ' + esc(m.id_event) + '. Ubah laporannya, bukan catatan ini.</div>';
   bukaForm(id ? 'Stok ' + id : (jenis === 'Hitung Fisik' ? 'Hitung fisik stok' : 'Catat stok'), F_MUTASI, m, function (r) {
     var harga = r._harga; delete r._harga;
@@ -101,7 +101,7 @@ var F_KAS = [
 function formKas(id, idEvent, isian) {
   var k = id ? cari(D.kas, 'id', id) : Object.assign({id_event: idEvent || ''}, isian);
   NOTA_BARU = null;
-  var extra = id ? '<button class="btn danger" type="button" onclick="hapus(\'KAS\',\'' + id + '\')">Hapus</button>' : '';
+  var extra = id ? '<button class="ubah btn danger" type="button" onclick="hapus(\'KAS\',\'' + id + '\')">Hapus</button>' : '';
   if (k && String(k.sumber || '').indexOf('LAPORAN:') === 0) extra = '<div class="meta">Dibuat otomatis dari laporan ' + esc(k.id_event) + ' (admin QRIS/pencairan). Ubah laporannya, bukan catatan ini.</div>';
   if (k && String(k.sumber || '').indexOf('TUGAS:') === 0) extra = '<div class="meta">Dibuat otomatis dari pembayaran fee crew (' + esc(String(k.sumber).slice(6)) + '). Ubah fee atau batalkan pembayaran dari halaman event ' + esc(k.id_event) + '.</div>';
   bukaForm(id ? 'Kas ' + id : 'Catat kas', F_KAS, k, function (r) {

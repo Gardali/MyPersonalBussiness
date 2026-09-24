@@ -172,18 +172,18 @@ function siapkan_() {
   if (!lap) return;
   var tgl = ev[lap.id_event].tanggal;
   if (lap.stok_kertas_akhir_fisik !== '') {
-    saveRecord('MUTASI_STOK', { tanggal: tgl, bahan: 'Kertas 4R', jenis: 'Hitung Fisik', jumlah: Number(lap.stok_kertas_akhir_fisik),
+    saveRecord_('MUTASI_STOK', { tanggal: tgl, bahan: 'Kertas 4R', jenis: 'Hitung Fisik', jumlah: Number(lap.stok_kertas_akhir_fisik),
       id_event: lap.id_event, sumber: 'AWAL', catatan: 'CEK: stok awal diambil dari hitung fisik laporan ' + lap.id_event + '. Hitung ulang & koreksi bila perlu.' });
   }
   if (lap.stok_buku_awal !== '') {
-    saveRecord('MUTASI_STOK', { tanggal: tgl, bahan: 'Graduation Book', jenis: 'Hitung Fisik',
+    saveRecord_('MUTASI_STOK', { tanggal: tgl, bahan: 'Graduation Book', jenis: 'Hitung Fisik',
       jumlah: Number(lap.stok_buku_awal) - Number(lap.grad_book_terjual || 0) - Number(lap.buku_rusak || 0),
       id_event: lap.id_event, sumber: 'AWAL', catatan: 'Stok awal dari laporan ' + lap.id_event });
   }
 }
 
 /** Semua data yang dibutuhkan aplikasi, dalam satu panggilan. */
-function getData() {
+function getData_() {
   siapkan_();
   var pengaturan = {};
   readTab_('PENGATURAN').forEach(function (r) { pengaturan[r.kunci] = r.nilai; });
@@ -245,7 +245,7 @@ function lastDataRow_(values) {
  * tetap). Kalau belum ada → baris baru di bawah data terakhir, dengan kode baru bila perlu.
  * Mengembalikan kode catatan.
  */
-function saveRecord(tab, rec) {
+function saveRecord_(tab, rec) {
   var cfg = TABS[tab];
   if (!cfg) throw new Error('Tab tidak boleh diubah: ' + tab);
   var lock = LockService.getScriptLock();
@@ -281,7 +281,7 @@ function saveRecord(tab, rec) {
   }
 }
 
-function deleteRecord(tab, id) {
+function deleteRecord_(tab, id) {
   var cfg = TABS[tab];
   if (!cfg) throw new Error('Tab tidak boleh diubah: ' + tab);
   var lock = LockService.getScriptLock();
@@ -304,7 +304,7 @@ function saveBy_(tab, col, val, rec) {
   var hit = readTab_(tab).filter(function (r) { return String(r[col]) === String(val); })[0];
   rec[col] = val;
   if (hit) rec[TABS[tab].id] = hit[TABS[tab].id];
-  return saveRecord(tab, rec);
+  return saveRecord_(tab, rec);
 }
 
 /** Folder kerja di samping file master (atau di My Drive bila tidak bisa). */

@@ -3,7 +3,7 @@
 function vCrew() {
   var now = D.hariIni;
   var list = D.crew.slice().sort(function (a, b) { return String(a.nama_panggilan || a.nama_lengkap).localeCompare(String(b.nama_panggilan || b.nama_lengkap)); });
-  var h = '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button><div class="bar"><div class="pagetitle" style="margin:0">Crew</div><button class="btn sm" onclick="formCrew()">+ Crew</button></div>';
+  var h = '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button><div class="bar"><div class="pagetitle" style="margin:0">Crew</div><button class="ubah btn sm" onclick="formCrew()">+ Crew</button></div>';
   var belum = feeBelumDibayar(false), perCrew = {};
   belum.forEach(function (t) { (perCrew[t.id_crew] = perCrew[t.id_crew] || []).push(t); });
   if (belum.length) {
@@ -11,7 +11,7 @@ function vCrew() {
       var c = cari(D.crew, 'id_crew', id) || {}, rows = perCrew[id].sort(function (a, b) { var ea = cari(D.event, 'id_event', a.id_event), eb = cari(D.event, 'id_event', b.id_event); return ea.tanggal < eb.tanggal ? -1 : 1; });
       var ids = rows.map(function (t) { return t.id; });
       return '<div class="card pad" style="margin-bottom:8px"><div class="bar" style="margin:0 0 4px"><div><div style="font-weight:700">' + esc(namaCrew(id)) + '</div><div class="meta">' + (c.bank || c.no_rekening ? esc(c.bank || '') + ' ' + esc(c.no_rekening || '') : 'Rekening belum diisi') + '</div></div>' +
-        '<button class="btn sm" onclick="formBayarFee(' + esc(JSON.stringify(ids)) + ')">Bayar ' + rp(sum(rows, function (t) { return t.fee; })) + '</button></div><table>' +
+        '<button class="ubah btn sm" onclick="formBayarFee(' + esc(JSON.stringify(ids)) + ')">Bayar ' + rp(sum(rows, function (t) { return t.fee; })) + '</button></div><table>' +
         rows.map(function (t) {
           var e = cari(D.event, 'id_event', t.id_event);
           return '<tr style="cursor:pointer" onclick="bukaEvent(\'' + t.id_event + '\')"><td>' + tgl(e.tanggal) + ' · ' + esc(e.nama_event) + (e.tanggal >= now ? ' <span class="pill">belum jalan</span>' : '') + '</td><td class="r">' + rp(t.fee) + '</td></tr>';
@@ -69,7 +69,7 @@ var F_CREW = [
 function formCrew(id) {
   var c = id ? cari(D.crew, 'id_crew', id) : {};
   FOTO_BARU = null;
-  var extra = id ? '<button class="btn danger" type="button" onclick="hapusCrewUI(\'' + id + '\')">Hapus</button>' : '';
+  var extra = id ? '<button class="ubah btn danger" type="button" onclick="hapusCrewUI(\'' + id + '\')">Hapus</button>' : '';
   bukaForm(id ? (c.nama_panggilan || c.nama_lengkap || id) : 'Crew baru', F_CREW, c, function (r) {
     delete r._foto;
     var emailBerubah = String(r.email || '').trim().toLowerCase() !== String(c.email || '').trim().toLowerCase();
@@ -98,8 +98,8 @@ function formTugas(id, idEvent) {
   if (!D.crew.length) { toast('Isi data crew dulu di Lainnya → Crew'); return; }
   var extra = '';
   if (id) {
-    extra = feeLunas(t) ? '<button class="btn ghost" type="button" onclick="batalBayarFee(\'' + id + '\')">Batalkan pembayaran</button>' : '<button class="btn ghost" type="button" onclick="tutupForm();formBayarFee([\'' + id + '\'])">Bayar fee</button>';
-    extra += '<button class="btn danger" type="button" onclick="hapusTugas(\'' + id + '\')">Hapus</button>';
+    extra = feeLunas(t) ? '<button class="ubah btn ghost" type="button" onclick="batalBayarFee(\'' + id + '\')">Batalkan pembayaran</button>' : '<button class="ubah btn ghost" type="button" onclick="tutupForm();formBayarFee([\'' + id + '\'])">Bayar fee</button>';
+    extra += '<button class="ubah btn danger" type="button" onclick="hapusTugas(\'' + id + '\')">Hapus</button>';
   }
   bukaForm(id ? 'Tugas ' + namaCrew(t.id_crew) : 'Tugaskan crew', F_TUGAS, t, function (r) {
     var dobel = D.tugas.filter(function (x) { return x.id_event === r.id_event && x.id_crew === r.id_crew && x.id !== r.id; });

@@ -6,7 +6,7 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 - `migrasi/buat_master.py` — membuat file DATABASE MASTER (.xlsx) dari data lama.
 - `app/` — kode Google Apps Script, dikirim ke Apps Script dengan clasp (`bun run kirim`).
   - Server (`.gs`, digabung otomatis oleh Apps Script):
-    `Code.gs` (inti: baca/tulis tab, `doGet`, `include`), `Event.gs` (event, laporan, kas, stok, checklist),
+    `Code.gs` (inti: baca/tulis tab, `doGet`, `include`), `Akses.gs` (login, sesi, `api()` + tabel izin), `Event.gs` (event, laporan, kas, stok, checklist),
     `Crew.gs` (crew & fee), `Kalender.gs` (Google Calendar), `Laporan.gs` (PDF, Unduh Laporan, backup),
     `Pengingat.gs` (email harian & pemicu), `Pengaturan.gs` (pengaturan & HPP).
   - Tampilan: `Index.html` hanya kerangka yang memanggil `Css.html` dan `Js*.html` lewat `include()`.
@@ -26,3 +26,4 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 8. Inventaris: target event per bulan bisa diubah langsung, alokasi penyusutan per event (total & per barang) tampil — selesai.
 9. Halaman HPP & harga jual (Lainnya): rincian HPP, margin per produk, ubah angka dari aplikasi; HPP terkunci di laporan event — selesai.
 10. Tombol "Unduh Laporan" di event: laporan lengkap & rapi sebagai Google Spreadsheet (Ringkasan, Produksi, Kas, Alat), satu file per event, bisa diunduh .xlsx — selesai.
+11. Login username + PIN, role admin / pemantau (lihat saja) / crew, hak akses diperiksa di server (`Akses.gs`), kelola pengguna — selesai (tampilan crew menyusul).

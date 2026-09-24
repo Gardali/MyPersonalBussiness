@@ -5,17 +5,17 @@
 // ---------------------------------------------------------------- crew
 
 /** Menyimpan foto profil crew ke folder Drive privat (tidak dibagikan), lalu mengaitkannya ke data crew. */
-function simpanFotoCrew(idCrew, base64, mime, namaFile) {
+function simpanFotoCrew_(idCrew, base64, mime, namaFile) {
   var lama = readTab_('CREW').filter(function (c) { return c.id_crew === idCrew; })[0];
   if (lama && lama.foto) { try { DriveApp.getFileById(lama.foto).setTrashed(true); } catch (e) { } }
   var blob = Utilities.newBlob(Utilities.base64Decode(base64), mime, namaFile || idCrew);
   var file = folder_('Posetive - Foto Crew').createFile(blob);
-  saveRecord('CREW', { id_crew: idCrew, foto: file.getId() });
+  saveRecord_('CREW', { id_crew: idCrew, foto: file.getId() });
   return file.getId();
 }
 
 /** Foto profil crew sebagai data URI (base64), atau null bila belum ada foto. */
-function getFotoCrew(idCrew) {
+function getFotoCrew_(idCrew) {
   var c = readTab_('CREW').filter(function (x) { return x.id_crew === idCrew; })[0];
   if (!c || !c.foto) return null;
   try {
@@ -25,7 +25,7 @@ function getFotoCrew(idCrew) {
 }
 
 /** Menghapus data crew sekaligus foto profilnya di Drive. */
-function hapusCrew(id) {
+function hapusCrew_(id) {
   var c = readTab_('CREW').filter(function (x) { return x.id_crew === id; })[0];
   if (c && c.foto) { try { DriveApp.getFileById(c.foto).setTrashed(true); } catch (e) { } }
   var email = c && emailBersih_(c.email);
@@ -36,17 +36,17 @@ function hapusCrew(id) {
       try { var ce = kalender_().getEventById(ev[t.id_event].id_kalender); if (ce) ce.removeGuest(email); } catch (e) { }
     });
   }
-  return deleteRecord('CREW', id);
+  return deleteRecord_('CREW', id);
 }
 
 // ---------------------------------------------------------------- fee crew
 
 /** Menyimpan penugasan crew. Bila fee-nya sudah dibayar, nominal di KAS ikut disamakan. */
-function simpanTugasCrew(rec) {
-  var id = saveRecord('TUGAS_CREW', rec);
+function simpanTugasCrew_(rec) {
+  var id = saveRecord_('TUGAS_CREW', rec);
   var t = readTab_('TUGAS_CREW').filter(function (x) { return x.id === id; })[0];
   var kas = t && t.id_kas ? readTab_('KAS').filter(function (k) { return k.id === t.id_kas; })[0] : null;
-  if (kas) saveRecord('KAS', { id: kas.id, nominal: Number(t.fee) || 0 });
+  if (kas) saveRecord_('KAS', { id: kas.id, nominal: Number(t.fee) || 0 });
   if (t) cobaSinkron_(t.id_event);
   return id;
 }
@@ -55,7 +55,7 @@ function simpanTugasCrew(rec) {
  * Membayar fee satu atau beberapa penugasan: tiap penugasan menjadi satu baris KAS Keluar "Fee Crew"
  * di event-nya (ikut masuk realisasi RAB fee crew), lalu kode kasnya dicatat di penugasan.
  */
-function bayarFeeCrew(ids, bayar) {
+function bayarFeeCrew_(ids, bayar) {
   var tugas = readTab_('TUGAS_CREW'), crew = {};
   readTab_('CREW').forEach(function (c) { crew[c.id_crew] = c; });
   ids.forEach(function (id) {
@@ -65,28 +65,28 @@ function bayarFeeCrew(ids, bayar) {
     var idKas = saveBy_('KAS', 'sumber', 'TUGAS:' + id, { tanggal: bayar.tanggal, jenis: 'Keluar', kategori: 'Fee Crew',
       nominal: Number(t.fee) || 0, id_event: t.id_event, metode: bayar.metode || '', keterangan: 'Fee crew ' + nama,
       catatan: 'Otomatis dari penugasan ' + id });
-    saveRecord('TUGAS_CREW', { id: id, id_kas: idKas });
+    saveRecord_('TUGAS_CREW', { id: id, id_kas: idKas });
   });
   return ids.length;
 }
 
 /** Membatalkan pembayaran fee: baris KAS-nya dihapus, penugasan kembali "belum dibayar". */
-function batalBayarFeeCrew(id) {
+function batalBayarFeeCrew_(id) {
   hapusKasTugas_(id);
-  saveRecord('TUGAS_CREW', { id: id, id_kas: '' });
+  saveRecord_('TUGAS_CREW', { id: id, id_kas: '' });
   return id;
 }
 
 /** Menghapus penugasan beserta baris KAS pembayarannya (bila ada). */
-function hapusTugasCrew(id) {
+function hapusTugasCrew_(id) {
   var t = readTab_('TUGAS_CREW').filter(function (x) { return x.id === id; })[0];
   hapusKasTugas_(id);
-  deleteRecord('TUGAS_CREW', id);
+  deleteRecord_('TUGAS_CREW', id);
   if (t) cobaSinkron_(t.id_event);
   return true;
 }
 
 function hapusKasTugas_(id) {
   readTab_('KAS').filter(function (k) { return String(k.sumber) === 'TUGAS:' + id; })
-    .forEach(function (k) { deleteRecord('KAS', k.id); });
+    .forEach(function (k) { deleteRecord_('KAS', k.id); });
 }

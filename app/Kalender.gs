@@ -39,7 +39,7 @@ function sinkronKalender_(idEvent) {
   if (e.id_kalender) { try { ce = cal.getEventById(e.id_kalender); } catch (err) { ce = null; } }
   if (e.status === 'Batal' || !e.tanggal) {
     if (ce) ce.deleteEvent();
-    if (e.id_kalender) saveRecord('EVENT', { id_event: idEvent, id_kalender: '' });
+    if (e.id_kalender) saveRecord_('EVENT', { id_event: idEvent, id_kalender: '' });
     return;
   }
   var peng = {};
@@ -68,7 +68,7 @@ function sinkronKalender_(idEvent) {
 
   if (!ce) {
     ce = mulai ? cal.createEvent(judul, mulai, selesai) : cal.createAllDayEvent(judul, Utilities.parseDate(e.tanggal, tz, 'yyyy-MM-dd'));
-    saveRecord('EVENT', { id_event: idEvent, id_kalender: ce.getId() });
+    saveRecord_('EVENT', { id_event: idEvent, id_kalender: ce.getId() });
   } else {
     ce.setTitle(judul);
     if (mulai) ce.setTime(mulai, selesai); else ce.setAllDayDate(Utilities.parseDate(e.tanggal, tz, 'yyyy-MM-dd'));
@@ -95,7 +95,7 @@ function emailBersih_(s) {
 }
 
 /** Setelah email crew diubah: samakan undangan di semua event mendatang tempat crew itu bertugas. */
-function sinkronCrew(idCrew) {
+function sinkronCrew_(idCrew) {
   if (!kalenderAktif_()) return 0;
   var now = Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd'), ev = {}, ids = {};
   readTab_('EVENT').forEach(function (e) { ev[e.id_event] = e; });
@@ -113,7 +113,7 @@ function cobaSinkron_(idEvent) {
  * Menghubungkan (membuat kalender bila perlu) lalu menyinkronkan semua event. Jalankan juga sekali dari
  * editor Apps Script bila aplikasi web menolak dengan pesan izin, supaya Google meminta izin Kalender.
  */
-function sinkronSemuaKalender() {
+function sinkronSemuaKalender_() {
   kalender_();
   PropertiesService.getScriptProperties().setProperty('KALENDER_AKTIF', '1');
   var n = 0;
@@ -122,7 +122,7 @@ function sinkronSemuaKalender() {
 }
 
 /** Memutus sinkron: kalender & jadwalnya dibiarkan di Google Calendar, aplikasi berhenti memperbaruinya. */
-function putusKalender() {
+function putusKalender_() {
   PropertiesService.getScriptProperties().setProperty('KALENDER_AKTIF', '0');
   return true;
 }

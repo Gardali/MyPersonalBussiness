@@ -26,10 +26,10 @@ function biayaLembar_(p) {
 }
 
 /** Mengubah nilai satu pengaturan; baris dibuat bila belum ada. */
-function simpanPengaturan(kunci, nilai) {
+function simpanPengaturan_(kunci, nilai) {
   var o = {};
   o[kunci] = nilai;
-  simpanPengaturanBanyak(o);
+  simpanPengaturanBanyak_(o);
   return Number(nilai);
 }
 
@@ -37,7 +37,7 @@ function simpanPengaturan(kunci, nilai) {
  * Mengubah beberapa pengaturan sekaligus (semua diperiksa dulu, baru ditulis). Bila ada angka HPP yang
  * berubah, laporan event yang belum punya HPP terkunci diisi HPP lama, supaya laba event lama tidak ikut bergeser.
  */
-function simpanPengaturanBanyak(obj) {
+function simpanPengaturanBanyak_(obj) {
   var baru = {};
   Object.keys(obj).forEach(function (k) {
     var info = PENGATURAN_APP[k];
@@ -79,6 +79,6 @@ function kunciHppLaporan_(bl, buku) {
     var rec = { id_event: l.id_event }, isi = false;
     if (l.realisasi_biaya_lembar === '' || l.realisasi_biaya_lembar == null) { rec.realisasi_biaya_lembar = bl; isi = true; }
     if (l.realisasi_biaya_buku === '' || l.realisasi_biaya_buku == null) { rec.realisasi_biaya_buku = buku; isi = true; }
-    if (isi) saveRecord('LAPORAN_EVENT', rec);
+    if (isi) saveRecord_('LAPORAN_EVENT', rec);
   });
 }

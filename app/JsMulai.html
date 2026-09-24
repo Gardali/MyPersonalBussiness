@@ -9,5 +9,5 @@ function muat(diam) {
     .catch(function (e) { document.getElementById('view').innerHTML = notice('bad', 'Gagal memuat: ' + esc(e && e.message || e)); });
 }
 document.getElementById('nav').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b && b.dataset.v) { DETAIL = null; tampil(b.dataset.v); } });
-muat();
+mulai();
 </script>
