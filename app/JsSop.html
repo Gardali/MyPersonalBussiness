@@ -38,24 +38,45 @@ function pillPeran(p, saya) {
 }
 function teksSop(s) { return '<div class="sop-isi">' + esc(s.isi) + '</div>'; }
 
+// ---------------------------------------------------------------- lipatan (dropdown) per fase
+// Fase & rincian langkah dibuat bisa dilipat (<details>). Yang dibuka/ditutup diingat di SOP_BUKA supaya tidak
+// kembali tertutup saat panel digambar ulang setelah mencentang.
+var SOP_BUKA = {};
+function kunciLipat(k) { return String(k).replace(/['"\\<>&]/g, ''); }
+function ingatLipat(el, kunci) { SOP_BUKA[kunci] = el.open; }
+function attrLipat(kunci, bawaan) {
+  var k = kunciLipat(kunci);
+  return ((k in SOP_BUKA ? SOP_BUKA[k] : bawaan) ? ' open' : '') + ' ontoggle="ingatLipat(this,\'' + k + '\')"';
+}
+/** Rincian langkah: pendek → tampil langsung; panjang → di balik "Rincian". */
+function rincianSop(s) {
+  if (!s.isi) return '';
+  if (s.isi.length <= 80 && s.isi.indexOf('\n') < 0) return teksSop(s);
+  return '<details class="sop-rinci"' + attrLipat('r:' + s.id, false) + '><summary>Rincian</summary>' + teksSop(s) + '</details>';
+}
+function kepalaFase(judul, info) {
+  return '<summary class="sop-fase"><span class="judul">' + esc(judul) + '</span>' + (info || '') + '<span class="chev">›</span></summary>';
+}
+
 // ---------------------------------------------------------------- halaman bacaan
 function vSop() {
   var admin = bisaUbah(), sop = urutSop(D.sop || []).filter(function (s) { return admin || s.aktif !== 'Tidak'; });
   var h = (peran() === 'crew' ? '' : '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button>') +
     '<div class="bar"><div class="pagetitle" style="margin:0">SOP Event</div><button class="ubah btn sm" onclick="formSop()">+ Bagian</button></div>';
-  h += '<div class="meta" style="margin-bottom:14px">' + (admin ? 'Ketuk bagian untuk mengubah. <b>Langkah</b> dicentang tim di setiap event; langkah <b>wajib</b> harus dicentang sebelum crew bisa mengirim laporan.' :
-    'Langkah bertanda peran dikerjakan orang dengan peran itu. Centang langkah di event hari ini lewat Event saya → SOP event.') + '</div>';
+  h += '<div class="meta" style="margin-bottom:14px">' + (admin ? 'Ketuk fase untuk membuka, ketuk bagian untuk mengubah. <b>Langkah</b> dicentang tim di setiap event; langkah <b>wajib</b> harus dicentang sebelum crew bisa mengirim laporan.' :
+    'Ketuk fase untuk membuka. Langkah bertanda peran dikerjakan orang dengan peran itu. Centang langkah di event hari ini lewat Event saya → SOP event.') + '</div>';
   if (!sop.length) return h + '<div class="card"><div class="empty">SOP belum diisi.</div></div>';
   perFase(sop).forEach(function (g) {
-    var no = 0;
-    h += sec(esc(g.fase), '<div class="card">' + g.isi.map(function (s) {
+    var no = 0, nLangkah = g.isi.filter(function (s) { return s.jenis === 'langkah'; }).length, nBaca = g.isi.length - nLangkah;
+    var info = '<span class="meta">' + [nLangkah ? nLangkah + ' langkah' : '', nBaca ? nBaca + ' bacaan' : ''].filter(Boolean).join(' · ') + '</span>';
+    h += '<details class="sop-lipat"' + attrLipat('baca:' + g.fase, false) + '>' + kepalaFase(g.fase, info) + '<div class="card">' + g.isi.map(function (s) {
       var tap = admin ? ' tap" onclick="formSop(\'' + s.id + '\')' : '', mati = s.aktif === 'Tidak' ? ' style="opacity:.45"' : '';
       if (s.jenis !== 'langkah') return '<div class="it sop-baca' + tap + '"' + mati + '><div class="mid"><div class="t">' + esc(s.judul) + (s.aktif === 'Tidak' ? ' <span class="pill">Nonaktif</span>' : '') + '</div>' + teksSop(s) + '</div></div>';
       no++;
       return '<div class="it' + tap + '"' + mati + '><div class="sop-no">' + no + '</div><div class="mid"><div class="t">' + esc(s.judul) + '</div>' +
         '<div style="display:flex;gap:4px;flex-wrap:wrap;margin:4px 0">' + pillPeran(s.peran) + (s.wajib === 'Ya' ? '<span class="pill p-warn">Wajib</span>' : '') +
         (s.berlaku ? '<span class="pill">' + esc(s.berlaku) + '</span>' : '') + (s.aktif === 'Tidak' ? '<span class="pill">Nonaktif</span>' : '') + '</div>' + (s.isi ? teksSop(s) : '') + '</div></div>';
-    }).join('') + '</div>');
+    }).join('') + '</div></details>';
   });
   return h;
 }
@@ -75,19 +96,23 @@ function bukaSopEvent(idEvent) { SOPE = {id: idEvent, saya: false}; renderSopEve
 function renderSopEvent() {
   var e = cari(D.event, 'id_event', SOPE.id); if (!e) return;
   var boleh = bolehIsi(SOPE.id), c = centangEvent(SOPE.id), p = progresSop(e), saya = e.peranSaya || '';
-  var list = langkahEvent(e).filter(function (s) { return !SOPE.saya || !saya || s.peran === saya || !s.peran || s.peran === 'Semua'; });
+  var semua = langkahEvent(e), list = semua.filter(function (s) { return !SOPE.saya || !saya || s.peran === saya || !s.peran || s.peran === 'Semua'; });
+  // Fase yang sedang berjalan = fase pertama yang masih punya langkah belum dicentang → terbuka otomatis.
+  var aktif = (semua.filter(function (s) { return !c[s.id]; })[0] || {}).fase || '';
   var h = '<div class="grab"></div><h2>SOP · ' + esc(e.nama_event) + '</h2>' +
     '<div class="meta" style="margin-bottom:10px">' + p.selesai + ' dari ' + p.total + ' langkah' + (saya ? ' · peran Anda: <b>' + esc(saya) + '</b>' : '') +
     (boleh ? '' : ' · <b>lihat saja</b>' + (peran() === 'crew' ? ' (bisa dicentang pada hari event)' : '')) + '</div>' +
     '<div class="btns" style="margin:0 0 12px">' + (saya ? '<button class="btn sm ghost" type="button" onclick="SOPE.saya=!SOPE.saya;renderSopEvent()">' + (SOPE.saya ? 'Tampilkan semua' : 'Hanya langkah saya') + '</button>' : '') +
     '<button class="btn sm ghost" type="button" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button><button class="btn sm ghost" type="button" onclick="tutupForm();tampil(\'sop\')">Baca SOP lengkap</button></div>';
   perFase(list).forEach(function (g) {
-    h += '<div class="grp">' + esc(g.fase) + '</div><div class="card" style="margin-bottom:10px">' + g.isi.map(function (s) {
-      var x = c[s.id];
-      return '<label class="it sop-langkah' + (x ? ' selesai' : '') + '"><input type="checkbox"' + (x ? ' checked' : '') + (boleh ? '' : ' disabled') + ' onchange="centangSopUI(\'' + s.id + '\',this)">' +
-        '<div class="mid"><div class="t">' + esc(s.judul) + ' ' + pillPeran(s.peran, saya) + (s.wajib === 'Ya' ? ' <span class="pill p-warn">Wajib</span>' : '') + '</div>' +
-        (s.isi ? teksSop(s) : '') + (x ? '<div class="meta pos">✓ ' + esc(x.dicentang_oleh) + ' · ' + esc(String(x.dicentang_pada).slice(11) || x.dicentang_pada) + '</div>' : '') + '</div></label>';
-    }).join('') + '</div>';
+    var sudah = g.isi.filter(function (s) { return c[s.id]; }).length, wajib = g.isi.filter(function (s) { return s.wajib === 'Ya' && !c[s.id]; }).length;
+    var info = '<span class="pill' + (sudah === g.isi.length ? ' p-ok' : '') + '">' + sudah + '/' + g.isi.length + '</span>' + (wajib ? '<span class="pill p-warn">' + wajib + ' wajib</span>' : '');
+    h += '<details class="sop-lipat"' + attrLipat('ev:' + e.id_event + ':' + g.fase, g.fase === aktif) + '>' + kepalaFase(g.fase, info) + '<div class="card">' + g.isi.map(function (s) {
+      var x = c[s.id], idc = 'cb_' + s.id;
+      return '<div class="it sop-langkah' + (x ? ' selesai' : '') + '"><input type="checkbox" id="' + idc + '"' + (x ? ' checked' : '') + (boleh ? '' : ' disabled') + ' onchange="centangSopUI(\'' + s.id + '\',this)">' +
+        '<div class="mid"><label class="t" for="' + idc + '">' + esc(s.judul) + ' ' + pillPeran(s.peran, saya) + (s.wajib === 'Ya' ? ' <span class="pill p-warn">Wajib</span>' : '') + '</label>' +
+        rincianSop(s) + (x ? '<div class="meta pos">✓ ' + esc(x.dicentang_oleh) + ' · ' + esc(String(x.dicentang_pada).slice(11) || x.dicentang_pada) + '</div>' : '') + '</div></div>';
+    }).join('') + '</div></details>';
   });
   h += '<div class="btns"><button class="btn ghost" type="button" style="flex:1" onclick="tutupForm()">Tutup</button></div>';
   var panel = document.getElementById('panel'), top = panel.scrollTop;

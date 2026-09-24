@@ -1388,6 +1388,75 @@
     opacity: .7
   }
 
+  /* dropdown per fase & rincian langkah */
+  .sop-lipat {
+    margin-bottom: 10px
+  }
+
+  .sop-lipat > .card {
+    margin-top: 6px
+  }
+
+  .sop-fase {
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: var(--card);
+    cursor: pointer;
+    font-weight: 700;
+    user-select: none
+  }
+
+  .sop-fase::-webkit-details-marker {
+    display: none
+  }
+
+  .sop-fase .judul {
+    flex: 1;
+    min-width: 0
+  }
+
+  .sop-fase .chev {
+    color: var(--muted);
+    font-size: 20px;
+    line-height: 1;
+    transition: transform .15s
+  }
+
+  .sop-lipat[open] > .sop-fase .chev {
+    transform: rotate(90deg)
+  }
+
+  .sop-rinci summary {
+    list-style: none;
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer
+  }
+
+  .sop-rinci summary::-webkit-details-marker {
+    display: none
+  }
+
+  .sop-rinci summary::after {
+    content: ' ▾'
+  }
+
+  .sop-rinci[open] summary::after {
+    content: ' ▴'
+  }
+
+  .sop-langkah .t {
+    display: block;
+    cursor: pointer
+  }
+
   /* ---- Foto bukti laporan ---- */
   .foto-grid {
     display: grid;
