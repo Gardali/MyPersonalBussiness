@@ -7,6 +7,7 @@ function dealKeEvent_(pipelineId) {
   var p = readTab_('PIPELINE').filter(function (r) { return r.id === pipelineId; })[0];
   if (!p) throw new Error('Prospek ' + pipelineId + ' tidak ditemukan.');
   if (p.id_event) return p.id_event;
+  siapkanKs_();
   var idEvent = saveRecord_('EVENT', {
     id_pipeline: p.id,
     nama_event: p.referensi || p.nama_klien,
@@ -18,8 +19,14 @@ function dealKeEvent_(pipelineId) {
     parameter_skema: p.parameter_skema,
     nilai_kontrak: p.harga_deal,
     status: 'Terkonfirmasi',
-    catatan: 'Dari pipeline ' + p.id + ' (' + p.nama_klien + ')'
+    catatan: 'Dari pipeline ' + p.id + ' (' + p.nama_klien + ')',
+    // kerja sama panitia & kolom umumnya ikut disalin (lihat KerjaSama.gs)
+    organisasi: p.organisasi, narahubung: p.nama_klien, kontak_narahubung: p.kontak,
+    jam_buka: p.jam_buka, jam_tutup: p.jam_tutup, lokasi: p.lokasi, estimasi_sesi: p.estimasi_sesi
   });
+  var ks = { id_event: idEvent };
+  kolomKs_().forEach(function (k) { if (p[k] !== undefined) ks[k] = p[k]; });
+  saveRecord_('EVENT', ks);
   saveRecord_('PIPELINE', { id: p.id, status: 'Deal', id_event: idEvent });
   cobaSinkron_(idEvent);
   return idEvent;

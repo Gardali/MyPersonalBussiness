@@ -69,7 +69,7 @@ function dataCrew_(u) {
         id_event: e.id_event, nama_event: e.nama_event, tanggal: String(e.tanggal), jam_buka: e.jam_buka || '', jam_tutup: e.jam_tutup || '',
         lokasi: e.lokasi || '', kota: e.kota || '', jenis_acara: e.jenis_acara || '', status: e.status || '',
         penanggung_jawab: e.penanggung_jawab || '', tim: e.tim || '',
-        klien: p ? String(p.nama_klien || '') : '', kontak: p ? String(p.kontak || '') : '',
+        klien: String((p && p.nama_klien) || e.narahubung || ''), kontak: String((p && p.kontak) || e.kontak_narahubung || ''),
         bisaIsi: bisaIsiTanggal_(e.tanggal) && !disetujui[e.id_event],
         rekan: tugas.filter(function (t) { return t.id_event === e.id_event; }).map(function (t) {
           return { nama: nama[t.id_crew] || t.id_crew, role: peranTugas_(t) || peranCrew[t.id_crew] || '', peran: peranTugas_(t), saya: String(t.id_crew) === idc };

@@ -50,7 +50,7 @@ var KAS_KOLOM_BARU = ['sumber'];
 var CREW_KOLOM_BARU = ['email'];
 var TUGAS_KOLOM_BARU = ['peran']; // FC / Operator Depan / Operator Cetak (lihat Sop.gs)
 // Pilihan dropdown baru yang ditambahkan otomatis ke tab PILIHAN bila belum ada.
-var PILIHAN_BARU = { 'Kategori Kas': ['Admin QRIS', 'Admin Pencairan QRIS'] };
+var PILIHAN_BARU = { 'Kategori Kas': ['Admin QRIS', 'Admin Pencairan QRIS', 'Bagi Hasil Panitia', 'Pembayaran Panitia'] };
 
 /** Menambahkan nilai dropdown baru ke kolom PILIHAN yang sudah ada, di bawah nilai lama (tidak menyentuh nilai lama). */
 function tambahPilihan_() {
@@ -79,7 +79,7 @@ function tambahKolom_(namaTab, kolomBaru) {
 var TEXT_COLS = ['id', 'id_event', 'id_pipeline', 'id_alat', 'id_crew', 'id_kas', 'id_kalender', 'kontak', 'no_nota', 'no_rekening', 'foto',
   'parameter_skema', 'jam_buka', 'jam_tutup', 'jam_buka_aktual', 'jam_tutup_aktual', 'jam_ramai',
   'foto_counter_awal', 'foto_counter_akhir', 'foto_tunai', 'foto_qris', 'dikirim_pada', 'disetujui_pada', 'jam_setup_mulai', 'jam_setup_selesai',
-  'id_langkah', 'urutan', 'dicentang_pada'];
+  'id_langkah', 'urutan', 'dicentang_pada', 'kontak_narahubung', 'ks_a_tingkat', 'ks_status_pada'];
 
 // Ikon tab browser (favicon). Apps Script hanya menerima URL publik, jadi diambil dari aset/favicon.png di repo GitHub.
 var FAVICON_URL = 'https://raw.githubusercontent.com/Gardali/MyPersonalBussiness/claude/sleepy-pascal-b7h62e/aset/favicon.png';
@@ -173,6 +173,7 @@ function siapkan_() {
   }
   tambahKolom_('TUGAS_CREW', TUGAS_KOLOM_BARU);
   siapkanSop_();
+  siapkanKs_();
 
   if (ss.getSheetByName('MUTASI_STOK')) return;
   var sh = ss.insertSheet('MUTASI_STOK');
@@ -217,6 +218,7 @@ function getData_() {
     tugas: readTab_('TUGAS_CREW'),
     sop: readTab_('SOP'),
     sopEvent: readTab_('SOP_EVENT'),
+    riwayatKs: readTab_('RIWAYAT_KS'),
     kalender: kalenderAktif_(),
     hariIni: Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
   };

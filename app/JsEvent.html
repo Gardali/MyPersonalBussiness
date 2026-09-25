@@ -7,7 +7,7 @@ function vEvent() {
   function baris(e) {
     var r = hasilEvent(e), perlu = e.status === 'Terkonfirmasi' && e.tanggal < now, masuk = r.lap && r.lap.status_laporan === 'Menunggu dicek';
     return item({lead: dt(e.tanggal), t: esc(e.nama_event), s: esc(e.model_pendapatan || 'Model belum diisi'),
-      end: waBtn(kontakEvent(e)) + (masuk ? '<span class="pill p-acc">Cek laporan</span>' : e.status === 'Selesai' ? '<span class="' + cls(r.labaKotor) + '">' + rpSingkat(r.labaKotor) + '</span><div class="s">laba kotor</div>' : perlu ? '<span class="pill p-warn">Perlu laporan</span>' : statusPill(e.status)),
+      end: waBtn(kontakEvent(e)) + (masuk ? '<span class="pill p-acc">Cek laporan</span>' : e.status === 'Selesai' ? '<span class="' + cls(r.labaKotor) + '">' + rp(r.labaKotor) + '</span><div class="s">laba kotor</div>' : perlu ? '<span class="pill p-warn">Perlu laporan</span>' : statusPill(e.status)),
       on: "bukaEvent('" + e.id_event + "')"});
   }
   var h = '<div class="bar"><div class="pagetitle" style="margin:0">Event</div><button class="ubah btn sm" onclick="formEvent()">+ Event</button></div>';
@@ -103,6 +103,7 @@ function vDetailEvent() {
       '<div class="meta">' + r.bepLapangan + ' lembar menutup biaya lapangan · ' + r.bepTotal + ' lembar termasuk alokasi</div></div>';
   }
   h += '<div class="cols"><div class="col">' + sec('Keuangan', hk);
+  if (skemaKs(e)) h += sec('Kerja sama panitia', htmlKsEvent(e));
 
   if (lap) {
     var st = lap.status_laporan;
@@ -278,7 +279,14 @@ function dataLaporanEvent(e) {
   kv(s, 'Kode', e.id_event); kv(s, 'Tanggal', e.tanggal, 'tgl');
   kv(s, 'Jam rencana', e.jam_buka ? e.jam_buka + '–' + (e.jam_tutup || '?') : '');
   kv(s, 'Lokasi', [e.lokasi, e.kota].filter(Boolean).join(', ')); kv(s, 'Jenis acara', e.jenis_acara);
-  kv(s, 'Model pendapatan', e.model_pendapatan); kv(s, 'Skema kerja sama', e.skema ? e.skema + (e.parameter_skema ? ' (' + e.parameter_skema + ')' : '') : '');
+  kv(s, 'Model pendapatan', e.model_pendapatan); kv(s, 'Skema kerja sama', e.skema || '');
+  if (skemaKs(e)) {
+    var kw = kewajibanKs(e);
+    kv(s, 'Panitia', [e.organisasi, e.narahubung, e.kontak_narahubung].filter(Boolean).join(' · '));
+    kv(s, 'Status kesepakatan', (e.ks_status || 'Draft') + (e.ks_status_oleh ? ' (' + e.ks_status_oleh + ', ' + e.ks_status_pada + ')' : ''));
+    kv(s, 'Ketentuan kerja sama', teksKs(e));
+    if (kw) { kv(s, kw.arah === 'tagih' ? 'Tagihan ke panitia (di muka)' : 'Bagi hasil ke panitia', kw.nominal, 'rp'); kv(s, 'Sudah ' + (kw.arah === 'tagih' ? 'diterima' : 'dibayar'), kw.dibayar, 'rp'); kv(s, 'Jatuh tempo', kw.jatuh, 'tgl'); }
+  }
   kv(s, 'Status', e.status); kv(s, 'Penanggung jawab', e.penanggung_jawab);
   if (p) { kv(s, 'Klien', p.nama_klien + (p.kontak ? ' · ' + p.kontak : '')); kv(s, 'Paket', p.paket); }
   kv(s, 'Catatan', e.catatan);
@@ -344,11 +352,11 @@ function dataLaporanEvent(e) {
     baris(s, ['PENJUALAN'], 'bagian');
     baris(s, ['', 'Jumlah', 'Omzet'], 'head');
     baris(s, ['Jumlah transaksi', n('jumlah_transaksi')], '', ['', 'n']);
-    baris(s, ['Sesi terjual (foto 4R)', r.sesiTerjual, r.sesiTerjual * P('HARGA_4R')], '', ['', 'n', 'rp']);
+    baris(s, ['Sesi terjual (foto 4R)', r.sesiTerjual, r.sesiTerjual * hargaEv(e, 'HARGA_4R')], '', ['', 'n', 'rp']);
     if (r.sesiVoucher) baris(s, ['Sesi cetak ulang pakai voucher (gratis)', r.sesiVoucher, 0], '', ['', 'n', 'rp']);
-    baris(s, ['Lembar / strip tambahan', r.lembarTambahan, r.lembarTambahan * P('HARGA_STRIP')], '', ['', 'n', 'rp']);
-    baris(s, ['Graduation Book', n('grad_book_terjual'), n('grad_book_terjual') * P('HARGA_BUKU')], '', ['', 'n', 'rp']);
-    if (n('grup_potongan')) baris(s, ['Potongan grup', n('grup_potongan'), -n('grup_potongan') * P('POTONGAN_GRUP')], '', ['', 'n', 'rp']);
+    baris(s, ['Lembar / strip tambahan', r.lembarTambahan, r.lembarTambahan * hargaEv(e, 'HARGA_STRIP')], '', ['', 'n', 'rp']);
+    baris(s, ['Graduation Book', n('grad_book_terjual'), n('grad_book_terjual') * hargaEv(e, 'HARGA_BUKU')], '', ['', 'n', 'rp']);
+    if (n('grup_potongan')) baris(s, ['Potongan grup', n('grup_potongan'), -n('grup_potongan') * hargaEv(e, 'POTONGAN_GRUP')], '', ['', 'n', 'rp']);
     baris(s, ['Omzet menurut laporan', '', r.omzet], 'total', ['', '', 'rp']);
     kv(s, 'Softfile terkirim', lap.softfile_terkirim, 'n');
     kosong(s);
@@ -441,11 +449,11 @@ function buatInvoiceUI(id, btn) {
 var F_EVENT = [
   {n: 'nama_event', l: 'Nama event', wajib: 1}, {n: 'tanggal', l: 'Tanggal', t: 'date', wajib: 1},
   {n: 'status', l: 'Status', t: 'sel', o: pil('Status Event'), def: 'Terkonfirmasi'},
-  {n: 'jam_buka', l: 'Jam buka', t: 'time'}, {n: 'jam_tutup', l: 'Jam tutup', t: 'time'},
-  {n: 'lokasi', l: 'Lokasi'}, {n: 'kota', l: 'Kota'}, {n: 'jenis_acara', l: 'Jenis acara', t: 'sel', o: pil('Jenis Acara')},
-  {n: 'model_pendapatan', l: 'Model pendapatan', t: 'sel', o: pil('Model Pendapatan')},
-  {n: 'skema', l: 'Skema kerja sama', t: 'sel', o: pil('Skema'), show: function (r) { return r.model_pendapatan === 'Kerja Sama Panitia'; }},
-  {n: 'parameter_skema', l: 'Parameter skema', show: function (r) { return r.model_pendapatan === 'Kerja Sama Panitia'; }},
+  {n: 'jam_buka', l: 'Jam buka', t: 'time', wajib: isKs}, {n: 'jam_tutup', l: 'Jam tutup', t: 'time', wajib: isKs},
+  {n: 'lokasi', l: 'Lokasi', wajib: isKs}, {n: 'kota', l: 'Kota'}, {n: 'jenis_acara', l: 'Jenis acara', t: 'sel', o: pil('Jenis Acara')}].concat(kolomModelSkema(), [
+  {n: 'organisasi', l: 'Nama organisasi / panitia', wajib: isKs, show: isKs},
+  {n: 'narahubung', l: 'Narahubung panitia', wajib: isKs, show: isKs}, {n: 'kontak_narahubung', l: 'WhatsApp narahubung', t: 'tel', wajib: isKs, show: isKs},
+  {n: 'estimasi_sesi', l: 'Perkiraan jumlah sesi', t: 'num', wajib: isKs, show: isKs}], F_KS, [
   {n: 'nilai_kontrak', l: 'Nilai kontrak (Rp)', t: 'num', show: function (r) { return r.model_pendapatan === 'Kontrak Klien'; }},
   {n: 'dp_nominal', l: 'DP (Rp) — kosongkan bila dibayar sekali lunas', t: 'num', show: function (r) { return r.model_pendapatan === 'Kontrak Klien'; }},
   {n: 'jatuh_tempo_dp', l: 'Jatuh tempo DP', t: 'date', show: function (r) { return r.model_pendapatan === 'Kontrak Klien' && num(r.dp_nominal) > 0; }},
@@ -457,7 +465,7 @@ var F_EVENT = [
   {n: 'rab_jepreto', l: 'Alokasi langganan Jepreto (Rp) — saran dari PENGATURAN ÷ target event/bulan', t: 'num', def: function () { return Math.round(P('JEPRETO_BULAN') / targetEventBulan()); }},
   {n: 'rab_fee_crew', l: 'Fee crew (Rp)', t: 'num'}, {n: 'rab_transport', l: 'Transport (Rp)', t: 'num'}, {n: 'rab_konsumsi', l: 'Konsumsi (Rp)', t: 'num'},
   {n: 'catatan', l: 'Catatan', t: 'area'}
-];
+]);
 var F_LAPORAN = [
   {g: 'Waktu'}, {n: 'jam_setup_mulai', l: 'Jam mulai setup', t: 'time'}, {n: 'jam_setup_selesai', l: 'Jam selesai setup', t: 'time'},
   {n: 'jam_buka_aktual', l: 'Jam buka aktual', t: 'time'}, {n: 'jam_tutup_aktual', l: 'Jam tutup aktual', t: 'time'},
@@ -493,7 +501,8 @@ function formEvent(id) {
     var crewBt = r.id_event && r.status !== 'Batal' ? D.tugas.filter(function (t) { return t.id_event === r.id_event && bentrokCrew(t.id_crew, r).length; }) : [];
     if (crewBt.length && !confirm('Crew bentrok dengan jadwal baru ini: ' + crewBt.map(function (t) { return namaCrew(t.id_crew) + ' (di ' + bentrokCrew(t.id_crew, r)[0].nama_event + ')'; }).join(', ') + '. Tetap simpan?')) return Promise.reject(new Error('dibatalkan'));
     return panggil('simpanEvent', r).then(function (hasil) { DETAIL = hasil.id; if (hasil.peringatan) alert(hasil.peringatan); });
-  }, extra);
+  }, extra, function (r) { var el = document.getElementById('preview'); if (el) el.innerHTML = htmlKsPratinjau(r, FORM && FORM.ksAwal) + (id ? htmlRiwayatKs(e.id_pipeline, id) : ''); });
+  FORM.ksAwal = e.ks_status || ''; FORM.terkunci = kunciKs(FORM.ksAwal); aturTampil();
 }
 function formLaporan(idEvent) {
   var ada = cari(D.laporan, 'id_event', idEvent), l = Object.assign({}, ada || {id_event: idEvent});

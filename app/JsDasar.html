@@ -41,7 +41,6 @@ aturMenu();
 var BLN = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 var HARI = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
 function rp(n) { n = Math.round(Number(n) || 0); return (n < 0 ? '−Rp' : 'Rp') + Math.abs(n).toLocaleString('id-ID'); }
-function rpSingkat(n) { n = Number(n) || 0; var a = Math.abs(n), s = n < 0 ? '−' : ''; if (a >= 1e6) return s + 'Rp' + (a / 1e6).toLocaleString('id-ID', {maximumFractionDigits: 1}) + ' jt'; if (a >= 1e3) return s + 'Rp' + Math.round(a / 1e3) + ' rb'; return rp(n); }
 function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function tgl(s) { if (!s) return '—'; var p = String(s).split('-'); if (p.length !== 3) return esc(s); return Number(p[2]) + ' ' + BLN[Number(p[1]) - 1] + ' ' + p[0]; }
@@ -135,7 +134,7 @@ function hasilEvent(ev) {
   h.alokasi = h.realisasi.penyusutan + h.realisasi.jepreto;
   h.labaKotor = h.masuk - h.keluar - h.bahan;
   h.labaBersih = h.labaKotor - h.alokasi;
-  h.untungLembar = P('HARGA_4R') - h.bl;
+  h.untungLembar = hargaEv(ev, 'HARGA_4R') - h.bl;
   h.bepLapangan = h.untungLembar > 0 ? Math.ceil((h.keluar) / h.untungLembar) : null;
   h.bepTotal = h.untungLembar > 0 ? Math.ceil((h.keluar + h.alokasi) / h.untungLembar) : null;
   if (lap) {
@@ -145,8 +144,9 @@ function hasilEvent(ev) {
     h.sesiTerjual = Math.max(0, (adaSplit ? num(lap.sesi_terjual) : num(lap.foto_4r_terjual)) - h.sesiVoucher);
     // Lembar tambahan = strip tambahan (produk yang sama, harga HARGA_STRIP). strip_terjual hanya ada di laporan lama.
     h.lembarTambahan = num(lap.lembar_tambahan) + Math.ceil(num(lap.strip_terjual) * (P('LEMBAR_PER_STRIP') || 1));
-    h.omzet = h.sesiTerjual * P('HARGA_4R') + h.lembarTambahan * P('HARGA_STRIP') + num(lap.grad_book_terjual) * P('HARGA_BUKU') -
-      num(lap.grup_potongan) * P('POTONGAN_GRUP');
+    // Harga resmi event (isian kerja sama) bila ada, selain itu PENGATURAN — lihat hargaEv di JsKerjaSama.
+    h.omzet = h.sesiTerjual * hargaEv(ev, 'HARGA_4R') + h.lembarTambahan * hargaEv(ev, 'HARGA_STRIP') + num(lap.grad_book_terjual) * hargaEv(ev, 'HARGA_BUKU') -
+      num(lap.grup_potongan) * hargaEv(ev, 'POTONGAN_GRUP');
     h.diterima = num(lap.tunai_dihitung) - num(lap.modal_kembalian) + num(lap.qris_transfer);
     h.selisihKas = h.diterima - h.omzet;
     h.lembarTerjual = h.sesiTerjual + h.lembarTambahan + num(lap.grad_book_terjual);
@@ -310,28 +310,21 @@ function peringatanStok() {
 
 // ---- kalkulator skema
 var SKEMA_SEMUA = ['Kontrak Klien', 'Open Booth Mandiri', 'A. Berjenjang', 'B. Persentase Omzet', 'C. Di Atas Impas', 'D. Fee Tetap', 'E. Voucher Prabayar', 'F. Bundling Peserta'];
-function tarifJenjang(sesi) {
-  var r = 0;
-  String(D.pengaturan.SKEMA_A_JENJANG || '').split(';').forEach(function (p) { var x = p.split(':'); if (x.length === 2 && sesi >= num(x[0])) r = num(x[1]); });
-  return r;
-}
-/** o: {skema, sesi, param, harga, crew}. skema = salah satu SKEMA_SEMUA. */
+/**
+ * o: {skema, sesi, harga, crew, ks}. skema = salah satu SKEMA_SEMUA. ks = isian kerja sama prospek/event (kolom ks_*);
+ * kolom yang kosong memakai nilai bawaan formulir kerja sama (bawaanKs di JsKerjaSama) — tidak lagi dari PENGATURAN.
+ */
 function hitungSkema(o) {
-  var sesi = Math.max(0, num(o.sesi)), param = o.param === '' || o.param == null ? null : num(o.param), jual = P('HARGA_4R');
+  var sesi = Math.max(0, num(o.sesi)), ks = o.ks || {}, jual = hargaEv(ks, 'HARGA_4R'), huruf = hurufSkema(o.skema);
   var r = {skema: o.skema, sesi: sesi, pendapatan: 0, panitia: 0, ket: ''};
-  switch (o.skema) {
-    case 'Kontrak Klien': r.pendapatan = num(o.harga); r.ket = 'Harga kontrak'; break;
-    case 'Open Booth Mandiri': r.pendapatan = sesi * jual; r.panitia = param || 0; r.ket = 'Sewa lapak ' + rp(r.panitia); break;
-    case 'A. Berjenjang': r.pendapatan = sesi * jual; r.panitia = sesi * tarifJenjang(sesi); r.ket = rp(tarifJenjang(sesi)) + '/sesi ke panitia'; break;
-    case 'B. Persentase Omzet': var pc = param === null ? P('SKEMA_B_PERSEN') : (param > 1 ? param / 100 : param);
-      r.pendapatan = sesi * jual; r.panitia = r.pendapatan * pc; r.ket = Math.round(pc * 100) + '% omzet ke panitia'; break;
-    case 'C. Di Atas Impas': r.pendapatan = sesi * jual; r.panitia = Math.max(0, sesi - P('SKEMA_C_BATAS')) * P('SKEMA_C_BAGIAN');
-      r.ket = rp(P('SKEMA_C_BAGIAN')) + '/sesi di atas ' + P('SKEMA_C_BATAS') + ' sesi'; break;
-    case 'D. Fee Tetap': r.pendapatan = sesi * jual; r.panitia = param === null ? P('SKEMA_D_FEE') : param; r.ket = 'Fee tetap ' + rp(r.panitia); break;
-    case 'E. Voucher Prabayar': var v = Math.max(param === null ? 0 : param, P('SKEMA_E_MIN'));
-      r.pendapatan = v * P('SKEMA_E_HARGA'); r.ket = v + ' voucher × ' + rp(P('SKEMA_E_HARGA')); break;
-    case 'F. Bundling Peserta': var q = Math.max(param === null ? 0 : param, P('SKEMA_F_MIN'));
-      r.pendapatan = q * P('SKEMA_F_HARGA'); r.ket = q + ' peserta × ' + rp(P('SKEMA_F_HARGA')); break;
+  if (o.skema === 'Kontrak Klien') { r.pendapatan = num(o.harga); r.ket = 'Harga kontrak'; }
+  else if (o.skema === 'Open Booth Mandiri') { r.pendapatan = sesi * jual; r.ket = 'Tanpa bagi hasil'; }
+  else if (huruf) {
+    var rec = Object.assign({}, bawaanKs(huruf), {model_pendapatan: 'Kerja Sama Panitia', skema: o.skema});
+    Object.keys(ks).forEach(function (k) { if (k.indexOf('ks_') === 0 && ks[k] !== '' && ks[k] != null) rec[k] = ks[k]; });
+    var x = hitungKs(rec, sesi);
+    if (huruf === 'E' || huruf === 'F') { r.pendapatan = x.dimuka; r.ket = x.ringkas; }
+    else { r.pendapatan = sesi * jual; r.panitia = x.bayar; r.ket = x.ringkas + ' ke panitia'; }
   }
   var crew = o.crew === '' || o.crew == null ? Pd('CREW_DEFAULT', 2) : num(o.crew);
   r.bahan = sesi * biayaLembar();
@@ -356,7 +349,7 @@ function skemaDari(rec) {
 function estimasiPipeline(p) {
   var sk = skemaDari(p); if (!sk) return null;
   if (sk === 'Kontrak Klien' ? !num(p.harga_deal || p.harga_penawaran) : !num(p.estimasi_sesi)) return null;
-  return hitungSkema({skema: sk, sesi: p.estimasi_sesi, param: p.parameter_skema, harga: p.harga_deal || p.harga_penawaran});
+  return hitungSkema({skema: sk, sesi: p.estimasi_sesi, harga: p.harga_deal || p.harga_penawaran, ks: p});
 }
 function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', TIPIS: 'p-warn', RUGI: 'p-bad'}[st] + '">' + st + '</span>'; }
 
@@ -378,7 +371,7 @@ function aktif(p) { return ['Deal', 'Kalah', 'Batal'].indexOf(p.status) < 0; }
 function salam() { var h = new Date().getHours(); return h < 11 ? 'Selamat pagi' : h < 15 ? 'Selamat siang' : h < 18 ? 'Selamat sore' : 'Selamat malam'; }
 
 function namaEvent(id) { var e = cari(D.event, 'id_event', id); return e ? e.nama_event + ' (' + tgl(e.tanggal) + ')' : id; }
-function kontakEvent(e) { var p = e.id_pipeline ? cari(D.pipeline, 'id', e.id_pipeline) : null; return p ? p.kontak : ''; }
+function kontakEvent(e) { var p = e.id_pipeline ? cari(D.pipeline, 'id', e.id_pipeline) : null; return (p && p.kontak) || e.kontak_narahubung || ''; }
 function pemilikAlat(a) { var i = a.id_alat ? cari(D.inventaris, 'id_alat', a.id_alat) : null; return i ? i.pemilik : ''; }
 function alatBelumKembali() {
   var now = D.hariIni;

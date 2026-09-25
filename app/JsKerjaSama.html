@@ -1,0 +1,355 @@
+<script>
+// Posetive — kerja sama panitia (skema A–F): kolom khusus per skema, tabel tingkat, hitungan & teks perjanjian,
+// serta kewajiban bayar/tagih setelah acara. Kolom tersimpan di PIPELINE & EVENT dengan awalan ks_ (disalin ke event
+// saat deal). Server: KerjaSama.gs (kunci setelah Disetujui, riwayat perubahan). Dimuat sebelum JsPipeline & JsEvent.
+var KS_STATUS = ['Draft', 'Diajukan', 'Disetujui', 'Dibatalkan'];
+var KS_TINGKAT_BAWAAN = '15-44:3000;45-69:4500;70-99:5500;100-:7000';
+var KS_CATATAN_SESI = '1 sesi = 1 lembar cetak yang dibayar pengunjung. Cetak gagal, cetak ulang, dan foto bonus panitia tidak dihitung.';
+var KAT_BAGI_HASIL = 'Bagi Hasil Panitia', KAT_BAYAR_PANITIA = 'Pembayaran Panitia';
+var KS_NAMA = {A: 'Berjenjang', B: 'Persentase Omzet', C: 'Di Atas Titik Impas', D: 'Fee Tetap', E: 'Voucher Prabayar', F: 'Bundling Tiket Peserta'};
+
+function hurufSkema(sk) { var c = String(sk || '').charAt(0); return c && 'ABCDEF'.indexOf(c) >= 0 ? c : ''; }
+function isKs(r) { return r.model_pendapatan === 'Kerja Sama Panitia'; }
+function skemaKs(r) { return isKs(r) ? hurufSkema(r.skema) : ''; }
+function adaSkema(r) { return !!skemaKs(r); }
+function skemaIni(h) { return function (r) { return skemaKs(r) === h; }; }
+function opsi(list) { return function () { return list.map(function (v) { return [v, v]; }); }; }
+/** Harga event: isian kerja sama bila ada, selain itu PENGATURAN. k = HARGA_4R | HARGA_BUKU | HARGA_STRIP | POTONGAN_GRUP */
+var KS_HARGA = {HARGA_4R: 'ks_harga_4r', HARGA_BUKU: 'ks_harga_buku', HARGA_STRIP: 'ks_harga_strip', POTONGAN_GRUP: 'ks_potongan_grup'};
+function hargaEv(e, k) { var c = KS_HARGA[k]; return e && c && e[c] !== '' && e[c] != null ? num(e[c]) : P(k); }
+function hariTenggat(t) { var m = String(t || '').match(/H([+-])(\d+)/); return m ? (m[1] === '+' ? 1 : -1) * Number(m[2]) : 0; }
+function persenKs(v) { return num(v) / 100; }
+
+// ---------------------------------------------------------------- tingkat (skema A)
+/** "15-44:3000;100-:7000" ↔ [{min:15, max:44, rate:3000}, {min:100, max:null, rate:7000}] */
+function parseTingkat(s) {
+  return String(s || '').split(';').map(function (p) {
+    var m = p.trim().match(/^(\d*)\s*-\s*(\d*)\s*:\s*(\d*)$/);
+    return m ? {min: m[1] === '' ? null : Number(m[1]), max: m[2] === '' ? null : Number(m[2]), rate: m[3] === '' ? null : Number(m[3])} : null;
+  }).filter(Boolean);
+}
+function strTingkat(rows) { return rows.map(function (t) { return (t.min == null ? '' : t.min) + '-' + (t.max == null ? '' : t.max) + ':' + (t.rate == null ? '' : t.rate); }).join(';'); }
+function teksTingkat(t) { return t.min + (t.max == null ? ' sesi ke atas' : '–' + t.max + ' sesi'); }
+/** Aturan tabel tingkat. Mengembalikan daftar pesan galat ([] bila benar). */
+function cekTingkat(rows, harga4r) {
+  var e = [];
+  if (!rows.length) return ['Tabel tingkat minimal 1 baris.'];
+  rows.forEach(function (t, i) {
+    var no = 'Tingkat ' + (i + 1), akhir = i === rows.length - 1;
+    if (t.min == null || t.min < 1) e.push(no + ': sesi minimal wajib diisi.');
+    if (t.rate == null || t.rate <= 0) e.push(no + ': bagi hasil per sesi wajib diisi.');
+    if (t.max == null && !akhir) e.push(no + ': sesi maksimal hanya boleh kosong di tingkat tertinggi (terakhir).');
+    if (t.max != null && t.min != null && t.max < t.min) e.push(no + ': sesi maksimal lebih kecil dari sesi minimal.');
+    if (t.rate != null && harga4r && t.rate > harga4r) e.push(no + ': bagi hasil ' + rp(t.rate) + ' melebihi harga foto 4R ' + rp(harga4r) + '.');
+    if (i === 0) return;
+    var p = rows[i - 1];
+    if (p.max != null && t.min != null) {
+      if (t.min <= p.max) e.push(no + ' tumpang tindih dengan tingkat ' + i + ' (mulai ' + t.min + ', padahal tingkat ' + i + ' sampai ' + p.max + ').');
+      else if (t.min > p.max + 1) e.push('Ada celah antara tingkat ' + i + ' dan ' + (i + 1) + ': sesi ' + (p.max + 1) + (t.min - 1 > p.max + 1 ? '–' + (t.min - 1) : '') + ' tidak masuk tingkat mana pun.');
+    }
+    if (p.rate != null && t.rate != null && t.rate <= p.rate) e.push(no + ': bagi hasil harus naik dari tingkat sebelumnya (' + rp(p.rate) + ' → ' + rp(t.rate) + ').');
+  });
+  return e;
+}
+/** Tarif per sesi untuk jumlah sesi ini (0 bila di bawah tingkat pertama). */
+function tarifTingkat(rows, sesi) {
+  var t = rows.filter(function (x) { return x.min != null && sesi >= x.min && (x.max == null || sesi <= x.max); })[0];
+  return t ? {rate: num(t.rate), tingkat: t} : {rate: 0, tingkat: null};
+}
+function htmlTingkat(n, v) {
+  var rows = parseTingkat(v || KS_TINGKAT_BAWAAN);
+  return '<div class="tingkat"><div class="tk-kepala"><span>Sesi min.</span><span></span><span>Sesi maks.</span><span>Bagi hasil / sesi</span><span></span></div>' +
+    '<div id="tk_' + n + '">' + rows.map(barisTingkat).join('') + '</div>' +
+    '<div class="btns" style="margin:6px 0 0"><button class="btn sm ghost" type="button" onclick="tambahTingkat(\'' + n + '\')">+ Tingkat</button></div>' +
+    '<div class="meta" style="margin-top:6px">Nominal berlaku untuk seluruh sesi sesuai tingkat yang dicapai. Kosongkan sesi maksimal di tingkat tertinggi (= ke atas).</div></div>';
+}
+function barisTingkat(t) {
+  return '<div class="tk-baris"><input data-tk="min" type="number" inputmode="numeric" value="' + (t.min == null ? '' : t.min) + '"><span>–</span>' +
+    '<input data-tk="max" type="number" inputmode="numeric" placeholder="ke atas" value="' + (t.max == null ? '' : t.max) + '">' +
+    '<input data-tk="rate" data-rp type="text" inputmode="numeric" value="' + teksRp(t.rate) + '">' +
+    '<button class="btn sm ghost" type="button" title="Buang baris" onclick="hapusTingkat(this)">✕</button></div>';
+}
+function bacaBarisTingkat(n) {
+  var box = document.getElementById('tk_' + n); if (!box || !box.querySelectorAll) return null;
+  return Array.prototype.map.call(box.querySelectorAll('.tk-baris'), function (b) {
+    var ambil = function (k) { var v = String(b.querySelector('[data-tk="' + k + '"]').value).replace(/\D/g, ''); return v === '' ? null : Number(v); };
+    return {min: ambil('min'), max: ambil('max'), rate: ambil('rate')};
+  });
+}
+/** Isi tabel tingkat di form sebagai teks, atau null bila tabelnya tidak sedang tampil. */
+function bacaTingkat(n) { var rows = bacaBarisTingkat(n); return rows ? strTingkat(rows) : null; }
+function tambahTingkat(n) {
+  var rows = bacaBarisTingkat(n) || [], akhir = rows[rows.length - 1];
+  if (akhir) {
+    if (akhir.max == null) akhir.max = (akhir.min || 0) + 29;
+    rows.push({min: akhir.max + 1, max: null, rate: (akhir.rate || 0) + 1000});
+  } else rows.push({min: 15, max: null, rate: 3000});
+  document.getElementById('tk_' + n).innerHTML = rows.map(barisTingkat).join('');
+  aturTampil();
+}
+function hapusTingkat(btn) {
+  var box = btn.closest('[id^="tk_"]');
+  if (box.querySelectorAll('.tk-baris').length <= 1) { toast('Minimal 1 tingkat'); return; }
+  btn.closest('.tk-baris').remove();
+  aturTampil();
+}
+
+// ---------------------------------------------------------------- hitungan
+/**
+ * Hitungan kerja sama untuk jumlah sesi tertentu (simulasi dari perkiraan sesi).
+ * {panitia: diterima panitia, bayar: dibayar Posetive ke panitia, dimuka: diterima Posetive di muka (E/F),
+ *  ringkas: teks pendek, kalimat: cara hitung, peringatan: []}
+ */
+function hitungKs(r, sesi, omzet) {
+  var k = skemaKs(r), harga = hargaEv(r, 'HARGA_4R'), o = {panitia: 0, bayar: 0, dimuka: 0, ringkas: '', kalimat: '', peringatan: []};
+  sesi = Math.max(0, num(sesi));
+  if (k === 'A') {
+    var rows = parseTingkat(r.ks_a_tingkat || KS_TINGKAT_BAWAAN), t = tarifTingkat(rows, sesi), awal = rows[0] ? rows[0].min : 0;
+    o.panitia = sesi * t.rate;
+    o.ringkas = t.tingkat ? rp(t.rate) + '/sesi' : 'belum capai ' + awal + ' sesi';
+    o.kalimat = t.tingkat ? sesi + ' sesi masuk tingkat ' + teksTingkat(t.tingkat) + ' → ' + sesi + ' × ' + rp(t.rate) + '.' : sesi + ' sesi belum mencapai ' + awal + ' sesi, jadi belum ada bagi hasil.';
+  } else if (k === 'B') {
+    var pc = persenKs(r.ks_b_persen), dasar = omzet != null && r.ks_b_dasar !== 'Hanya foto 4R' ? omzet : sesi * harga;
+    o.panitia = dasar * pc;
+    o.ringkas = Math.round(pc * 100) + '% ' + (r.ks_b_dasar === 'Hanya foto 4R' ? 'foto 4R' : 'omzet');
+    o.kalimat = omzet != null && r.ks_b_dasar !== 'Hanya foto 4R' ? 'Omzet ' + rp(omzet) + ' × ' + Math.round(pc * 100) + '%.' :
+      '(' + sesi + ' sesi × ' + rp(harga) + ') × ' + Math.round(pc * 100) + '%' + (r.ks_b_dasar === 'Hanya foto 4R' || omzet != null ? '.' : '. Setelah acara dihitung dari seluruh omzet (termasuk strip & Graduation Book).');
+  } else if (k === 'C') {
+    var lebih = Math.max(0, sesi - num(r.ks_c_sesi_awal)), persen = r.ks_c_bentuk !== 'Rupiah per sesi', per = persen ? harga * persenKs(r.ks_c_nilai) : num(r.ks_c_nilai);
+    o.panitia = lebih * per;
+    o.ringkas = (persen ? num(r.ks_c_nilai) + '%' : rp(per) + '/sesi') + ' di atas ' + num(r.ks_c_sesi_awal) + ' sesi';
+    o.kalimat = '(' + sesi + ' − ' + num(r.ks_c_sesi_awal) + ' sesi awal = ' + lebih + ' sesi) × ' + (persen ? rp(harga) + ' × ' + num(r.ks_c_nilai) + '%' : rp(per)) + '.';
+  } else if (k === 'D') {
+    o.panitia = num(r.ks_d_fee);
+    o.ringkas = 'fee ' + rp(o.panitia);
+    o.kalimat = 'Fee tetap, tidak bergantung jumlah sesi.';
+  } else if (k === 'E' || k === 'F') {
+    var e = k === 'E', jml = num(e ? r.ks_e_jumlah : r.ks_f_jumlah), min = num(e ? r.ks_e_minimal : r.ks_f_minimal);
+    var hPos = num(e ? r.ks_e_harga : r.ks_f_harga), hJual = num(e ? r.ks_e_harga_jual : r.ks_f_harga_tiket), n = Math.max(jml, min), sat = e ? 'voucher' : 'peserta';
+    if (jml < min) o.peringatan.push('Jumlah ' + sat + ' (' + jml + ') di bawah minimal ' + min + ' — dihitung ' + min + ' ' + sat + '.');
+    o.dimuka = n * hPos;
+    o.panitia = n * (hJual - hPos);
+    o.ringkas = n + ' ' + sat + ' × ' + rp(hPos);
+    o.kalimat = n + ' ' + sat + ' × ' + rp(hPos) + ' dibayar panitia ke Posetive di muka. Keuntungan panitia ' + n + ' × (' + rp(hJual) + ' − ' + rp(hPos) + ').';
+  }
+  o.bayar = k === 'E' || k === 'F' ? 0 : o.panitia;
+  return o;
+}
+function durasiKs(r) {
+  var a = menit(r.jam_buka), b = menit(r.jam_tutup);
+  if (a === null || b === null) return '';
+  var d = b > a ? b - a : b + 1440 - a;
+  return Math.floor(d / 60) + ' jam' + (d % 60 ? ' ' + d % 60 + ' menit' : '');
+}
+
+// ---------------------------------------------------------------- teks perjanjian
+function teksKs(r) {
+  var k = skemaKs(r); if (!k) return '';
+  var harga = hargaEv(r, 'HARGA_4R'), tenggatSetelah = (r.ks_tenggat || 'H+3') + ' setelah acara', t = [];
+  var bagian = function (v) { return String(v || '').replace(/^H-/, 'H-'); };
+  t.push('Harga foto 4R untuk pengunjung ' + rp(harga) + ' per sesi' + (hargaEv(r, 'HARGA_STRIP') ? ', cetak strip tambahan ' + rp(hargaEv(r, 'HARGA_STRIP')) : '') +
+    (hargaEv(r, 'HARGA_BUKU') ? ', Graduation Book ' + rp(hargaEv(r, 'HARGA_BUKU')) : '') + (hargaEv(r, 'POTONGAN_GRUP') ? ', potongan grup ' + rp(hargaEv(r, 'POTONGAN_GRUP')) : '') + '.');
+  if (k === 'A') {
+    var rows = parseTingkat(r.ks_a_tingkat || KS_TINGKAT_BAWAAN);
+    t.push('Panitia menerima bagi hasil per sesi sebagai berikut: ' + rows.map(function (x) { return teksTingkat(x) + ' ' + rp(x.rate); }).join('; ') + '. Nominal berlaku untuk seluruh sesi sesuai tingkat yang dicapai. Bagi hasil dibayarkan paling lambat ' + tenggatSetelah + '.');
+  } else if (k === 'B') {
+    t.push('Panitia menerima bagi hasil sebesar ' + num(r.ks_b_persen) + '% dari ' + (r.ks_b_dasar === 'Hanya foto 4R' ? 'penjualan foto 4R' : 'seluruh omzet photobooth (foto 4R, strip tambahan, dan Graduation Book)') + '. Bagi hasil dibayarkan paling lambat ' + tenggatSetelah + '.');
+  } else if (k === 'C') {
+    var persen = r.ks_c_bentuk !== 'Rupiah per sesi';
+    t.push(num(r.ks_c_sesi_awal) + ' sesi pertama sepenuhnya menjadi hak Posetive. Untuk sesi ke-' + (num(r.ks_c_sesi_awal) + 1) + ' dan seterusnya, panitia menerima bagi hasil sebesar ' +
+      (persen ? num(r.ks_c_nilai) + '% dari harga foto 4R per sesi' : rp(num(r.ks_c_nilai)) + ' per sesi') + '. Bagi hasil dibayarkan paling lambat ' + tenggatSetelah + '.');
+  } else if (k === 'D') {
+    t.push('Posetive membayar fee tetap kepada panitia sebesar ' + rp(num(r.ks_d_fee)) + ', dibayarkan ' + (r.ks_d_waktu === 'Saat loading' ? 'saat loading' : 'paling lambat ' + bagian(r.ks_d_waktu || 'H-1') + ' sebelum acara') + '.');
+  } else if (k === 'E') {
+    var ne = Math.max(num(r.ks_e_jumlah), num(r.ks_e_minimal));
+    t.push('Panitia memesan ' + ne + ' voucher foto dengan harga ' + rp(num(r.ks_e_harga)) + ' per voucher (total ' + rp(ne * num(r.ks_e_harga)) + '), dibayarkan kepada Posetive paling lambat ' + bagian(r.ks_e_tenggat || 'H-3') + ' sebelum acara. Pemesanan minimal ' + num(r.ks_e_minimal) +
+      ' voucher. Setiap voucher berlaku untuk satu sesi foto, ' + (r.ks_e_masa || 'hanya pada hari acara') + '. Voucher yang tidak terpakai ' + (r.ks_e_sisa === 'Dapat dipakai di acara berikutnya' ? 'dapat dipakai di acara berikutnya' : 'hangus') + '.');
+  } else if (k === 'F') {
+    var nf = Math.max(num(r.ks_f_jumlah), num(r.ks_f_minimal));
+    t.push('Panitia membayar ' + rp(num(r.ks_f_harga)) + ' per peserta untuk ' + nf + ' peserta (minimal ' + num(r.ks_f_minimal) + ' peserta; total ' + rp(nf * num(r.ks_f_harga)) + '), dibayarkan kepada Posetive paling lambat ' + bagian(r.ks_f_tenggat || 'H-3') +
+      ' sebelum acara. Setiap peserta terdaftar berhak atas satu sesi foto. ' + (r.ks_f_non_peserta === 'Tidak' ? 'Photobooth hanya melayani peserta terdaftar.' : 'Tamu non-peserta dapat berfoto dengan harga normal ' + rp(harga) + ' per sesi.'));
+  }
+  if (k === 'A' || k === 'B' || k === 'C') t.push('Satu sesi dihitung sebagai satu lembar cetak yang dibayar pengunjung; cetak gagal, cetak ulang, dan foto bonus panitia tidak dihitung.');
+  return t.join(' ');
+}
+function salinTeks(id) {
+  var el = document.getElementById(id); if (!el) return;
+  var selesai = function () { toast('Teks disalin'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(el.value).then(selesai, function () { el.select(); try { document.execCommand('copy'); selesai(); } catch (e) { toast('Pilih teks lalu salin manual'); } });
+  else { el.select(); try { document.execCommand('copy'); selesai(); } catch (e) { toast('Pilih teks lalu salin manual'); } }
+}
+
+// ---------------------------------------------------------------- kolom formulir
+function bawaanKs(k) {
+  var o = {};
+  F_KS.forEach(function (f) { if (f.n && f.def && (!k || !f.sk || f.sk === k)) o[f.n] = nilaiBawaan(f); });
+  return o;
+}
+/** Kolom skema lama sudah diisi (berbeda dari nilai bawaan)? Dipakai untuk konfirmasi saat skema diganti. */
+function skemaTerisi(k) {
+  if (!k || !FORM) return false;
+  var r = bacaForm();
+  return F_KS.some(function (f) { return f.sk === k && f.n && String(r[f.n] == null ? '' : r[f.n]) !== String(f.def ? nilaiBawaan(f) : ''); });
+}
+/** Mengosongkan (kembali ke nilai bawaan) kolom skema lama setelah skema diganti. */
+function kosongkanSkema(k) {
+  var frm = document.getElementById('frm'); if (!frm || !k) return;
+  F_KS.forEach(function (f) {
+    if (f.sk !== k || !f.n) return;
+    var v = f.def ? nilaiBawaan(f) : '';
+    if (f.t === 'tingkat') { var box = document.getElementById('tk_' + f.n); if (box) box.innerHTML = parseTingkat(v).map(barisTingkat).join(''); return; }
+    var el = frm.elements[f.n]; if (el) el.value = f.t === 'rp' ? teksRp(v) : v;
+  });
+}
+function konfirmasiSkema(kolom) {
+  return function (lama, baru, r) {
+    var kLama = kolom === 'skema' ? (isKs(r) ? hurufSkema(lama) : '') : (lama === 'Kerja Sama Panitia' ? hurufSkema(r.skema) : '');
+    var kBaru = kolom === 'skema' ? hurufSkema(baru) : (baru === 'Kerja Sama Panitia' ? hurufSkema(r.skema) : '');
+    return kLama && kLama !== kBaru && skemaTerisi(kLama) ? 'Kolom skema ' + kLama + ' (' + KS_NAMA[kLama] + ') sudah terisi. Kalau diganti, isinya dikosongkan. Lanjut?' : '';
+  };
+}
+function setelahGantiSkema(kolom) {
+  return function (lama) {
+    var r = bacaForm(), k = kolom === 'skema' ? hurufSkema(lama) : (lama === 'Kerja Sama Panitia' ? hurufSkema(r.skema) : '');
+    if (k && k !== skemaKs(r)) kosongkanSkema(k);
+  };
+}
+function hargaBawaan(k, v) { return function () { return Pd(k, v); }; }
+var ksKunci = true;
+var F_KS = [
+  {g: 'Harga & kesepakatan', show: adaSkema},
+  {n: 'ks_harga_4r', l: 'Harga foto 4R ke pengunjung', t: 'rp', def: hargaBawaan('HARGA_4R', 20000), wajib: adaSkema, show: adaSkema, kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_harga_buku', l: 'Harga Graduation Book', t: 'rp', def: hargaBawaan('HARGA_BUKU', 35000), show: adaSkema, kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_harga_strip', l: 'Harga cetak strip tambahan', t: 'rp', def: hargaBawaan('HARGA_STRIP', 10000), show: adaSkema, kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_potongan_grup', l: 'Potongan grup', t: 'rp', def: hargaBawaan('POTONGAN_GRUP', 5000), show: adaSkema, kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_tenggat', l: 'Tenggat pembayaran bagi hasil', t: 'sel', o: opsi(['H+1', 'H+3', 'H+7']), def: 'H+3', show: function (r) { return 'ABC'.indexOf(skemaKs(r) || 'x') >= 0; }, kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_status', l: 'Status kesepakatan', t: 'sel', o: opsi(KS_STATUS), def: 'Draft', show: adaSkema, isiUlang: 1},
+
+  {g: 'Skema A — Berjenjang', show: skemaIni('A')},
+  {n: 'ks_a_tingkat', sk: 'A', l: 'Tingkat bagi hasil', t: 'tingkat', def: KS_TINGKAT_BAWAAN, show: skemaIni('A'), kunci: ksKunci, isiUlang: 1,
+    cek: function (r) { var e = cekTingkat(parseTingkat(r.ks_a_tingkat), num(r.ks_harga_4r)); return e.length ? 'Skema A:\n• ' + e.join('\n• ') : ''; }},
+
+  {g: 'Skema B — Persentase Omzet', show: skemaIni('B')},
+  {n: 'ks_b_persen', sk: 'B', l: 'Persentase untuk panitia (%)', t: 'num', def: 25, wajib: skemaIni('B'), show: skemaIni('B'), kunci: ksKunci, isiUlang: 1,
+    cek: function (r) { return num(r.ks_b_persen) < 0 || num(r.ks_b_persen) > 100 ? 'Skema B: persentase harus 0–100.' : ''; }},
+  {n: 'ks_b_dasar', sk: 'B', l: 'Dasar perhitungan', t: 'sel', o: opsi(['Seluruh omzet', 'Hanya foto 4R']), def: 'Seluruh omzet', show: skemaIni('B'), kunci: ksKunci, isiUlang: 1},
+
+  {g: 'Skema C — Di Atas Titik Impas', show: skemaIni('C')},
+  {n: 'ks_c_sesi_awal', sk: 'C', l: 'Jumlah sesi awal untuk Posetive', t: 'num', def: 30, wajib: skemaIni('C'), show: skemaIni('C'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_c_bentuk', sk: 'C', l: 'Bentuk bagi hasil setelahnya', t: 'sel', o: opsi(['Persentase', 'Rupiah per sesi']), def: 'Persentase', show: skemaIni('C'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_c_nilai', sk: 'C', l: 'Nilai bagi hasil (% bila Persentase, Rp per sesi bila Rupiah per sesi)', t: 'num', def: 40, wajib: skemaIni('C'), show: skemaIni('C'), kunci: ksKunci, isiUlang: 1,
+    cek: function (r) { return r.ks_c_bentuk !== 'Rupiah per sesi' && (num(r.ks_c_nilai) < 0 || num(r.ks_c_nilai) > 100) ? 'Skema C: persentase harus 0–100.' : ''; }},
+
+  {g: 'Skema D — Fee Tetap', show: skemaIni('D')},
+  {n: 'ks_d_fee', sk: 'D', l: 'Nominal fee untuk panitia', t: 'rp', def: 300000, wajib: skemaIni('D'), show: skemaIni('D'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_d_waktu', sk: 'D', l: 'Waktu pembayaran', t: 'sel', o: opsi(['H-7', 'H-3', 'H-1', 'Saat loading']), def: 'H-1', show: skemaIni('D'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_d_bukti', sk: 'D', l: 'Bukti pembayaran — catatan (opsional; file bukti diunggah di catatan Kas saat fee dibayar)', t: 'area', show: skemaIni('D'), kunci: ksKunci},
+
+  {g: 'Skema E — Voucher Prabayar', show: skemaIni('E')},
+  {n: 'ks_e_jumlah', sk: 'E', l: 'Jumlah voucher dipesan', t: 'num', wajib: skemaIni('E'), show: skemaIni('E'), kunci: ksKunci},
+  {n: 'ks_e_minimal', sk: 'E', l: 'Jumlah minimal pembelian', t: 'num', def: 40, show: skemaIni('E'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_e_harga', sk: 'E', l: 'Harga voucher untuk panitia', t: 'rp', def: 15000, wajib: skemaIni('E'), show: skemaIni('E'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_e_harga_jual', sk: 'E', l: 'Harga jual voucher oleh panitia (informasi)', t: 'rp', def: 20000, show: skemaIni('E'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_e_tenggat', sk: 'E', l: 'Tenggat pembayaran', t: 'sel', o: opsi(['H-7', 'H-3', 'H-1']), def: 'H-3', show: skemaIni('E'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_e_masa', sk: 'E', l: 'Masa berlaku voucher', def: 'hanya pada hari acara', show: skemaIni('E'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_e_sisa', sk: 'E', l: 'Voucher tidak terpakai', t: 'sel', o: opsi(['Hangus', 'Dapat dipakai di acara berikutnya']), def: 'Hangus', show: skemaIni('E'), kunci: ksKunci, isiUlang: 1},
+
+  {g: 'Skema F — Bundling Tiket Peserta', show: skemaIni('F')},
+  {n: 'ks_f_jumlah', sk: 'F', l: 'Jumlah peserta terdaftar', t: 'num', wajib: skemaIni('F'), show: skemaIni('F'), kunci: ksKunci},
+  {n: 'ks_f_minimal', sk: 'F', l: 'Jumlah minimal peserta', t: 'num', def: 60, show: skemaIni('F'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_f_harga', sk: 'F', l: 'Harga per peserta untuk panitia', t: 'rp', def: 12000, wajib: skemaIni('F'), show: skemaIni('F'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_f_harga_tiket', sk: 'F', l: 'Harga yang dimasukkan panitia ke tiket (informasi)', t: 'rp', def: 15000, show: skemaIni('F'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_f_tenggat', sk: 'F', l: 'Tenggat pembayaran', t: 'sel', o: opsi(['H-7', 'H-3', 'H-1']), def: 'H-3', show: skemaIni('F'), kunci: ksKunci, isiUlang: 1},
+  {n: 'ks_f_non_peserta', sk: 'F', l: 'Tamu non-peserta boleh berfoto dengan harga normal?', t: 'sel', o: opsi(['Ya', 'Tidak']), def: 'Ya', show: skemaIni('F'), kunci: ksKunci, isiUlang: 1},
+
+  {t: 'info', l: KS_CATATAN_SESI, show: adaSkema}
+];
+/** Kolom "Model pendapatan" & "Skema" untuk form prospek/event: konfirmasi saat diganti, ikut terkunci. */
+function kolomModelSkema() {
+  return [
+    {n: 'model_pendapatan', l: 'Model pendapatan', t: 'sel', o: pil('Model Pendapatan'), konfirmasi: konfirmasiSkema('model'), setelahGanti: setelahGantiSkema('model'), kunci: ksKunci},
+    {n: 'skema', l: 'Skema kerja sama', t: 'sel', o: pil('Skema'), show: isKs, wajib: isKs, konfirmasi: konfirmasiSkema('skema'), setelahGanti: setelahGantiSkema('skema'), kunci: ksKunci}
+  ];
+}
+/** Kerja sama yang sudah Disetujui dikunci; hanya terbuka bila status dikembalikan ke Draft. */
+function kunciKs(lama) { return function (r) { return lama === 'Disetujui' && r.ks_status !== 'Draft'; }; }
+
+// ---------------------------------------------------------------- pratinjau di form (hasil hitungan, teks perjanjian, riwayat)
+function htmlKsPratinjau(r, kunciAwal) {
+  var k = skemaKs(r); if (!k) return '';
+  var x = hitungKs(r, r.estimasi_sesi), h = '', galat = [];
+  var ft = F_KS.filter(function (f) { return f.cek && tampilKolom(f, r); }); ft.forEach(function (f) { var m = f.cek(r); if (m) galat.push(m); });
+  if (kunciAwal === 'Disetujui') h += notice(r.ks_status === 'Draft' ? '' : 'bad', r.ks_status === 'Draft' ? 'Status dikembalikan ke <b>Draft</b> — kolom skema bisa diubah lagi setelah disimpan.' :
+    '<b>Kerja sama sudah Disetujui</b>' + (r.ks_status_oleh ? ' (' + esc(r.ks_status_oleh) + ', ' + esc(r.ks_status_pada) + ')' : '') + ' — kolom skema dikunci. Ubah status ke <b>Draft</b> untuk mengubahnya.');
+  if (galat.length) h += '<div style="margin-top:8px">' + notice('bad', galat.map(function (g) { return esc(g).replace(/\n/g, '<br>'); }).join('<br>')) + '</div>';
+  x.peringatan.forEach(function (p) { h += '<div style="margin-top:8px">' + notice('', esc(p)) + '</div>'; });
+  var dur = durasiKs(r);
+  h += '<div class="card pad" style="margin-top:8px"><div class="meta">Hasil hitungan · Skema ' + k + ' — ' + KS_NAMA[k] + (num(r.estimasi_sesi) ? ' · perkiraan ' + num(r.estimasi_sesi) + ' sesi' : '') + (dur ? ' · durasi ' + dur : '') + '</div>' +
+    '<table style="margin-top:6px"><tr><td>Diterima panitia</td><td class="r"><b>' + rp(x.panitia) + '</b></td></tr>' +
+    (k === 'E' || k === 'F' ? '<tr><td>Diterima Posetive di muka</td><td class="r"><b>' + rp(x.dimuka) + '</b></td></tr>' : '') + '</table>' +
+    '<div class="meta" style="margin-top:6px">' + esc(x.kalimat) + '</div></div>';
+  h += '<div class="card pad" style="margin-top:8px"><div class="meta" style="margin-bottom:6px">Ringkasan untuk surat perjanjian</div>' +
+    '<textarea id="ks_teks" readonly style="width:100%;min-height:130px">' + esc(teksKs(r)) + '</textarea>' +
+    '<div class="btns" style="margin:6px 0 0"><button class="btn sm ghost" type="button" onclick="salinTeks(\'ks_teks\')">Salin teks</button></div></div>';
+  return h;
+}
+/** Riwayat perubahan kerja sama satu acara (prospek + event-nya). */
+function htmlRiwayatKs(idPipeline, idEvent) {
+  var list = (D.riwayatKs || []).filter(function (x) { return (idPipeline && (x.id_ref === idPipeline || x.id_pipeline === idPipeline)) || (idEvent && x.id_ref === idEvent); })
+    .sort(function (a, b) { return a.waktu < b.waktu ? 1 : -1; });
+  if (!list.length) return '';
+  return '<details class="sop-lipat" style="margin-top:8px"><summary class="sop-fase"><span class="judul">Riwayat perubahan kerja sama</span><span class="pill">' + list.length + '</span><span class="chev">›</span></summary><div class="card">' +
+    list.map(function (x) { return item({t: esc(x.perubahan), s: esc(x.waktu) + ' · ' + esc(x.oleh) + ' · ' + esc(x.id_ref)}); }).join('') + '</div></details>';
+}
+
+// ---------------------------------------------------------------- setelah deal: kewajiban bayar / tagih
+/**
+ * Kewajiban uang kerja sama satu event:
+ *   A/B/C → Posetive membayar bagi hasil ke panitia, dihitung dari laporan (sesi berbayar / omzet), tenggat H+n.
+ *   D     → Posetive membayar fee tetap, tenggat H-n / saat loading.
+ *   E/F   → Posetive menagih panitia (voucher / bundling) di muka, tenggat H-n.
+ * {arah: 'bayar'|'tagih', nominal, dibayar, kurang, jatuh, sisaHari, menunggu (belum ada laporan), dasar, kategori}
+ */
+function kewajibanKs(e) {
+  var k = skemaKs(e);
+  if (!k || e.status === 'Batal' || e.ks_status === 'Dibatalkan' || !e.tanggal) return null;
+  var h = hasilEvent(e), tagih = k === 'E' || k === 'F', o = {arah: tagih ? 'tagih' : 'bayar', kategori: tagih ? KAT_BAYAR_PANITIA : KAT_BAGI_HASIL, menunggu: false};
+  if (k === 'D') { o.nominal = num(e.ks_d_fee); o.jatuh = addHari(e.tanggal, hariTenggat(e.ks_d_waktu || 'H-1')); o.dasar = 'fee tetap'; }
+  else if (tagih) { var x = hitungKs(e, 0); o.nominal = x.dimuka; o.jatuh = addHari(e.tanggal, hariTenggat((k === 'E' ? e.ks_e_tenggat : e.ks_f_tenggat) || 'H-3')); o.dasar = x.ringkas; }
+  else {
+    o.jatuh = addHari(e.tanggal, hariTenggat(e.ks_tenggat || 'H+3'));
+    if (h.lap) { var y = hitungKs(e, h.sesiTerjual, h.omzet); o.nominal = y.panitia; o.dasar = h.sesiTerjual + ' sesi berbayar' + (k === 'B' && e.ks_b_dasar !== 'Hanya foto 4R' ? ' · omzet ' + rp(h.omzet) : '') + ' · ' + y.kalimat; }
+    else { o.menunggu = true; o.nominal = hitungKs(e, e.estimasi_sesi).panitia; o.dasar = 'perkiraan ' + num(e.estimasi_sesi) + ' sesi — angka pasti setelah laporan diisi'; }
+  }
+  o.nominal = Math.round(o.nominal);
+  o.dibayar = sum(h.kas.filter(function (c) { return c.kategori === o.kategori && c.jenis === (tagih ? 'Masuk' : 'Keluar'); }), function (c) { return c.nominal; });
+  o.kurang = Math.max(0, o.nominal - o.dibayar);
+  o.sisaHari = selisihHari(o.jatuh, D.hariIni);
+  return o;
+}
+function teksJatuhKs(o) { return o.sisaHari < 0 ? 'terlambat ' + (-o.sisaHari) + ' hari' : o.sisaHari === 0 ? 'jatuh tempo hari ini' : 'jatuh tempo ' + tgl(o.jatuh); }
+/** Kerja sama yang perlu dibayar/ditagih ≤ 3 hari lagi atau terlambat (untuk Beranda). */
+function ksMendesak() {
+  return D.event.map(function (e) { return {e: e, o: kewajibanKs(e)}; })
+    .filter(function (x) { return x.o && !x.o.menunggu && x.o.kurang > 0 && x.o.sisaHari <= 3; })
+    .sort(function (a, b) { return a.o.jatuh < b.o.jatuh ? -1 : 1; });
+}
+/** Kartu "Kerja sama panitia" di detail event (admin & pemantau). */
+function htmlKsEvent(e) {
+  var k = skemaKs(e); if (!k) return '';
+  var o = kewajibanKs(e), st = e.ks_status || 'Draft';
+  var h = '<div class="card pad"><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><span class="pill ' + (st === 'Disetujui' ? 'p-ok' : st === 'Dibatalkan' ? 'p-bad' : st === 'Diajukan' ? 'p-acc' : '') + '">' + esc(st) + '</span>' +
+    '<b>Skema ' + k + ' — ' + KS_NAMA[k] + '</b></div>';
+  if (st !== 'Disetujui' && st !== 'Dibatalkan') h += '<div style="margin-bottom:8px">' + notice('', 'Kesepakatan belum <b>Disetujui</b>. Ubah statusnya lewat tombol Ubah setelah panitia setuju.') + '</div>';
+  if (o) {
+    var judul = o.arah === 'tagih' ? 'Tagih panitia (di muka)' : k === 'D' ? 'Fee ke panitia' : 'Bagi hasil ke panitia';
+    h += '<table><tr><td>' + judul + (o.menunggu ? ' <span class="meta">(perkiraan)</span>' : '') + '</td><td class="r"><b>' + rp(o.nominal) + '</b></td></tr>' +
+      '<tr><td>' + (o.arah === 'tagih' ? 'Sudah diterima' : 'Sudah dibayar') + '</td><td class="r">' + rp(o.dibayar) + (o.kurang ? '' : ' <span class="pill p-ok">Lunas</span>') + '</td></tr></table>' +
+      '<div class="meta" style="margin-top:6px">' + esc(o.dasar) + '</div>' +
+      (o.kurang && !o.menunggu ? '<div class="meta ' + (o.sisaHari < 0 ? 'neg' : '') + '" style="margin:8px 0">Kurang <b>' + rp(o.kurang) + '</b> · ' + teksJatuhKs(o) + '</div>' +
+        '<button class="ubah btn sm" onclick="formKas(null,\'' + e.id_event + '\',{jenis:\'' + (o.arah === 'tagih' ? 'Masuk' : 'Keluar') + '\',kategori:\'' + o.kategori + '\',nominal:' + o.kurang + ',keterangan:\'' + (o.arah === 'tagih' ? 'Pembayaran panitia ' : 'Bagi hasil panitia ') + esc(String(e.nama_event).replace(/['\\]/g, '')) + '\'})">+ Catat ' + (o.arah === 'tagih' ? 'pembayaran dari panitia' : 'pembayaran ke panitia') + '</button>' : '');
+  }
+  h += '<details class="sop-rinci" style="margin-top:8px"><summary>Teks perjanjian</summary><div class="sop-isi">' + esc(teksKs(e)) + '</div></details></div>';
+  return h + htmlRiwayatKs(e.id_pipeline, e.id_event);
+}
+</script>

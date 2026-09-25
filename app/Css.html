@@ -239,6 +239,11 @@
     margin-bottom: 22px
   }
 
+  /* Kotak berisi angka uang penuh: kolom menyesuaikan lebar (HP 2 kolom, laptop 3) supaya angka tidak terpotong */
+  .stats.uang {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))
+  }
+
   .stat {
     background: var(--card);
     border-radius: 14px;
@@ -252,7 +257,8 @@
   }
 
   .stat .v {
-    font-size: 17px;
+    font-size: clamp(14px, 4.3vw, 17px);
+    overflow-wrap: anywhere;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     letter-spacing: -.01em
@@ -296,7 +302,8 @@
   }
 
   .scard .v {
-    font-size: 18px;
+    font-size: clamp(15px, 4.6vw, 18px);
+    overflow-wrap: anywhere;
     font-weight: 700;
     letter-spacing: -.01em;
     font-variant-numeric: tabular-nums;
@@ -1343,6 +1350,34 @@
     color: var(--muted);
     padding: 14px 0;
     font-size: 14px
+  }
+
+  /* ---- Kerja sama: tabel tingkat bagi hasil ---- */
+  .tk-kepala,
+  .tk-baris {
+    display: grid;
+    grid-template-columns: 1fr 12px 1fr 1.4fr 40px;
+    gap: 6px;
+    align-items: center
+  }
+
+  .tk-kepala {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px
+  }
+
+  .tk-baris {
+    margin-bottom: 6px
+  }
+
+  .tk-baris input {
+    min-width: 0;
+    width: 100%
+  }
+
+  .tk-baris .btn {
+    padding: 6px 0
   }
 
   /* ---- SOP ---- */

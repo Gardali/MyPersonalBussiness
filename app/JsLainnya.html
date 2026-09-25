@@ -9,9 +9,9 @@ function vInventaris() {
   var butuhUmur = aset.filter(function (x) { return itemPenyusutan(x).butuhUmur; });
   var h = '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button><div class="bar"><div class="pagetitle" style="margin:0">Inventaris</div><button class="ubah btn sm" onclick="formInventaris()">+ Barang</button></div>';
   var target = targetEventBulan();
-  h += '<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><div class="k">Nilai aset (' + aset.length + ')</div><div class="v">' + rpSingkat(sum(aset, function (x) { return x.nilai_beli; })) + '</div></div>' +
-    '<div class="stat"><div class="k">Penyusutan/bulan</div><div class="v">' + rpSingkat(totalPenyusutanBulanan()) + '</div></div>' +
-    '<div class="stat"><div class="k">Alokasi/event</div><div class="v">' + rpSingkat(totalPenyusutanBulanan() / target) + '</div></div></div>';
+  h += '<div class="stats uang"><div class="stat"><div class="k">Nilai aset (' + aset.length + ')</div><div class="v">' + rp(sum(aset, function (x) { return x.nilai_beli; })) + '</div></div>' +
+    '<div class="stat"><div class="k">Penyusutan/bulan</div><div class="v">' + rp(totalPenyusutanBulanan()) + '</div></div>' +
+    '<div class="stat"><div class="k">Alokasi/event</div><div class="v">' + rp(totalPenyusutanBulanan() / target) + '</div></div></div>';
   h += '<div class="card pad" style="margin-bottom:10px"><div class="bar" style="margin:0;gap:10px"><label for="inv_target" style="font-weight:600">Target event per bulan</label>' +
     '<div style="display:flex;gap:8px;align-items:center"><input id="inv_target" type="number" inputmode="numeric" min="1" step="1" value="' + target + '" style="width:72px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;text-align:center">' +
     '<button class="ubah btn sm" onclick="simpanTargetEvent(this)">Simpan</button></div></div>' +
@@ -50,7 +50,7 @@ function tabelMargin(produk) {
 function vHpp() {
   var r = rincianHpp(P), m4 = P('HARGA_4R') - r.lembar;
   var h = '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button><div class="bar"><div class="pagetitle" style="margin:0">HPP & harga jual</div><button class="ubah btn sm" onclick="formHpp()">Ubah angka</button></div>';
-  h += '<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><div class="k">HPP / lembar</div><div class="v">' + rp(r.lembar) + '</div></div>' +
+  h += '<div class="stats uang"><div class="stat"><div class="k">HPP / lembar</div><div class="v">' + rp(r.lembar) + '</div></div>' +
     '<div class="stat"><div class="k">HPP Grad Book</div><div class="v">' + rp(r.buku + r.lembar) + '</div></div>' +
     '<div class="stat"><div class="k">Margin 4R</div><div class="v ' + cls(m4) + '">' + (P('HARGA_4R') ? Math.round(m4 / P('HARGA_4R') * 100) + '%' : '—') + '</div></div></div>';
   h += '<div class="cols"><div class="col">';
@@ -127,7 +127,7 @@ function vLainnya() {
   h += sec('SOP event', '<div class="card pad"><div class="meta" style="margin-bottom:10px">Langkah dari H-1 sampai tiba di kos, per peran (FC, Operator Depan, Operator Cetak). Tim mencentangnya di setiap event; uji coba wajib sebelum laporan dikirim.</div><button class="btn sm" onclick="tampil(\'sop\')">Buka SOP</button></div>');
   h += sec('Crew', '<div class="card pad"><div class="meta" style="margin-bottom:10px">Data tim (domisili, kendaraan, rekening, masa kontrak) dan fee yang belum dibayar.</div><button class="btn sm" onclick="tampil(\'crew\')">Kelola crew</button></div>');
   h += sec('HPP & harga jual', '<div class="card pad"><div class="meta" style="margin-bottom:10px">HPP per lembar ' + rp(biayaLembar()) + ' · Graduation Book ' + rp(P('BIAYA_BUKU') + biayaLembar()) + '. Rincian kertas, tinta, cadangan gagal, dan margin tiap produk.</div><button class="btn sm" onclick="tampil(\'hpp\')">Lihat & ubah HPP</button></div>');
-  h += sec('Inventaris','<div class="card pad"><div class="meta" style="margin-bottom:10px">Alat & aset milik atau pinjaman ke Posetive, beserta penyusutannya (' + rpSingkat(totalPenyusutanBulanan()) + '/bulan).</div><button class="btn sm" onclick="tampil(\'inventaris\')">Kelola inventaris</button></div>');
+  h += sec('Inventaris','<div class="card pad"><div class="meta" style="margin-bottom:10px">Alat & aset milik atau pinjaman ke Posetive, beserta penyusutannya (' + rp(totalPenyusutanBulanan()) + '/bulan).</div><button class="btn sm" onclick="tampil(\'inventaris\')">Kelola inventaris</button></div>');
   h += sec('Google Calendar', '<div class="card pad"><div class="meta" style="margin-bottom:10px">' + (D.kalender ?
       '<span class="pill p-ok">Terhubung</span> Event otomatis masuk ke kalender <b>Posetive Photobooth</b> di Google Calendar setiap kali disimpan (jam, lokasi, klien, crew). Event batal dihapus dari kalender.' :
       'Sambungkan supaya setiap event otomatis masuk ke Google Calendar (kalender baru "Posetive Photobooth") dan muncul sebagai notifikasi di HP.') + '</div>' +

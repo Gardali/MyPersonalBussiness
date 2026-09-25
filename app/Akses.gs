@@ -49,7 +49,11 @@ function api(token, nama, args) {
   if (aturan[1].indexOf(u.role) < 0) throw new Error('Akun Anda (' + (ROLE[u.role] || u.role) + ') tidak punya akses untuk ini.');
   args = args || [];
   if ((nama === 'saveRecord' || nama === 'deleteRecord') && String(args[0]) === 'PENGGUNA') throw new Error('Kelola akun lewat menu Pengguna.');
-  return aturan[0].apply(null, aturan[2] ? [u].concat(args) : args);
+  // Kerja sama panitia: kunci setelah Disetujui + riwayat perubahan (KerjaSama.gs) untuk setiap simpan prospek/event.
+  var sesudah = nama === 'saveRecord' ? jagaKs_(u, String(args[0]), args[1]) : nama === 'simpanEvent' ? jagaKs_(u, 'EVENT', args[0]) : null;
+  var hasil = aturan[0].apply(null, aturan[2] ? [u].concat(args) : args);
+  if (sesudah) sesudah(hasil && typeof hasil === 'object' ? hasil.id : hasil);
+  return hasil;
 }
 
 /** Login dengan username + PIN. Mengembalikan token sesi & data pengguna. */

@@ -133,7 +133,7 @@ function cobaEmailLaporan_(idEvent, diperbarui) {
 
 function emailLaporan_(idEvent, diperbarui) {
   var l = laporanEvent_(idEvent), e = readTab_('EVENT').filter(function (x) { return x.id_event === idEvent; })[0] || { nama_event: idEvent, tanggal: '' };
-  var p = pengaturan_(), r = ringkasLaporan_(l, p), esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var p = hargaEvent_(pengaturan_(), e), r = ringkasLaporan_(l, p), esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var masalah = [], sop = { total: 0, selesai: 0, terlewat: [] };
   try { sop = sopEventIni_(idEvent); } catch (err) { }
   if (r.selisihLembar) masalah.push('selisih lembar ' + r.selisihLembar);

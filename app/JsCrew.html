@@ -7,7 +7,7 @@ function vCrew() {
   var belum = feeBelumDibayar(false), perCrew = {};
   belum.forEach(function (t) { (perCrew[t.id_crew] = perCrew[t.id_crew] || []).push(t); });
   if (belum.length) {
-    h += sec('Fee belum dibayar <span class="pill p-warn" style="margin-left:4px">' + rpSingkat(sum(belum, function (t) { return t.fee; })) + '</span>', Object.keys(perCrew).map(function (id) {
+    h += sec('Fee belum dibayar <span class="pill p-warn" style="margin-left:4px">' + rp(sum(belum, function (t) { return t.fee; })) + '</span>', Object.keys(perCrew).map(function (id) {
       var c = cari(D.crew, 'id_crew', id) || {}, rows = perCrew[id].sort(function (a, b) { var ea = cari(D.event, 'id_event', a.id_event), eb = cari(D.event, 'id_event', b.id_event); return ea.tanggal < eb.tanggal ? -1 : 1; });
       var ids = rows.map(function (t) { return t.id; });
       return '<div class="card pad" style="margin-bottom:8px"><div class="bar" style="margin:0 0 4px"><div><div style="font-weight:700">' + esc(namaCrew(id)) + '</div><div class="meta">' + (c.bank || c.no_rekening ? esc(c.bank || '') + ' ' + esc(c.no_rekening || '') : 'Rekening belum diisi') + '</div></div>' +

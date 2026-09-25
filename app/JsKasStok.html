@@ -22,11 +22,11 @@ function vKas() {
   var h = '<div class="bar"><div class="pagetitle" style="margin:0">Kas</div><div style="display:flex;gap:8px;align-items:center"><select class="plain" onchange="FILTER.kas=this.value;tampil(\'kas\')"><option value="">Semua bulan</option>' +
     bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select><button class="ubah btn sm" onclick="formKas()">+ Catat</button></div></div>';
   h += '<div class="head2"><div class="hero" style="margin-top:0"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div></div>';
-  h += '<div class="stats" style="grid-template-columns:repeat(2,1fr)"><div class="stat"><div class="k">Kas Posetive (operasional)</div><div class="v">' + rpSingkat(saldoPosetive()) + '</div></div>' +
-    '<div class="stat"><div class="k">Dari event</div><div class="v">' + rpSingkat(saldoEvent()) + '</div></div></div>';
-  h += '<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><div class="k">Pemasukan</div><div class="v pos">' + rpSingkat(masuk) + '</div></div>' +
-    '<div class="stat"><div class="k">Dari owner</div><div class="v">' + rpSingkat(setoran) + '</div></div>' +
-    '<div class="stat"><div class="k">Keluar</div><div class="v">' + rpSingkat(keluar) + '</div></div></div></div>';
+  h += '<div class="stats" style="grid-template-columns:repeat(2,1fr)"><div class="stat"><div class="k">Kas Posetive (operasional)</div><div class="v">' + rp(saldoPosetive()) + '</div></div>' +
+    '<div class="stat"><div class="k">Dari event</div><div class="v">' + rp(saldoEvent()) + '</div></div></div>';
+  h += '<div class="stats uang"><div class="stat"><div class="k">Pemasukan</div><div class="v pos">' + rp(masuk) + '</div></div>' +
+    '<div class="stat"><div class="k">Dari owner</div><div class="v">' + rp(setoran) + '</div></div>' +
+    '<div class="stat"><div class="k">Keluar</div><div class="v">' + rp(keluar) + '</div></div></div></div>';
   h += '<div class="chips" style="margin-bottom:14px">' + [['', 'Semua'], ['umum', 'Posetive'], ['event', 'Event']].map(function (c) {
     return '<button class="chip ' + (c[0] === sb ? 'on' : '') + '" onclick="FILTER.kasSumber=\'' + c[0] + '\';tampil(\'kas\')">' + c[1] + '</button>';
   }).join('') + '</div>';

@@ -88,6 +88,24 @@ dengan jam, lokasi, klien + WA, dan rekan crew — tanpa kontrak, fee, kas, atau
   laporan/checklist lagi. Salah pencet? **Batalkan persetujuan**. Admin tetap bisa mengubah laporan kapan saja.
 - Crew yang dilepas dari event langsung tidak bisa melihat/mengisi event itu lagi.
 
+## Kerja sama panitia (skema A–F)
+- Isi di **Prospek** (Pipeline): pilih Model pendapatan **Kerja Sama Panitia** → **Skema**. Kolom khusus skema itu muncul
+  otomatis; kolom skema lain disembunyikan dan tidak ikut tersimpan. Saat deal, semuanya ikut ke Event.
+- **Harga per acara** (4R, Graduation Book, strip, potongan grup) terisi dari PENGATURAN dan bisa diubah per acara. Harga
+  ini dipakai juga untuk omzet laporan & selisih kas event itu.
+- Di bawah form: **hasil hitungan** dari perkiraan jumlah sesi, **ringkasan untuk surat perjanjian** (tombol Salin teks), dan
+  **riwayat perubahan**.
+- **Status kesepakatan**: setelah **Disetujui**, kolom skema (termasuk harga & model) dikunci — di aplikasi dan di server.
+  Untuk mengubah, kembalikan status ke **Draft**. Siapa & kapan status diubah tercatat; semua perubahan skema dicatat di
+  tab **RIWAYAT_KS**.
+- **Setelah acara** (detail event → Kerja sama panitia):
+  - A/B/C: bagi hasil dihitung dari laporan (sesi berbayar; skema B "Seluruh omzet" dari omzet laporan), jatuh tempo H+1/H+3/H+7.
+  - D: fee tetap, jatuh tempo H-7/H-3/H-1/saat loading. E/F: tagih panitia di muka, jatuh tempo H-7/H-3/H-1.
+  - **+ Catat pembayaran** membuat catatan Kas (kategori *Bagi Hasil Panitia* / *Pembayaran Panitia*). Beranda mengingatkan
+    yang jatuh tempo ≤ 3 hari lagi atau terlambat.
+- Kalkulator skema (Pipeline → Kalkulator) kini memakai nilai bawaan formulir kerja sama. Pengaturan `SKEMA_*` di tab
+  PENGATURAN tidak dipakai lagi.
+
 ## SOP event
 - Isi SOP ada di tab **SOP** (dibuat otomatis dari "SOP Event Posetive Photobooth" saat aplikasi pertama kali dibuka
   setelah pembaruan). Ubah lewat **Lainnya → SOP event** — ketuk bagian untuk mengubah, **+ Bagian** untuk menambah.

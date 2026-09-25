@@ -2,20 +2,37 @@
 // Posetive — formulir umum (bukaForm, simpan, hapus).
 // ---------------------------------------------------------------- formulir
 var FORM = null, FOTO_BARU = null, NOTA_BARU = null, FOTO_FORM = {};
-/** boleh: bisa disimpan? Bawaan: hanya admin. Crew mengirim true untuk laporan event hari ini (server tetap memeriksa). */
+/**
+ * boleh: bisa disimpan? Bawaan: hanya admin. Crew mengirim true untuk laporan event hari ini (server tetap memeriksa).
+ * Definisi kolom (fields): {n, l, t, o, def, show, wajib, cek, konfirmasi, kunci}
+ *   t        '' | num | pct | rp (rupiah, tampil Rp20.000) | date | time | tel | email | sel | area | file | foto | bukti
+ *            | tingkat (tabel tingkat bagi hasil, lihat JsKerjaSama) | info (catatan tetap, l = teksnya)
+ *   show(r)  tampil atau tidak; kolom tersembunyi tidak wajib, tidak diperiksa, dan disimpan kosong
+ *   wajib    true atau function(r)
+ *   cek(r)   pesan galat bila isian tidak valid ('' bila benar)
+ *   konfirmasi(lama, baru, r)  pesan konfirmasi sebelum nilai kolom ini diganti ('' = tanpa konfirmasi)
+ *   kunci    kolom ini dikunci bila FORM.terkunci(r) bernilai true (mis. kerja sama yang sudah Disetujui)
+ *   isiUlang bila isian tersimpan kosong, pakai def lagi (kolom yang hanya tampil untuk pilihan tertentu)
+ */
 function bukaForm(judul, fields, rec, onSave, extra, preview, boleh) {
   var ubah = boleh === undefined ? bisaUbah() : !!boleh;
-  FORM = {fields: fields, rec: Object.assign({}, rec), onSave: onSave, preview: preview, ubah: ubah};
+  FORM = {fields: fields, rec: Object.assign({}, rec), onSave: onSave, preview: preview, ubah: ubah, lama: {}, terkunci: null};
   FOTO_FORM = {};
-  fields.forEach(function (f) { if (f.n && FORM.rec[f.n] === undefined && f.def) FORM.rec[f.n] = f.def === 'today' ? D.hariIni : (typeof f.def === 'function' ? f.def() : f.def); });
+  fields.forEach(function (f) {
+    if (f.n && (FORM.rec[f.n] === undefined || (f.isiUlang && FORM.rec[f.n] === '')) && f.def) FORM.rec[f.n] = nilaiBawaan(f);
+    if (f.n) FORM.lama[f.n] = FORM.rec[f.n] == null ? '' : String(FORM.rec[f.n]);
+  });
   var h = '<div class="grab"></div><h2>' + esc(judul) + '</h2><form id="frm" onsubmit="simpanForm();return false">';
   fields.forEach(function (f, i) {
-    if (f.g) { h += '<div class="grp">' + esc(f.g) + '</div>'; return; }
+    if (f.g) { h += '<div class="grp" data-i="' + i + '">' + esc(f.g) + '</div>'; return; }
+    if (f.t === 'info') { h += '<div class="f wide" data-i="' + i + '"><div class="meta">' + esc(f.l) + '</div></div>'; return; }
     var v = FORM.rec[f.n]; v = v == null ? '' : v;
     if (f.t === 'pct' && v !== '') v = Math.round(num(v) * 100);
     var inp;
     if (f.t === 'sel') inp = '<select name="' + f.n + '"><option value="">— pilih —</option>' + f.o().map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(v) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select>';
     else if (f.t === 'area') inp = '<textarea name="' + f.n + '">' + esc(v) + '</textarea>';
+    else if (f.t === 'rp') inp = '<input name="' + f.n + '" type="text" inputmode="numeric" data-rp value="' + esc(teksRp(v)) + '">';
+    else if (f.t === 'tingkat') inp = htmlTingkat(f.n, v);
     else if (f.t === 'file') inp = '<div style="display:flex;align-items:center;gap:12px"><img id="foto_prev" style="width:56px;height:56px;border-radius:50%;object-fit:cover;background:var(--soft);visibility:hidden;flex:none"><input type="file" accept="image/*" onchange="pilihFoto(this)"></div>';
     else if (f.t === 'foto') inp = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><img id="fp_' + f.n + '" alt="" style="width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--soft);display:none;flex:none">' +
       '<label class="btn sm ghost" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px"><span style="width:16px;height:16px;display:inline-flex">' + ikon('camera') + '</span>' + (v ? 'Ganti foto' : 'Pilih / ambil foto') +
@@ -27,17 +44,36 @@ function bukaForm(judul, fields, rec, onSave, extra, preview, boleh) {
       var type = {date: 'date', time: 'time', num: 'number', pct: 'number', tel: 'tel', email: 'email'}[f.t] || 'text';
       inp = '<input name="' + f.n + '" type="' + type + '"' + (type === 'number' ? ' inputmode="decimal" step="any"' : '') + ' value="' + esc(v) + '">';
     }
-    h += '<div class="f' + (f.t === 'area' || f.t === 'file' || f.t === 'bukti' || f.t === 'foto' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? ' *' : '') + '</label>' + inp + '</div>';
+    h += '<div class="f' + (f.t === 'area' || f.t === 'file' || f.t === 'bukti' || f.t === 'foto' || f.t === 'tingkat' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? '<span class="wj"> *</span>' : '') + '</label>' + inp + '</div>';
   });
   if (FORM.preview) h += '<div id="preview" class="f wide" style="margin-top:10px"></div>';
   h += '<div class="btns">' + (ubah ? '<button class="btn" type="submit" style="flex:1">Simpan</button>' : '') + '<button class="btn ghost" type="button" onclick="tutupForm()"' + (ubah ? '' : ' style="flex:1"') + '>' + (ubah ? 'Batal' : 'Tutup') + '</button></div>' +
     (extra && ubah ? '<div class="btns">' + extra + '</div>' : '') + '</form>';
   document.getElementById('panel').innerHTML = h;
   // Pemantau (lihat saja): form tampil sebagai detail, semua isian dikunci.
-  if (!ubah) document.querySelectorAll('#frm input, #frm select, #frm textarea').forEach(function (el) { el.disabled = true; });
+  if (!ubah) document.querySelectorAll('#frm input, #frm select, #frm textarea, #frm button[type=button]').forEach(function (el) { if (!/tutupForm/.test(el.getAttribute('onclick') || '')) el.disabled = true; });
   document.getElementById('sheet').classList.add('open');
-  document.getElementById('frm').addEventListener('change', aturTampil);
-  if (preview) document.getElementById('frm').addEventListener('input', function () { FORM.preview(bacaForm()); });
+  var frm = document.getElementById('frm');
+  frm.addEventListener('change', gantiNilai);
+  frm.addEventListener('input', function (ev) {
+    if (ev.target && ev.target.hasAttribute && ev.target.hasAttribute('data-rp')) ev.target.value = teksRp(ev.target.value);
+    if (FORM.preview) FORM.preview(bacaForm());
+  });
+  aturTampil();
+}
+function nilaiBawaan(f) { return f.def === 'today' ? D.hariIni : (typeof f.def === 'function' ? f.def() : f.def); }
+/** Rupiah untuk isian: "Rp20.000" (kosong tetap kosong). */
+function teksRp(v) { var d = String(v == null ? '' : v).replace(/\D/g, ''); return d ? 'Rp' + Number(d).toLocaleString('id-ID') : ''; }
+function angkaRp(v) { var d = String(v == null ? '' : v).replace(/\D/g, ''); return d ? Number(d) : ''; }
+/** Kolom berubah: minta konfirmasi bila perlu (dibatalkan → nilai lama dikembalikan), lalu atur ulang tampilan. */
+function gantiNilai(ev) {
+  var el = ev && ev.target, f = el && el.name ? FORM.fields.filter(function (x) { return x.n === el.name; })[0] : null;
+  if (f && f.konfirmasi) {
+    var lama = FORM.lama[f.n] || '', baru = el.value, pesan = lama !== baru ? f.konfirmasi(lama, baru, bacaForm()) : '';
+    if (pesan && !confirm(pesan)) { el.value = lama; aturTampil(); return; }
+    if (lama !== baru && f.setelahGanti) f.setelahGanti(lama, baru);
+  }
+  if (f) FORM.lama[f.n] = el.value;
   aturTampil();
 }
 /** Mengecilkan foto di HP sebelum diunggah (sisi terpanjang max px, JPEG). Hasil: Promise data URI. */
@@ -75,19 +111,26 @@ function bacaForm() {
   var frm = document.getElementById('frm'), r = Object.assign({}, FORM.rec);
   FORM.fields.forEach(function (f) {
     if (!f.n) return;
+    if (f.t === 'tingkat') { var tk = bacaTingkat(f.n); if (tk !== null) r[f.n] = tk; return; }
     var el = frm.elements[f.n]; if (!el) return;
     var v = el.value.trim();
+    if (f.t === 'rp') v = angkaRp(v);
     if ((f.t === 'num' || f.t === 'pct') && v !== '') v = Number(v);
     if (f.t === 'pct' && v !== '') v = v / 100;
     r[f.n] = v;
   });
   return r;
 }
+function wajibKolom(f, r) { return typeof f.wajib === 'function' ? !!f.wajib(r) : !!f.wajib; }
+function tampilKolom(f, r) { return !f.show || !!f.show(r); }
 function aturTampil() {
-  var r = bacaForm();
-  document.querySelectorAll('#frm .f[data-i]').forEach(function (div) {
+  var r = bacaForm(), kunci = !!(FORM.terkunci && FORM.terkunci(r));
+  document.querySelectorAll('#frm [data-i]').forEach(function (div) {
     var f = FORM.fields[Number(div.dataset.i)];
-    div.style.display = f.show && !f.show(r) ? 'none' : '';
+    div.style.display = tampilKolom(f, r) ? '' : 'none';
+    var wj = div.querySelector('.wj'); if (wj) wj.style.display = wajibKolom(f, r) ? '' : 'none';
+    // Kolom berkunci (mis. kerja sama Disetujui) — hanya diatur bila form bisa diubah; mode lihat-saja sudah terkunci semua.
+    if (f.kunci && FORM.ubah) div.querySelectorAll('input, select, textarea, button').forEach(function (el) { el.disabled = kunci; });
   });
   if (FORM.preview) FORM.preview(r);
 }
@@ -96,10 +139,12 @@ document.getElementById('sheet').addEventListener('click', function (e) { if (e.
 
 function simpanForm() {
   if (!FORM || !FORM.ubah) return;
-  var r = bacaForm();
-  var kurang = FORM.fields.filter(function (f) { return f.wajib && (r[f.n] === '' || r[f.n] == null); });
+  var r = bacaForm(), tampil = FORM.fields.filter(function (f) { return f.n && tampilKolom(f, r); });
+  var kurang = tampil.filter(function (f) { return wajibKolom(f, r) && (r[f.n] === '' || r[f.n] == null); });
   if (kurang.length) { toast('Wajib diisi: ' + kurang.map(function (f) { return f.l; }).join(', ')); return; }
-  FORM.fields.forEach(function (f) { if (f.show && !f.show(r)) r[f.n] = ''; });
+  var salah = tampil.map(function (f) { return f.cek ? f.cek(r) : ''; }).filter(Boolean);
+  if (salah.length) { alert(salah.join('\n')); return; }
+  FORM.fields.forEach(function (f) { if (f.n && !tampilKolom(f, r)) r[f.n] = ''; });
   delete r._row;
   var btn = document.querySelector('#frm button[type=submit]'); btn.disabled = true; btn.textContent = 'Menyimpan…';
   FORM.onSave(r).then(function () { tutupForm(); toast('Tersimpan'); return muat(true); })

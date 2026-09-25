@@ -16,7 +16,7 @@ function vPipeline() {
     var acara = p.referensi || p.jenis_acara || 'Prospek';
     var sub = esc(p.nama_klien || '—') + (p.referensi && p.jenis_acara ? ' · ' + esc(p.jenis_acara) : '') + (p.tanggal_event ? ' · ' + tgl(p.tanggal_event) : '');
     if (aktif(p) && p.follow_up) sub += '<br><span class="' + (late ? 'neg' : '') + '">Follow-up ' + tgl(p.follow_up) + (late ? ' · terlewat' : '') + '</span>';
-    return item({lead: '<div class="av">' + inisial(acara) + '</div>', t: esc(acara), s: sub, end: waBtn(p.kontak) + statusPill(p.status) + (function () { var e = aktif(p) ? estimasiPipeline(p) : null; return e ? '<div class="s" style="margin-top:3px">' + pillStatus(e.status) + ' ' + rpSingkat(e.laba) + '</div>' : (harga ? '<div class="s">' + rpSingkat(harga) + '</div>' : ''); })(), on: "formPipeline('" + p.id + "')"});
+    return item({lead: '<div class="av">' + inisial(acara) + '</div>', t: esc(acara), s: sub, end: waBtn(p.kontak) + statusPill(p.status) + (function () { var e = aktif(p) ? estimasiPipeline(p) : null; return e ? '<div class="s" style="margin-top:3px">' + pillStatus(e.status) + ' ' + rp(e.laba) + '</div>' : (harga ? '<div class="s">' + rp(harga) + '</div>' : ''); })(), on: "formPipeline('" + p.id + "')"});
   }).join('') : '<div class="empty">Tidak ada prospek di sini.</div>') + '</div>';
   var kalah = D.pipeline.filter(function (p) { return p.status === 'Kalah' || p.status === 'Batal'; });
   if (kalah.length) {
@@ -28,7 +28,7 @@ function vPipeline() {
 
 var KALK = {sesi: 30, crew: '', harga: ''};
 function bukaKalkulator() {
-  var h = '<div class="grab"></div><h2>Kalkulator skema</h2><div class="meta" style="margin-bottom:12px">Bandingkan semua skema untuk perkiraan jumlah sesi yang sama. Angka harga & biaya dari tab PENGATURAN.</div>' +
+  var h = '<div class="grab"></div><h2>Kalkulator skema</h2><div class="meta" style="margin-bottom:12px">Bandingkan semua skema untuk perkiraan jumlah sesi yang sama. Parameter skema memakai nilai bawaan formulir kerja sama (mis. A: 15–44 sesi Rp3.000 …, B: 25%); harga & biaya dari tab PENGATURAN.</div>' +
     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:0 10px">' +
     '<div class="f"><label>Perkiraan sesi</label><input id="k_sesi" type="number" inputmode="numeric" value="' + esc(KALK.sesi) + '"></div>' +
     '<div class="f"><label>Jumlah crew</label><input id="k_crew" type="number" inputmode="numeric" placeholder="' + Pd('CREW_DEFAULT', 2) + '" value="' + esc(KALK.crew) + '"></div>' +
@@ -47,7 +47,7 @@ function hitungKalkulator() {
   var r0 = rows[0] || {};
   var h = '<div class="meta" style="margin:4px 0 8px">Biaya tetap per event: bahan ' + rp(biayaLembar()) + '/sesi · lapangan ' + rp(r0.lapangan) + ' (' + r0.crew + ' crew + transport) · alokasi ' + rp(r0.alokasi) + '</div><div class="card">';
   h += rows.map(function (r) {
-    return item({t: esc(r.skema), s: esc(r.ket) + ' · omzet ' + rpSingkat(r.pendapatan) + (r.panitia ? ' · panitia ' + rpSingkat(r.panitia) : '') + (r.impas !== undefined ? ' · impas ' + (r.impas === null ? '>1000' : r.impas) + ' sesi' : ''),
+    return item({t: esc(r.skema), s: esc(r.ket) + ' · omzet ' + rp(r.pendapatan) + (r.panitia ? ' · panitia ' + rp(r.panitia) : '') + (r.impas !== undefined ? ' · impas ' + (r.impas === null ? '>1000' : r.impas) + ' sesi' : ''),
       end: '<span class="' + cls(r.laba) + '">' + rp(r.laba) + '</span><div class="s" style="margin-top:3px">' + pillStatus(r.status) + '</div>'});
   }).join('') + '</div><div class="meta" style="margin-top:8px"><b>AMAN</b> = untung setelah alokasi Jepreto & penyusutan. <b>TIPIS</b> = biaya lapangan tertutup, alokasi belum. <b>RUGI</b> = biaya lapangan pun tidak tertutup.</div>';
   document.getElementById('k_hasil').innerHTML = h;
@@ -55,10 +55,11 @@ function hitungKalkulator() {
 
 function previewPipeline(r) {
   var sk = skemaDari(r), el = document.getElementById('preview'); if (!el) return;
-  if (!sk) { el.innerHTML = '<div class="meta">Pilih model pendapatan (dan skema) untuk melihat perkiraan laba.</div>'; return; }
-  if (sk === 'Kontrak Klien' ? !num(r.harga_deal || r.harga_penawaran) : !num(r.estimasi_sesi)) { el.innerHTML = '<div class="meta">Isi ' + (sk === 'Kontrak Klien' ? 'harga penawaran/deal' : 'estimasi sesi') + ' untuk melihat perkiraan laba.</div>'; return; }
-  var e = hitungSkema({skema: sk, sesi: r.estimasi_sesi, param: r.parameter_skema, harga: r.harga_deal || r.harga_penawaran});
-  el.innerHTML = '<div class="card pad"><div style="display:flex;justify-content:space-between;align-items:center"><div class="meta">Perkiraan laba · ' + esc(sk) + '</div>' + pillStatus(e.status) + '</div>' +
+  var ks = htmlKsPratinjau(r, FORM && FORM.ksAwal) + (r.id ? htmlRiwayatKs(r.id, r.id_event) : '');
+  if (!sk) { el.innerHTML = ks + '<div class="meta">Pilih model pendapatan (dan skema) untuk melihat perkiraan laba.</div>'; return; }
+  if (sk === 'Kontrak Klien' ? !num(r.harga_deal || r.harga_penawaran) : !num(r.estimasi_sesi)) { el.innerHTML = ks + '<div class="meta">Isi ' + (sk === 'Kontrak Klien' ? 'harga penawaran/deal' : 'perkiraan jumlah sesi') + ' untuk melihat perkiraan laba.</div>'; return; }
+  var e = hitungSkema({skema: sk, sesi: r.estimasi_sesi, harga: r.harga_deal || r.harga_penawaran, ks: r});
+  el.innerHTML = ks + '<div class="card pad" style="margin-top:8px"><div style="display:flex;justify-content:space-between;align-items:center"><div class="meta">Perkiraan laba · ' + esc(sk) + '</div>' + pillStatus(e.status) + '</div>' +
     '<div class="big ' + cls(e.laba) + '" style="font-size:24px">' + rp(e.laba) + '</div><table>' +
     '<tr><td>Omzet' + (e.ket ? ' <span class="meta">(' + esc(e.ket) + ')</span>' : '') + '</td><td class="r">' + rp(e.pendapatan) + '</td></tr>' +
     (e.panitia ? '<tr><td>Ke panitia</td><td class="r">−' + rp(e.panitia) + '</td></tr>' : '') +
@@ -69,21 +70,21 @@ function previewPipeline(r) {
 }
 
 var F_PIPELINE = [
-  {n: 'nama_klien', l: 'Nama klien / PIC', wajib: 1}, {n: 'kontak', l: 'Kontak (WA)', t: 'tel'},
-  {n: 'referensi', l: 'Nama acara / referensi'}, {n: 'status', l: 'Status', t: 'sel', o: pil('Status Pipeline'), def: 'Prospek'},
+  {n: 'nama_klien', l: 'Nama klien / narahubung (PIC)', wajib: 1}, {n: 'kontak', l: 'Kontak (WA)', t: 'tel', wajib: isKs},
+  {n: 'referensi', l: 'Nama acara / referensi', wajib: isKs}, {n: 'organisasi', l: 'Nama organisasi / panitia', wajib: isKs},
+  {n: 'status', l: 'Status', t: 'sel', o: pil('Status Pipeline'), def: 'Prospek'},
   {n: 'alasan_kalah', l: 'Alasan kalah / batal', t: 'sel', o: pil('Alasan Kalah'), show: function (r) { return r.status === 'Kalah' || r.status === 'Batal'; }},
   {n: 'follow_up', l: 'Follow-up berikutnya', t: 'date'},
-  {g: 'Acara'}, {n: 'jenis_acara', l: 'Jenis acara', t: 'sel', o: pil('Jenis Acara')}, {n: 'tanggal_event', l: 'Tanggal acara', t: 'date'},
-  {n: 'kota', l: 'Kota'}, {n: 'luar_kota', l: 'Luar kota?', t: 'sel', o: pil('Ya/Tidak')},
+  {g: 'Acara'}, {n: 'jenis_acara', l: 'Jenis acara', t: 'sel', o: pil('Jenis Acara')}, {n: 'tanggal_event', l: 'Tanggal acara', t: 'date', wajib: isKs},
+  {n: 'jam_buka', l: 'Jam buka', t: 'time', wajib: isKs}, {n: 'jam_tutup', l: 'Jam tutup', t: 'time', wajib: isKs},
+  {n: 'lokasi', l: 'Lokasi', wajib: isKs}, {n: 'kota', l: 'Kota'}, {n: 'luar_kota', l: 'Luar kota?', t: 'sel', o: pil('Ya/Tidak')},
   {n: 'indoor_outdoor', l: 'Indoor / outdoor', t: 'sel', o: pil('Indoor/Outdoor')}, {n: 'estimasi_tamu', l: 'Estimasi tamu', t: 'num'},
-  {g: 'Penawaran'}, {n: 'model_pendapatan', l: 'Model pendapatan', t: 'sel', o: pil('Model Pendapatan')},
-  {n: 'skema', l: 'Skema kerja sama', t: 'sel', o: pil('Skema'), show: function (r) { return r.model_pendapatan === 'Kerja Sama Panitia'; }},
-  {n: 'parameter_skema', l: 'Parameter skema', show: function (r) { return r.model_pendapatan === 'Kerja Sama Panitia'; }},
-  {n: 'estimasi_sesi', l: 'Estimasi sesi', t: 'num'}, {n: 'paket', l: 'Paket'},
-  {n: 'harga_penawaran', l: 'Harga penawaran (Rp)', t: 'num'}, {n: 'harga_deal', l: 'Harga deal (Rp)', t: 'num'},
+  {g: 'Penawaran'}].concat(kolomModelSkema(), [
+  {n: 'estimasi_sesi', l: 'Perkiraan jumlah sesi', t: 'num', wajib: isKs}, {n: 'paket', l: 'Paket'},
+  {n: 'harga_penawaran', l: 'Harga penawaran (Rp)', t: 'num'}, {n: 'harga_deal', l: 'Harga deal (Rp)', t: 'num'}], F_KS, [
   {g: 'Asal'}, {n: 'sumber', l: 'Sumber', t: 'sel', o: pil('Sumber')}, {n: 'kanal', l: 'Kanal', t: 'sel', o: pil('Kanal')},
   {n: 'tanggal_masuk', l: 'Tanggal masuk', t: 'date', def: 'today'}, {n: 'catatan', l: 'Catatan', t: 'area'}
-];
+]);
 function formPipeline(id) {
   var p = id ? cari(D.pipeline, 'id', id) : {};
   var extra = '';
@@ -91,6 +92,7 @@ function formPipeline(id) {
   if (p.id_event) extra += '<button class="btn ghost" type="button" onclick="tutupForm();bukaEvent(\'' + p.id_event + '\')">Lihat ' + esc(p.id_event) + '</button>';
   if (id) extra += '<button class="ubah btn danger" type="button" onclick="hapus(\'PIPELINE\',\'' + id + '\')">Hapus</button>';
   bukaForm(id ? 'Prospek ' + id : 'Prospek baru', F_PIPELINE, p, function (r) { return panggil('saveRecord', 'PIPELINE', r); }, extra, previewPipeline);
+  FORM.ksAwal = p.ks_status || ''; FORM.terkunci = kunciKs(FORM.ksAwal); aturTampil();
 }
 function jadiEvent(id) {
   var r = bacaForm(); delete r._row;
