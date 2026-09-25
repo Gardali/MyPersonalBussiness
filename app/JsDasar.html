@@ -137,6 +137,9 @@ function hasilEvent(ev) {
   h.untungLembar = hargaEv(ev, 'HARGA_4R') - h.bl;
   h.bepLapangan = h.untungLembar > 0 ? Math.ceil((h.keluar) / h.untungLembar) : null;
   h.bepTotal = h.untungLembar > 0 ? Math.ceil((h.keluar + h.alokasi) / h.untungLembar) : null;
+  // Titik impas sesuai RAB: seluruh biaya yang direncanakan (penyusutan, Jepreto, fee crew, transport, konsumsi) ÷ untung per lembar.
+  h.rabTotal = h.rab.penyusutan + h.rab.jepreto + h.rab.feeCrew + h.rab.transport + h.rab.konsumsi;
+  h.bepRab = h.untungLembar > 0 && h.rabTotal > 0 ? Math.ceil(h.rabTotal / h.untungLembar) : null;
   if (lap) {
     var adaSplit = lap.sesi_terjual !== '' && lap.sesi_terjual != null;
     // sesi_terjual = jumlah sesi di Jepreto, termasuk sesi cetak ulang pakai voucher (diskon penuh, Rp0) → dikurangi.
