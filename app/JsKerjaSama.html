@@ -135,6 +135,48 @@ function hitungKs(r, sesi, omzet) {
   o.bayar = k === 'E' || k === 'F' ? 0 : o.panitia;
   return o;
 }
+/**
+ * Bagi hasil ke panitia untuk n sesi (A/B/C), dengan parameter dibaca sekali — dipakai berulang saat mencari titik impas.
+ * Skema B memakai omzet ≈ n × harga 4R (sama dengan simulasi). null bila bukan A/B/C.
+ */
+function fungsiBagiHasil(r) {
+  var k = skemaKs(r), harga = hargaEv(r, 'HARGA_4R');
+  if (k === 'A') { var rows = parseTingkat(r.ks_a_tingkat || KS_TINGKAT_BAWAAN); return function (n) { return n * tarifTingkat(rows, n).rate; }; }
+  if (k === 'B') { var pc = persenKs(r.ks_b_persen); return function (n) { return n * harga * pc; }; }
+  if (k === 'C') {
+    var awal = num(r.ks_c_sesi_awal), per = r.ks_c_bentuk !== 'Rupiah per sesi' ? harga * persenKs(r.ks_c_nilai) : num(r.ks_c_nilai);
+    return function (n) { return Math.max(0, n - awal) * per; };
+  }
+  return null;
+}
+/**
+ * Titik impas event kerja sama panitia (dipanggil dari hasilEvent). Bagi hasil yang sudah dibayar (Kas kategori
+ * Bagi Hasil Panitia) dikeluarkan dari biaya nyata supaya tidak terhitung dua kali, lalu:
+ *   A/B/C → lembar terkecil n dengan n × untung/lembar − bagi hasil(n) ≥ biaya (dicari satu per satu: tarif A naik per tingkat);
+ *   D     → fee panitia masuk sebagai biaya tetap;  E/F → tidak ada titik impas per lembar (dibayar panitia di muka).
+ */
+function impasKs(ev, h) {
+  var k = skemaKs(ev); if (!k) return;
+  h.bepKs = k;
+  if (k === 'E' || k === 'F') { h.bepLapangan = h.bepTotal = h.bepRab = null; return; }
+  var untung = h.untungLembar, sudahBagi = sum(h.kas.filter(function (c) { return c.jenis === 'Keluar' && c.kategori === KAT_BAGI_HASIL; }), function (c) { return c.nominal; });
+  var nyata = h.keluar - sudahBagi, cari;
+  if (untung <= 0) { h.bepLapangan = h.bepTotal = h.bepRab = null; return; }
+  if (k === 'D') {
+    var fee = num(ev.ks_d_fee);
+    h.feePanitia = fee;
+    cari = function (biaya) { return Math.ceil((biaya + fee) / untung); };
+  } else {
+    var bagi = fungsiBagiHasil(ev);
+    cari = function (biaya) {
+      for (var n = 0; n <= 3000; n++) if (n * untung - bagi(n) >= biaya) return n;
+      return null; // bagi hasil terlalu besar: tidak pernah impas dalam 3000 lembar
+    };
+  }
+  h.bepLapangan = cari(nyata);
+  h.bepTotal = cari(nyata + h.alokasi);
+  h.bepRab = h.rabTotal > 0 ? cari(h.rabTotal) : null;
+}
 function durasiKs(r) {
   var a = menit(r.jam_buka), b = menit(r.jam_tutup);
   if (a === null || b === null) return '';

@@ -24,22 +24,23 @@ function bukaEvent(id) { DETAIL = id; tampil('event'); }
  * Kartu titik impas: tiga target lembar — sesuai RAB (biaya rencana), biaya nyata + alokasi, dan biaya lapangan nyata.
  * Bar diskalakan ke target terbesar; ◆ = RAB, ▲ = biaya lapangan nyata.
  */
-function htmlTitikImpas(r, terjual) {
+function htmlTitikImpas(r, terjual, e) {
   var skala = Math.max(r.bepTotal || 0, r.bepRab || 0, terjual, 1), pos = function (n) { return Math.min(100, Math.round(n / skala * 100)); };
   var utama = r.bepRab !== null ? r.bepRab : r.bepTotal, tanda = function (n, simbol) { return '<div style="position:absolute;left:' + pos(n) + '%;transform:translateX(-50%);top:2px;font-size:11px;color:var(--muted);white-space:nowrap">' + simbol + ' ' + n + '</div>'; };
   var target = function (label, n, ket) {
-    if (n === null) return '';
+    if (n === null) return r.bepKs ? '<tr><td>' + label + '</td><td class="r"><b class="neg">tidak impas</b><div class="meta">bagi hasil terlalu besar</div></td></tr>' : '';
     var capai = terjual >= n;
     return '<tr><td>' + label + (ket ? '<div class="meta">' + ket + '</div>' : '') + '</td><td class="r"><b>' + n + ' lembar</b><div class="meta ' + (capai ? 'pos' : '') + '">' + (capai ? 'tercapai' : 'kurang ' + (n - terjual)) + '</div></td></tr>';
   };
   return '<div class="card pad" style="margin-top:8px"><div class="meta">Titik impas (untung ' + rp(r.untungLembar) + '/lembar)</div>' +
     '<div style="font-weight:700;margin:2px 0 10px">' + terjual + ' terjual' + (utama ? ' dari ' + utama + ' lembar' + (r.bepRab !== null ? ' (sesuai RAB)' : '') : '') + '</div>' +
     '<div style="position:relative;height:10px;border-radius:10px;background:var(--soft);overflow:hidden"><div style="height:100%;width:' + pos(terjual) + '%;background:' + (terjual >= utama ? 'var(--ok)' : 'var(--accent)') + ';border-radius:10px"></div></div>' +
-    '<div style="position:relative;height:18px">' + (r.bepRab !== null ? tanda(r.bepRab, '◆') : '') + (r.bepLapangan !== r.bepRab ? tanda(r.bepLapangan, '▲') : '') + '</div>' +
-    '<table>' + target('◆ Sesuai RAB', r.bepRab, 'RAB ' + rp(r.rabTotal) + ' ÷ ' + rp(r.untungLembar)) +
+    '<div style="position:relative;height:18px">' + (r.bepRab !== null ? tanda(r.bepRab, '◆') : '') + (r.bepLapangan !== null && r.bepLapangan !== r.bepRab ? tanda(r.bepLapangan, '▲') : '') + '</div>' +
+    '<table>' + (r.rabTotal > 0 ? target('◆ Sesuai RAB', r.bepRab, 'RAB ' + rp(r.rabTotal) + (r.bepKs ? '' : ' ÷ ' + rp(r.untungLembar))) : '') +
     target('Biaya nyata + alokasi', r.bepTotal, rp(r.keluar) + ' + alokasi ' + rp(r.alokasi)) +
-    target('▲ Biaya lapangan nyata', r.bepLapangan, 'kas keluar ' + rp(r.keluar)) + '</table>' +
-    (r.bepRab === null ? '<div class="meta" style="margin-top:6px">Isi RAB di Ubah event untuk melihat titik impas sesuai rencana.</div>' : '') + '</div>';
+    target('▲ Biaya lapangan nyata', r.bepLapangan, 'kas keluar ' + rp(r.keluar) + (r.bepKs ? ' (bagi hasil yang sudah dibayar tidak dihitung dua kali)' : '')) + '</table>' +
+    (r.bepKs ? '<div class="meta" style="margin-top:6px">Sudah memperhitungkan ' + (r.bepKs === 'D' ? 'fee panitia ' + rp(r.feePanitia) + ' sebagai biaya tetap' : 'bagi hasil panitia Skema ' + r.bepKs + ' (' + esc(KS_NAMA[r.bepKs]) + ') per jumlah sesi') + '.</div>' : '') +
+    (r.rabTotal > 0 ? '' : '<div class="meta" style="margin-top:6px">Isi RAB di Ubah event untuk melihat titik impas sesuai rencana.</div>') + '</div>';
 }
 
 // ---- foto bukti & persetujuan laporan (admin/pemantau)
@@ -116,7 +117,7 @@ function vDetailEvent() {
       (tg.kurang ? '<div class="meta ' + (tg.sisaHari !== null && tg.sisaHari < 0 ? 'neg' : '') + '" style="margin:8px 0 10px">Tagih ' + (tg.tahap === 'DP' ? 'DP' : 'pelunasan') + ' <b>' + rp(tg.kurang) + '</b> · ' + teksJatuhTempo(tg) + '</div>' +
         '<button class="ubah btn sm" onclick="formKas(null,\'' + e.id_event + '\',{jenis:\'Masuk\',kategori:\'DP / Pelunasan Kontrak\',nominal:' + tg.kurang + ',keterangan:\'' + (tg.tahap === 'DP' ? 'DP' : 'Pelunasan') + ' ' + esc(String(e.nama_event).replace(/['\\]/g, '')) + '\'})">+ Catat pembayaran</button>' : '') + '</div>';
   }
-  if (openBooth && r.bepLapangan !== null) hk += htmlTitikImpas(r, lap ? r.lembarTerjual : 0);
+  if (openBooth && (r.bepLapangan !== null || (r.bepKs && 'ABCD'.indexOf(r.bepKs) >= 0 && r.untungLembar > 0))) hk += htmlTitikImpas(r, lap ? r.lembarTerjual : 0, e);
   h += '<div class="cols"><div class="col">' + sec('Keuangan', hk);
   if (skemaKs(e)) h += sec('Kerja sama panitia', htmlKsEvent(e));
   var hv = htmlVoucherEvent(e);
@@ -320,7 +321,7 @@ function dataLaporanEvent(e) {
   if (r.masuk) kv(s, 'Margin laba kotor', r.labaKotor / r.masuk, 'pct');
   if (e.model_pendapatan !== 'Kontrak Klien' && r.untungLembar > 0) {
     if (r.bepRab !== null) kv(s, 'Titik impas sesuai RAB (lembar)', r.bepRab, 'n');
-    kv(s, 'Titik impas biaya nyata + alokasi (lembar)', r.bepTotal, 'n');
+    if (r.bepTotal !== null) kv(s, 'Titik impas biaya nyata + alokasi (lembar)', r.bepTotal, 'n');
   }
   kosong(s);
 
