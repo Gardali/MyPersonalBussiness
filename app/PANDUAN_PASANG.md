@@ -106,6 +106,19 @@ dengan jam, lokasi, klien + WA, dan rekan crew — tanpa kontrak, fee, kas, atau
 - Kalkulator skema (Pipeline → Kalkulator) kini memakai nilai bawaan formulir kerja sama. Pengaturan `SKEMA_*` di tab
   PENGATURAN tidak dipakai lagi.
 
+## Voucher mitra (mis. Sinektive)
+- **Ubah event → Voucher mitra**: isi nama mitra (bawaan *Sinektive*) dan **potongan per voucher** (yang ditagih ke mitra).
+- Detail event → **Voucher** → **Tambah voucher**: tempel daftar kode, satu per baris (`KODE` atau `KODE, nama pemegang`),
+  boleh langsung dari spreadsheet. Kode yang sudah ada di event itu dilewati.
+- Di hari event crew membuka **Voucher** di Event saya, mencari kode, lalu **mencentang** saat tamu menukar. Yang sudah
+  ditukar turun ke bawah & tercoret, beserta jam & nama crew. Kode yang sudah ditukar tidak bisa ditukar lagi (muncul
+  peringatan "SUDAH DITUKAR pukul … oleh …"). Batal tukar perlu konfirmasi dan tercatat di kolom riwayat (tab **VOUCHER**).
+- Tamu voucher tetap sesi biasa dan membayar harga dikurangi potongan. Omzet laporan otomatis dikurangi *voucher ditukar ×
+  potongan*, jadi selisih kas tetap cocok.
+- Tagihan ke mitra = voucher ditukar × potongan, tampil di detail event & Beranda sampai lunas. **+ Catat pembayaran dari
+  mitra** mencatatnya di Kas (kategori *Klaim Voucher Mitra*). **Unduh Laporan** memuat lembar **Voucher** (daftar kode yang
+  ditukar, jam, crew) sebagai bukti klaim.
+
 ## SOP event
 - Isi SOP ada di tab **SOP** (dibuat otomatis dari "SOP Event Posetive Photobooth" saat aplikasi pertama kali dibuka
   setelah pembaruan). Ubah lewat **Lainnya → SOP event** — ketuk bagian untuk mengubah, **+ Bagian** untuk menambah.

@@ -16,7 +16,8 @@ var TABS = {
   CREW: { id: 'id_crew', prefix: 'CR-', pad: 3 },
   TUGAS_CREW: { id: 'id', prefix: 'TC-', pad: 4 },
   SOP: { id: 'id', prefix: 'SOP-', pad: 3 },
-  SOP_EVENT: { id: 'id', prefix: 'SE-', pad: 5 }
+  SOP_EVENT: { id: 'id', prefix: 'SE-', pad: 5 },
+  VOUCHER: { id: 'id', prefix: 'VC-', pad: 5 }
 };
 var MUTASI_HEAD = ['id', 'tanggal', 'bahan', 'jenis', 'jumlah', 'id_event', 'sumber', 'catatan'];
 var CREW_HEAD = ['id_crew', 'foto', 'nama_lengkap', 'nama_panggilan', 'domisili', 'kendaraan', 'bank', 'no_rekening',
@@ -50,7 +51,7 @@ var KAS_KOLOM_BARU = ['sumber'];
 var CREW_KOLOM_BARU = ['email'];
 var TUGAS_KOLOM_BARU = ['peran']; // FC / Operator Depan / Operator Cetak (lihat Sop.gs)
 // Pilihan dropdown baru yang ditambahkan otomatis ke tab PILIHAN bila belum ada.
-var PILIHAN_BARU = { 'Kategori Kas': ['Admin QRIS', 'Admin Pencairan QRIS', 'Bagi Hasil Panitia', 'Pembayaran Panitia'] };
+var PILIHAN_BARU = { 'Kategori Kas': ['Admin QRIS', 'Admin Pencairan QRIS', 'Bagi Hasil Panitia', 'Pembayaran Panitia', 'Klaim Voucher Mitra'] };
 
 /** Menambahkan nilai dropdown baru ke kolom PILIHAN yang sudah ada, di bawah nilai lama (tidak menyentuh nilai lama). */
 function tambahPilihan_() {
@@ -174,6 +175,7 @@ function siapkan_() {
   tambahKolom_('TUGAS_CREW', TUGAS_KOLOM_BARU);
   siapkanSop_();
   siapkanKs_();
+  siapkanVoucher_();
 
   if (ss.getSheetByName('MUTASI_STOK')) return;
   var sh = ss.insertSheet('MUTASI_STOK');
@@ -219,6 +221,7 @@ function getData_() {
     sop: readTab_('SOP'),
     sopEvent: readTab_('SOP_EVENT'),
     riwayatKs: readTab_('RIWAYAT_KS'),
+    voucher: readTab_('VOUCHER'),
     kalender: kalenderAktif_(),
     hariIni: Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
   };

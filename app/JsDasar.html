@@ -145,8 +145,11 @@ function hasilEvent(ev) {
     // Lembar tambahan = strip tambahan (produk yang sama, harga HARGA_STRIP). strip_terjual hanya ada di laporan lama.
     h.lembarTambahan = num(lap.lembar_tambahan) + Math.ceil(num(lap.strip_terjual) * (P('LEMBAR_PER_STRIP') || 1));
     // Harga resmi event (isian kerja sama) bila ada, selain itu PENGATURAN — lihat hargaEv di JsKerjaSama.
+    // Voucher mitra (mis. Sinektive) = potongan harga yang dibayar mitra, bukan tamu → dikurangkan dari uang yang seharusnya diterima.
+    h.voucherMitra = (D.voucher || []).filter(function (v) { return v.id_event === ev.id_event && v.ditukar === 'Ya'; }).length;
+    h.potonganVoucher = h.voucherMitra * num(ev.voucher_nilai);
     h.omzet = h.sesiTerjual * hargaEv(ev, 'HARGA_4R') + h.lembarTambahan * hargaEv(ev, 'HARGA_STRIP') + num(lap.grad_book_terjual) * hargaEv(ev, 'HARGA_BUKU') -
-      num(lap.grup_potongan) * hargaEv(ev, 'POTONGAN_GRUP');
+      num(lap.grup_potongan) * hargaEv(ev, 'POTONGAN_GRUP') - h.potonganVoucher;
     h.diterima = num(lap.tunai_dihitung) - num(lap.modal_kembalian) + num(lap.qris_transfer);
     h.selisihKas = h.diterima - h.omzet;
     h.lembarTerjual = h.sesiTerjual + h.lembarTambahan + num(lap.grad_book_terjual);

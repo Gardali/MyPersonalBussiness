@@ -85,6 +85,9 @@ function vBeranda() {
   semuaCrewBentrok().forEach(function (b) {
     n += '<div onclick="bukaEvent(\'' + b.ev[0].id_event + '\')" style="cursor:pointer">' + notice('bad', '<b>' + esc(namaCrew(b.id_crew)) + ' bentrok ' + tgl(b.tanggal) + '</b> — ditugaskan di ' + b.ev.map(function (e) { return esc(e.nama_event) + (e.jam_buka ? ' (' + esc(e.jam_buka) + ')' : ''); }).join(' & ') + '.') + '</div>';
   });
+  klaimVoucherTertunda().forEach(function (x) {
+    n += '<div onclick="bukaEvent(\'' + x.e.id_event + '\')" style="cursor:pointer">' + notice('', '<b>Tagih ' + esc(x.k.mitra) + ' ' + rp(x.k.kurang) + '</b> — ' + x.k.jumlah + ' voucher ditukar di ' + esc(x.e.nama_event) + ' (' + tgl(x.e.tanggal) + ').') + '</div>';
+  });
   ksMendesak().forEach(function (x) {
     n += '<div onclick="bukaEvent(\'' + x.e.id_event + '\')" style="cursor:pointer">' + notice(x.o.sisaHari < 0 ? 'bad' : '', '<b>' + (x.o.arah === 'tagih' ? 'Tagih panitia ' : 'Bayar ' + (skemaKs(x.e) === 'D' ? 'fee' : 'bagi hasil') + ' ke panitia ') + esc(x.e.nama_event) + '</b> — ' + rp(x.o.kurang) + ', ' + teksJatuhKs(x.o) + '. ' + waBtn(kontakEvent(x.e))) + '</div>';
   });

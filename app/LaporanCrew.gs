@@ -103,13 +103,15 @@ function sopEventIni_(idEvent) {
 // ---------------------------------------------------------------- email ringkasan
 
 /** Angka penting laporan — rumus sama dengan hasilEvent() di JsDasar. */
-function ringkasLaporan_(l, p) {
+/** vm: ringkasan voucher mitra event ({jumlah, potongan}) — potongannya dikurangkan dari omzet. */
+function ringkasLaporan_(l, p, vm) {
   var n = function (v) { var x = Number(v); return isFinite(x) ? x : 0; };
   // Sesi di Jepreto termasuk sesi cetak ulang pakai voucher (diskon penuh) → dikurangi, sama dengan hasilEvent() di JsDasar.
   var sesi = Math.max(0, (l.sesi_terjual !== '' && l.sesi_terjual != null ? n(l.sesi_terjual) : n(l.foto_4r_terjual)) - n(l.cetak_ulang_voucher));
   var tambahan = n(l.lembar_tambahan) + Math.ceil(n(l.strip_terjual) * (n(p.LEMBAR_PER_STRIP) || 1));
   var r = { tercetak: Math.max(0, n(l.counter_akhir) - n(l.counter_awal)), sesi: sesi, tambahan: tambahan, buku: n(l.grad_book_terjual) };
-  r.omzet = sesi * n(p.HARGA_4R) + tambahan * n(p.HARGA_STRIP) + r.buku * n(p.HARGA_BUKU) - n(l.grup_potongan) * n(p.POTONGAN_GRUP);
+  r.omzet = sesi * n(p.HARGA_4R) + tambahan * n(p.HARGA_STRIP) + r.buku * n(p.HARGA_BUKU) - n(l.grup_potongan) * n(p.POTONGAN_GRUP) - (vm ? n(vm.potongan) : 0);
+  r.voucherMitra = vm || null;
   r.diterima = n(l.tunai_dihitung) - n(l.modal_kembalian) + n(l.qris_transfer);
   r.selisihKas = r.diterima - r.omzet;
   r.selisihLembar = r.tercetak - (sesi + tambahan + r.buku + n(l.lembar_uji_bonus) + n(l.lembar_gagal));
@@ -133,7 +135,7 @@ function cobaEmailLaporan_(idEvent, diperbarui) {
 
 function emailLaporan_(idEvent, diperbarui) {
   var l = laporanEvent_(idEvent), e = readTab_('EVENT').filter(function (x) { return x.id_event === idEvent; })[0] || { nama_event: idEvent, tanggal: '' };
-  var p = hargaEvent_(pengaturan_(), e), r = ringkasLaporan_(l, p), esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var p = hargaEvent_(pengaturan_(), e), r = ringkasLaporan_(l, p, e.id_event ? ringkasVoucher_(e) : null), esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var masalah = [], sop = { total: 0, selesai: 0, terlewat: [] };
   try { sop = sopEventIni_(idEvent); } catch (err) { }
   if (r.selisihLembar) masalah.push('selisih lembar ' + r.selisihLembar);
@@ -151,6 +153,7 @@ function emailLaporan_(idEvent, diperbarui) {
     baris('Sesi berbayar · Lembar tambahan · Grad Book', r.sesi + ' · ' + r.tambahan + ' · ' + r.buku + (r.voucher ? ' (+' + r.voucher + ' sesi voucher)' : '')) +
     baris('Tercetak (counter ' + esc(l.counter_awal) + ' → ' + esc(l.counter_akhir) + ')', r.tercetak) +
     baris('Selisih lembar', r.selisihLembar || 'Cocok', !!r.selisihLembar) +
+    (r.voucherMitra && r.voucherMitra.jumlah ? baris('Voucher ' + esc(r.voucherMitra.mitra) + ' ditukar', r.voucherMitra.jumlah + ' × ' + rupiah_(r.voucherMitra.nilai) + ' = ' + rupiah_(r.voucherMitra.potongan) + ' (ditagih ke ' + esc(r.voucherMitra.mitra) + ')') : '') +
     baris('Omzet menurut laporan', rupiah_(r.omzet)) +
     baris('Uang diterima (tunai − modal + QRIS)', rupiah_(r.diterima)) +
     baris('Selisih kas', r.selisihKas ? rupiah_(r.selisihKas) : 'Cocok', !!r.selisihKas) +

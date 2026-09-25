@@ -1,0 +1,110 @@
+<script>
+// Posetive — voucher mitra per event (mis. Sinektive): daftar kode, dicentang saat ditukar di booth.
+// Belum ditukar di atas; yang sudah ditukar turun ke bawah & tercoret. Potongan voucher dikurangkan dari omzet laporan
+// dan ditagihkan ke mitra (jumlah ditukar × nilai). Server: Voucher.gs.
+var VC = null; // panel yang terbuka: {id, cari}
+var KAT_KLAIM_VOUCHER = 'Klaim Voucher Mitra';
+function voucherEv(idEvent) { return (D.voucher || []).filter(function (v) { return v.id_event === idEvent; }); }
+function ringkasVoucherEv(e) {
+  var l = voucherEv(e.id_event), n = l.filter(function (v) { return v.ditukar === 'Ya'; }).length, nilai = num(e.voucher_nilai);
+  return {total: l.length, jumlah: n, nilai: nilai, potongan: n * nilai, mitra: e.voucher_mitra || 'Mitra'};
+}
+/** Tagihan ke mitra = voucher ditukar × nilai; dibayar = Kas Masuk kategori Klaim Voucher Mitra di event itu. */
+function klaimVoucher(e) {
+  var r = ringkasVoucherEv(e); if (!r.jumlah || !r.nilai) return null;
+  r.dibayar = sum((D.kas || []).filter(function (k) { return k.id_event === e.id_event && k.jenis === 'Masuk' && k.kategori === KAT_KLAIM_VOUCHER; }), function (k) { return k.nominal; });
+  r.kurang = Math.max(0, r.potongan - r.dibayar);
+  return r;
+}
+/** Klaim mitra yang belum lunas dari event yang sudah lewat (untuk Beranda). */
+function klaimVoucherTertunda() {
+  return (D.event || []).filter(function (e) { return e.tanggal && e.tanggal < D.hariIni && e.status !== 'Batal'; })
+    .map(function (e) { return {e: e, k: klaimVoucher(e)}; }).filter(function (x) { return x.k && x.k.kurang > 0; });
+}
+
+// ---------------------------------------------------------------- panel daftar voucher
+function bukaVoucher(idEvent) { VC = {id: idEvent, cari: ''}; renderVoucher(); document.getElementById('sheet').classList.add('open'); }
+function renderVoucher() {
+  var e = cari(D.event, 'id_event', VC.id); if (!e) return;
+  var r = ringkasVoucherEv(e);
+  var h = '<div class="grab"></div><h2>Voucher ' + esc(r.mitra) + ' · ' + esc(e.nama_event) + '</h2><div class="meta" id="vc_ringkas" style="margin-bottom:10px"></div>' +
+    '<div class="f"><input id="vc_cari" type="search" placeholder="Cari kode atau nama pemegang…" autocomplete="off" autocapitalize="characters" value="' + esc(VC.cari) + '" oninput="VC.cari=this.value;renderDaftarVoucher()"></div>' +
+    '<div id="vc_daftar"></div>';
+  if (bisaUbah()) h += '<details class="sop-lipat" style="margin-top:12px"><summary class="sop-fase"><span class="judul">Tambah voucher</span><span class="chev">›</span></summary><div class="card pad">' +
+    '<div class="meta" style="margin-bottom:6px">Satu voucher per baris: <b>KODE</b> atau <b>KODE, nama pemegang</b>. Bisa ditempel langsung dari spreadsheet. Kode yang sudah ada dilewati.</div>' +
+    '<textarea id="vc_tambah" style="width:100%;min-height:110px" placeholder="SNK-001, Andi\nSNK-002\nSNK-003, Budi"></textarea>' +
+    '<div class="btns" style="margin:8px 0 0"><button class="btn sm" type="button" onclick="tambahVoucherUI(this)">Tambahkan</button></div>' +
+    (r.nilai ? '' : '<div class="meta neg" style="margin-top:8px">Nilai potongan per voucher belum diisi — isi di Ubah event → Voucher mitra, supaya tagihan ke ' + esc(r.mitra) + ' terhitung.</div>') + '</div></details>';
+  h += '<div class="btns"><button class="btn ghost" type="button" style="flex:1" onclick="tutupForm()">Tutup</button></div>';
+  document.getElementById('panel').innerHTML = h;
+  renderDaftarVoucher();
+}
+function renderDaftarVoucher() {
+  var e = cari(D.event, 'id_event', VC.id); if (!e) return;
+  var r = ringkasVoucherEv(e), boleh = bolehIsi(VC.id), admin = bisaUbah(), q = String(VC.cari || '').trim().toUpperCase(), semua = voucherEv(VC.id);
+  var ring = document.getElementById('vc_ringkas');
+  if (ring) ring.innerHTML = '<b>' + r.jumlah + ' dari ' + r.total + '</b> ditukar' + (r.nilai ? ' · potongan ' + rp(r.nilai) + '/voucher · tagih ' + esc(r.mitra) + ' <b>' + rp(r.potongan) + '</b>' : '') +
+    (boleh ? '' : ' · <b>lihat saja</b>' + (peran() === 'crew' ? ' (bisa dicentang pada hari event)' : ''));
+  var cocok = q ? semua.filter(function (v) { return String(v.kode).toUpperCase().indexOf(q) >= 0 || String(v.pemegang || '').toUpperCase().indexOf(q) >= 0; }) : semua;
+  var tepat = q ? semua.filter(function (v) { return String(v.kode).toUpperCase() === q; })[0] : null, h = '';
+  if (tepat) h += notice(tepat.ditukar === 'Ya' ? 'bad' : '', tepat.ditukar === 'Ya' ? '<b>' + esc(tepat.kode) + ' SUDAH DITUKAR</b> pukul ' + esc(String(tepat.ditukar_pada).slice(11)) + ' oleh ' + esc(tepat.ditukar_oleh) + '. Jangan dilayani lagi.' :
+    '<b>' + esc(tepat.kode) + '</b> belum ditukar' + (tepat.pemegang ? ' · ' + esc(tepat.pemegang) : '') + '. Centang saat tamu memakainya.');
+  else if (q && !cocok.length) h += notice('bad', 'Kode <b>' + esc(VC.cari) + '</b> tidak ada di daftar voucher event ini.');
+  var belum = cocok.filter(function (v) { return v.ditukar !== 'Ya'; }).sort(function (a, b) { return String(a.kode).localeCompare(String(b.kode), 'id', {numeric: true}); });
+  var sudah = cocok.filter(function (v) { return v.ditukar === 'Ya'; }).sort(function (a, b) { return String(a.ditukar_pada) < String(b.ditukar_pada) ? 1 : -1; });
+  var baris = function (v) {
+    var x = v.ditukar === 'Ya';
+    return '<div class="it vc-baris' + (x ? ' vc-sudah' : '') + '"><label class="vc-cek"><input type="checkbox"' + (x ? ' checked' : '') + (boleh ? '' : ' disabled') + ' onchange="tukarVoucherUI(\'' + v.id + '\',this)">' +
+      '<span class="mid"><span class="t">' + esc(v.kode) + '</span><span class="s">' + [esc(v.pemegang), x ? '✓ ' + esc(String(v.ditukar_pada).slice(11)) + ' · ' + esc(v.ditukar_oleh) : ''].filter(Boolean).join(' · ') + '</span></span></label>' +
+      (admin && !x ? '<button class="btn sm ghost" type="button" title="Buang dari daftar" onclick="hapusVoucherUI(\'' + v.id + '\')">✕</button>' : '') + '</div>';
+  };
+  if (!semua.length) h += '<div class="card"><div class="empty">' + (admin ? 'Belum ada voucher. Tambahkan di bawah.' : 'Belum ada voucher untuk event ini.') + '</div></div>';
+  else h += '<div class="card" style="margin-top:8px">' + (belum.length ? belum.map(baris).join('') : '<div class="empty">' + (q ? 'Tidak ada yang belum ditukar.' : 'Semua voucher sudah ditukar.') + '</div>') + '</div>' +
+    (sudah.length ? '<div class="grp">Sudah ditukar (' + sudah.length + ')</div><div class="card">' + sudah.map(baris).join('') + '</div>' : '');
+  var el = document.getElementById('vc_daftar'); if (el) el.innerHTML = h;
+}
+/** Disimpan langsung per centang. Batal tukar perlu konfirmasi. Kode yang ternyata sudah ditukar orang lain ditolak server. */
+function tukarVoucherUI(id, el) {
+  var v = cari(D.voucher || [], 'id', id), tukar = el.checked;
+  if (!tukar && !confirm('Batalkan penukaran ' + v.kode + '? Voucher ini akan bisa ditukar lagi.')) { el.checked = true; return; }
+  el.disabled = true;
+  panggil(D.modeCrew ? 'tukarVoucherCrew' : 'tukarVoucher', id, tukar).then(function (rows) {
+    D.voucher = (D.voucher || []).filter(function (x) { return x.id_event !== v.id_event; }).concat(rows);
+    if (VC && VC.id === v.id_event) renderDaftarVoucher();
+    if (tukar) toast(v.kode + ' ditukar');
+  }).catch(function (err) {
+    el.checked = !tukar; el.disabled = false;
+    alert(String(err && err.message || err).replace(/^Error:\s*/, ''));
+    muat(true).then(function () { if (VC) renderDaftarVoucher(); });
+  });
+}
+function tambahVoucherUI(btn) {
+  var teks = document.getElementById('vc_tambah').value, id = VC.id;
+  if (!teks.trim()) { toast('Tempel kode voucher dulu'); return; }
+  btn.disabled = true; btn.textContent = 'Menyimpan…';
+  panggil('tambahVoucher', id, teks).then(function (h) {
+    if (h.dobel.length) alert(h.ditambah + ' voucher ditambahkan. ' + h.dobel.length + ' dilewati karena sudah ada: ' + h.dobel.slice(0, 15).join(', ') + (h.dobel.length > 15 ? ', …' : ''));
+    else toast(h.ditambah + ' voucher ditambahkan');
+    return muat(true);
+  }).then(function () { if (VC && VC.id === id) renderVoucher(); })
+    .catch(function (err) { btn.disabled = false; btn.textContent = 'Tambahkan'; toast('Gagal: ' + (err && err.message || err)); });
+}
+function hapusVoucherUI(id) {
+  var v = cari(D.voucher || [], 'id', id);
+  if (!confirm('Buang ' + v.kode + ' dari daftar voucher?')) return;
+  panggil('hapusVoucher', id).then(function () { D.voucher = D.voucher.filter(function (x) { return x.id !== id; }); renderDaftarVoucher(); })
+    .catch(function (err) { toast('Gagal: ' + (err && err.message || err)); });
+}
+
+// ---------------------------------------------------------------- kartu di detail event (admin & pemantau)
+function htmlVoucherEvent(e) {
+  var r = ringkasVoucherEv(e); if (!r.total && !r.nilai) return '';
+  var k = klaimVoucher(e);
+  var h = '<div class="card pad" style="cursor:pointer" onclick="bukaVoucher(\'' + e.id_event + '\')"><div style="font-weight:700">' + r.jumlah + ' dari ' + r.total + ' voucher ditukar</div>' +
+    '<div class="meta" style="margin-top:4px">' + (r.nilai ? 'Potongan ' + rp(r.nilai) + ' per voucher' : '<span class="neg">Nilai potongan belum diisi (Ubah event → Voucher mitra)</span>') + ' · ketuk untuk membuka daftar</div></div>';
+  if (k) h += '<div class="card pad" style="margin-top:8px"><table><tr><td>Tagih ' + esc(r.mitra) + ' (' + r.jumlah + ' × ' + rp(r.nilai) + ')</td><td class="r"><b>' + rp(k.potongan) + '</b></td></tr>' +
+    '<tr><td>Sudah diterima</td><td class="r">' + rp(k.dibayar) + (k.kurang ? '' : ' <span class="pill p-ok">Lunas</span>') + '</td></tr></table>' +
+    (k.kurang ? '<div class="btns"><button class="ubah btn sm" onclick="formKas(null,\'' + e.id_event + '\',{jenis:\'Masuk\',kategori:\'' + KAT_KLAIM_VOUCHER + '\',nominal:' + k.kurang + ',keterangan:\'Klaim voucher ' + esc(String(r.mitra).replace(/['\\]/g, '')) + ' ' + esc(String(e.nama_event).replace(/['\\]/g, '')) + '\'})">+ Catat pembayaran dari ' + esc(r.mitra) + '</button></div>' : '') + '</div>';
+  return h;
+}
+</script>

@@ -23,6 +23,7 @@ function bisaIsiTanggal_(tanggal) { tanggal = String(tanggal); return tanggal ==
 /** Semua yang dibutuhkan tampilan crew, dalam satu panggilan. */
 function dataCrew_(u) {
   siapkanSop_();
+  siapkanVoucher_();
   var hari = hariKerja_(), idc = String(u.id_crew || '');
   var tugas = readTab_('TUGAS_CREW'), nama = {}, peranCrew = {};
   readTab_('CREW').forEach(function (c) { nama[c.id_crew] = c.nama_panggilan || c.nama_lengkap || c.id_crew; peranCrew[c.id_crew] = c.role || ''; });
@@ -71,6 +72,7 @@ function dataCrew_(u) {
         penanggung_jawab: e.penanggung_jawab || '', tim: e.tim || '',
         klien: String((p && p.nama_klien) || e.narahubung || ''), kontak: String((p && p.kontak) || e.kontak_narahubung || ''),
         bisaIsi: bisaIsiTanggal_(e.tanggal) && !disetujui[e.id_event],
+        voucher_mitra: e.voucher_mitra || '', voucher_nilai: e.voucher_nilai || '',
         rekan: tugas.filter(function (t) { return t.id_event === e.id_event; }).map(function (t) {
           return { nama: nama[t.id_crew] || t.id_crew, role: peranTugas_(t) || peranCrew[t.id_crew] || '', peran: peranTugas_(t), saya: String(t.id_crew) === idc };
         }),
@@ -87,6 +89,9 @@ function dataCrew_(u) {
     setTanpaKode: Object.keys(set).sort(),
     sop: sop.map(function (s) { return { id: s.id, fase: s.fase, jenis: s.jenis, peran: s.peran, judul: s.judul, isi: s.isi, wajib: s.wajib }; }),
     sopEvent: readTab_('SOP_EVENT').filter(function (c) { return ids[c.id_event]; }),
+    voucher: readTab_('VOUCHER').filter(function (v) { return ids[v.id_event]; }).map(function (v) {
+      return { id: v.id, id_event: v.id_event, kode: v.kode, pemegang: v.pemegang, ditukar: v.ditukar, ditukar_oleh: v.ditukar_oleh, ditukar_pada: v.ditukar_pada };
+    }),
     stokAwal: { kertas: stokSekarang_('Kertas 4R'), buku: stokSekarang_('Graduation Book') }
   };
 }

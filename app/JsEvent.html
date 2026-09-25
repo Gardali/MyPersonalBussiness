@@ -69,7 +69,7 @@ function vDetailEvent() {
   h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">' + statusPill(e.status) + '<span class="pill">' + esc(e.model_pendapatan || 'Model belum diisi') + '</span>' + (e.skema ? '<span class="pill">' + esc(e.skema) + '</span>' : '') + '</div>';
   var kEv = kontakEvent(e);
   h += '<div class="meta">' + esc(e.lokasi || '') + (e.tim ? ' · ' + esc(e.tim) : '') + (kEv ? ' · ' + esc(kEv) + ' ' + waBtn(kEv) : '') + '</div>';
-  h += '<div class="btns" style="margin-bottom:20px"><button class="ubah btn sm" onclick="formLaporan(\'' + e.id_event + '\')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="ubah btn sm ghost" onclick="formKas(null,\'' + e.id_event + '\')">+ Kas</button><button class="btn sm ghost" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button><button class="btn sm ghost" onclick="unduhLaporanEvent(\'' + e.id_event + '\',this)">Unduh Laporan</button>' + (e.model_pendapatan === 'Kontrak Klien' ? '<button class="btn sm ghost" onclick="buatInvoiceUI(\'' + e.id_event + '\',this)">Invoice PDF</button>' : '') + '<button class="ubah btn sm ghost" onclick="formEvent(\'' + e.id_event + '\')">Ubah</button></div>';
+  h += '<div class="btns" style="margin-bottom:20px"><button class="ubah btn sm" onclick="formLaporan(\'' + e.id_event + '\')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="ubah btn sm ghost" onclick="formKas(null,\'' + e.id_event + '\')">+ Kas</button><button class="btn sm ghost" onclick="bukaChecklist(\'' + e.id_event + '\')">Checklist alat</button><button class="btn sm ghost" onclick="bukaVoucher(\'' + e.id_event + '\')">Voucher</button><button class="btn sm ghost" onclick="unduhLaporanEvent(\'' + e.id_event + '\',this)">Unduh Laporan</button>' + (e.model_pendapatan === 'Kontrak Klien' ? '<button class="btn sm ghost" onclick="buatInvoiceUI(\'' + e.id_event + '\',this)">Invoice PDF</button>' : '') + '<button class="ubah btn sm ghost" onclick="formEvent(\'' + e.id_event + '\')">Ubah</button></div>';
   if (String(e.catatan || '').indexOf('CEK:') === 0) h += notice('', esc(e.catatan.slice(4).trim()));
 
   var hk = '<div class="card pad"><div class="meta">Laba kotor</div><div class="big ' + cls(r.labaKotor) + '">' + rp(r.labaKotor) + '</div>' +
@@ -104,6 +104,8 @@ function vDetailEvent() {
   }
   h += '<div class="cols"><div class="col">' + sec('Keuangan', hk);
   if (skemaKs(e)) h += sec('Kerja sama panitia', htmlKsEvent(e));
+  var hv = htmlVoucherEvent(e);
+  if (hv) h += sec('Voucher ' + esc(e.voucher_mitra || 'mitra'), hv);
 
   if (lap) {
     var st = lap.status_laporan;
@@ -120,6 +122,7 @@ function vDetailEvent() {
       '<tr><td>Tercetak (counter)</td><td class="r">' + r.tercetak + '</td></tr>' +
       '<tr><td>Terjual + uji + gagal</td><td class="r">' + r.lembarTerjual + ' + ' + num(lap.lembar_uji_bonus) + ' + ' + num(lap.lembar_gagal) + '</td></tr>' +
       '<tr class="total"><td>Selisih lembar</td><td class="r ' + (r.selisihLembar ? 'neg' : 'pos') + '">' + (r.selisihLembar ? r.selisihLembar + ' · periksa' : 'Cocok') + '</td></tr>' +
+      (r.voucherMitra ? '<tr><td>Voucher ' + esc(e.voucher_mitra || 'mitra') + ' ditukar · potongan</td><td class="r">' + r.voucherMitra + ' · −' + rp(r.potonganVoucher) + '</td></tr>' : '') +
       '<tr><td>Omzet menurut laporan</td><td class="r">' + rp(r.omzet) + '</td></tr>' +
       '<tr><td>Uang diterima</td><td class="r">' + rp(r.diterima) + '</td></tr>' +
       '<tr class="total"><td>Selisih kas</td><td class="r ' + (r.selisihKas ? 'neg' : 'pos') + '">' + (r.selisihKas ? rp(r.selisihKas) : 'Cocok') + '</td></tr></table>';
@@ -357,6 +360,7 @@ function dataLaporanEvent(e) {
     baris(s, ['Lembar / strip tambahan', r.lembarTambahan, r.lembarTambahan * hargaEv(e, 'HARGA_STRIP')], '', ['', 'n', 'rp']);
     baris(s, ['Graduation Book', n('grad_book_terjual'), n('grad_book_terjual') * hargaEv(e, 'HARGA_BUKU')], '', ['', 'n', 'rp']);
     if (n('grup_potongan')) baris(s, ['Potongan grup', n('grup_potongan'), -n('grup_potongan') * hargaEv(e, 'POTONGAN_GRUP')], '', ['', 'n', 'rp']);
+    if (r.voucherMitra) baris(s, ['Voucher ' + (e.voucher_mitra || 'mitra') + ' (ditagih ke mitra)', r.voucherMitra, -r.potonganVoucher], '', ['', 'n', 'rp']);
     baris(s, ['Omzet menurut laporan', '', r.omzet], 'total', ['', '', 'rp']);
     kv(s, 'Softfile terkirim', lap.softfile_terkirim, 'n');
     kosong(s);
@@ -421,6 +425,16 @@ function dataLaporanEvent(e) {
     var dibawa = alat.filter(function (a) { return a.dibawa === 'Ya'; });
     baris(s, [dibawa.length + ' dibawa · ' + dibawa.filter(function (a) { return a.kembali === 'Ya'; }).length + ' kembali'], 'total');
   }
+  var vc = voucherEv(e.id_event);
+  if (vc.length) {
+    var rv = ringkasVoucherEv(e);
+    s = lembar('Voucher', [140, 220, 110, 170, 130], true);
+    kepala(s, 'Voucher ' + rv.mitra);
+    baris(s, ['Kode', 'Pemegang', 'Status', 'Ditukar oleh', 'Jam'], 'head');
+    vc.slice().sort(function (a, b) { return (a.ditukar === 'Ya') === (b.ditukar === 'Ya') ? String(a.kode).localeCompare(String(b.kode), 'id', {numeric: true}) : a.ditukar === 'Ya' ? -1 : 1; })
+      .forEach(function (v) { baris(s, [v.kode, v.pemegang || '', v.ditukar === 'Ya' ? 'Ditukar' : 'Belum', v.ditukar_oleh || '', String(v.ditukar_pada || '').slice(11)]); });
+    baris(s, [rv.jumlah + ' dari ' + rv.total + ' ditukar' + (rv.nilai ? ' × ' + rp(rv.nilai) + ' = ' + rp(rv.potongan) + ' ditagih ke ' + rv.mitra : '')], 'total');
+  }
   return {sheets: sheets};
 }
 function unduhLaporanEvent(id, btn) {
@@ -460,6 +474,9 @@ var F_EVENT = [
   {n: 'jatuh_tempo_pelunasan', l: 'Jatuh tempo pelunasan — kosong = hari H', t: 'date', show: function (r) { return r.model_pendapatan === 'Kontrak Klien'; }},
   {n: 'jumlah_crew', l: 'Jumlah crew', t: 'num'}, {n: 'penanggung_jawab', l: 'Penanggung jawab'}, {n: 'tim', l: 'Tim'},
   {n: 'folder_drive', l: 'Folder Drive'},
+  {g: 'Voucher mitra'},
+  {n: 'voucher_mitra', l: 'Nama mitra voucher', def: 'Sinektive', isiUlang: 1},
+  {n: 'voucher_nilai', l: 'Potongan per voucher (ditagih ke mitra) — daftar kode diisi lewat tombol Voucher di detail event', t: 'rp'},
   {g: 'RAB (Rencana Anggaran Biaya)'},
   {n: 'rab_penyusutan', l: 'Alokasi penyusutan (Rp) — saran dari Inventaris ÷ target event/bulan', t: 'num', def: function () { return Math.round(totalPenyusutanBulanan() / targetEventBulan()); }},
   {n: 'rab_jepreto', l: 'Alokasi langganan Jepreto (Rp) — saran dari PENGATURAN ÷ target event/bulan', t: 'num', def: function () { return Math.round(P('JEPRETO_BULAN') / targetEventBulan()); }},

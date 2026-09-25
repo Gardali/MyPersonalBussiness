@@ -50,6 +50,7 @@ function vDetailSaya() {
     h += '<div style="margin-bottom:20px">' + notice('', '<b>Laporan sudah disetujui admin</b>' + (lap.disetujui_oleh ? ' (' + esc(lap.disetujui_oleh) + ', ' + esc(lap.disetujui_pada) + ')' : '') + '. Terima kasih! Laporan & checklist tidak bisa diubah lagi.') + '</div>';
   } else if (e.bisaIsi) {
     h += '<div class="btns" style="margin-bottom:10px"><button class="btn sm' + (lap ? ' ghost' : '') + '" onclick="formLaporanCrew(' + id + ')">' + (lap ? 'Ubah laporan' : 'Isi laporan') + '</button><button class="btn sm ghost" onclick="bukaChecklist(' + id + ')">Checklist alat</button>' +
+      (voucherEv(e.id_event).length ? '<button class="btn sm ghost" onclick="bukaVoucher(' + id + ')">Voucher ' + esc(e.voucher_mitra || '') + '</button>' : '') +
       (lap && st !== 'Menunggu dicek' ? '<button class="btn sm" onclick="kirimLaporanUI(' + id + ',this)">Kirim ke admin</button>' : '') + '</div>';
     if (st === 'Menunggu dicek') h += '<div style="margin-bottom:10px">' + notice('', '<b>Terkirim ke admin</b> · ' + esc(lap.dikirim_pada) + '. Kalau masih ada yang diubah, admin otomatis diberi tahu.') + '</div>';
     else if (lap && kurang.length) h += '<div class="meta" style="margin-bottom:6px">Sebelum dikirim, lengkapi: <b>' + kurang.join(', ') + '</b>.</div>';
