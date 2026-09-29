@@ -68,12 +68,12 @@ function angkaRp(v) { var d = String(v == null ? '' : v).replace(/\D/g, ''); ret
 /** Kolom berubah: minta konfirmasi bila perlu (dibatalkan → nilai lama dikembalikan), lalu atur ulang tampilan. */
 function gantiNilai(ev) {
   var el = ev && ev.target, f = el && el.name ? FORM.fields.filter(function (x) { return x.n === el.name; })[0] : null;
-  if (f && f.konfirmasi) {
-    var lama = FORM.lama[f.n] || '', baru = el.value, pesan = lama !== baru ? f.konfirmasi(lama, baru, bacaForm()) : '';
+  if (f) {
+    var lama = FORM.lama[f.n] || '', baru = el.value, pesan = f.konfirmasi && lama !== baru ? f.konfirmasi(lama, baru, bacaForm()) : '';
     if (pesan && !confirm(pesan)) { el.value = lama; aturTampil(); return; }
     if (lama !== baru && f.setelahGanti) f.setelahGanti(lama, baru);
+    FORM.lama[f.n] = el.value;
   }
-  if (f) FORM.lama[f.n] = el.value;
   aturTampil();
 }
 /** Mengecilkan foto di HP sebelum diunggah (sisi terpanjang max px, JPEG). Hasil: Promise data URI. */

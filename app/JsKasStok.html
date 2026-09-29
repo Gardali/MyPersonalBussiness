@@ -92,9 +92,41 @@ function pilihBukti(inp) {
   };
   reader.readAsDataURL(f);
 }
+// Kategori kas per jenis. Kategori baru di tab PILIHAN yang tidak ada di daftar ini dikenali dari riwayat Kas
+// (dipakai hanya untuk satu jenis); bila belum pernah dipakai, muncul di kedua jenis.
+var KAT_KAS = {
+  Masuk: ['Penjualan Event', 'Penjualan', 'DP / Pelunasan Kontrak', 'Setoran Owner', 'Pembayaran Panitia', 'Klaim Voucher Mitra'],
+  Keluar: ['Pengadaan Barang', 'Media Cetak', 'Fee Crew', 'Transport', 'Konsumsi', 'Fee Panitia / Sewa Lapak', 'Langganan Software',
+    'Admin QRIS', 'Admin Pencairan QRIS', 'Bagi Hasil Panitia'],
+  Keduanya: ['Lainnya']
+};
+function jenisKategori(k) {
+  if (KAT_KAS.Keduanya.indexOf(k) >= 0) return '';
+  if (KAT_KAS.Masuk.indexOf(k) >= 0) return 'Masuk';
+  if (KAT_KAS.Keluar.indexOf(k) >= 0) return 'Keluar';
+  var pakai = {};
+  (D.kas || []).forEach(function (x) { if (x.kategori === k && x.jenis) pakai[x.jenis] = true; });
+  var j = Object.keys(pakai);
+  return j.length === 1 ? j[0] : '';
+}
+/** Pilihan kategori untuk jenis ini; kategori yang sedang tersimpan tetap ikut (catatan lama tidak hilang kategorinya). */
+function opsiKategoriKas(jenis, sekarang) {
+  var l = (D.pilihan['Kategori Kas'] || []).filter(function (k) { var j = jenisKategori(k); return !jenis || !j || j === jenis; });
+  if (sekarang && l.indexOf(sekarang) < 0) l.push(sekarang);
+  return l.map(function (v) { return [v, v]; });
+}
+/** Jenis diganti → pilihan kategori ikut berganti; kategori yang tidak cocok dikosongkan. */
+function isiUlangKategoriKas(lama, jenis) {
+  var sel = document.getElementById('frm').elements.kategori; if (!sel) return;
+  var v = sel.value, opsi = opsiKategoriKas(jenis), cocok = opsi.some(function (o) { return o[0] === v; });
+  sel.innerHTML = '<option value="">— pilih —</option>' + opsi.map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join('');
+  sel.value = cocok ? v : '';
+  if (v && !cocok) toast('Kategori "' + v + '" bukan untuk kas ' + String(jenis).toLowerCase() + ' — pilih lagi');
+}
 var F_KAS = [
-  {n: 'tanggal', l: 'Tanggal', t: 'date', def: 'today', wajib: 1}, {n: 'jenis', l: 'Jenis', t: 'sel', o: pil('Jenis Kas'), def: 'Keluar', wajib: 1},
-  {n: 'nominal', l: 'Nominal (Rp)', t: 'num', wajib: 1}, {n: 'kategori', l: 'Kategori', t: 'sel', o: pil('Kategori Kas'), wajib: 1},
+  {n: 'tanggal', l: 'Tanggal', t: 'date', def: 'today', wajib: 1}, {n: 'jenis', l: 'Jenis', t: 'sel', o: pil('Jenis Kas'), def: 'Keluar', wajib: 1, setelahGanti: isiUlangKategoriKas},
+  {n: 'nominal', l: 'Nominal (Rp)', t: 'num', wajib: 1},
+  {n: 'kategori', l: 'Kategori', t: 'sel', wajib: 1, o: function () { return opsiKategoriKas(FORM && FORM.rec.jenis, FORM && FORM.rec.kategori); }},
   {n: 'keterangan', l: 'Keterangan'}, {n: 'id_event', l: 'Event terkait', t: 'sel', o: pilEvent},
   {n: 'metode', l: 'Metode', t: 'sel', o: pil('Metode')}, {n: 'no_nota', l: 'Nota / bukti (PNG, JPG, atau PDF)', t: 'bukti'}, {n: 'catatan', l: 'Catatan', t: 'area'}
 ];
