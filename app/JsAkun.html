@@ -39,16 +39,17 @@ function pakaiBca() { return (D.kas || []).some(function (k) { return k.akun ===
 function cocokTerakhir() { return (D.rekonsiliasi || []).slice().sort(function (a, b) { return a.waktu < b.waktu ? 1 : -1; })[0] || null; }
 function labelAkun(a) { var x = AKUN_KAS.filter(function (o) { return o[0] === a; })[0]; return x ? x[0] : a; }
 
-// ---------------------------------------------------------------- kartu saldo per akun (halaman Kas)
-function htmlAkunKas() {
-  var bca = saldoAkun(AKUN_BCA), tunai = saldoAkun(AKUN_TUNAI), lama = saldoAkun(AKUN_LAMA), utang = reimburseTerutang(), c = cocokTerakhir();
-  var kotak = function (k, v, cls2, ket) { return '<div class="stat"><div class="k">' + k + '</div><div class="v ' + (cls2 || '') + '">' + rp(v) + '</div>' + (ket ? '<div class="meta" style="font-size:12px">' + ket + '</div>' : '') + '</div>'; };
-  var h = '<div class="stats uang">' + kotak('BCA Posetive', bca, bca < 0 ? 'neg' : '') + kotak('Tunai / pegangan crew', tunai, tunai < 0 ? 'neg' : '') +
-    (Math.round(lama) ? kotak('Kas lama (sebelum BCA)', lama, '', 'pindahkan ke BCA lewat Pindah dana') : '') +
-    (utang ? kotak('Reimburse belum diganti', utang, 'neg', 'utang divisi ke pribadi') : '') + '</div>';
-  h += '<div class="bar" style="margin:-8px 0 16px"><div class="meta">' + (c ? 'Terakhir dicocokkan ' + esc(c.waktu) + ' · ' + (num(c.selisih) ? '<span class="neg">selisih ' + rp(c.selisih) + '</span>' : '<span class="pos">cocok</span>') : 'Belum pernah dicocokkan dengan rekening BCA') + '</div>' +
-    '<button class="ubah btn sm ghost" onclick="bukaCocokBca()">Cocokkan dengan BCA</button></div>';
-  return h;
+// ---------------------------------------------------------------- kartu saldo kas divisi (halaman Kas)
+/** Satu kartu: saldo kas divisi, rinciannya per akun (Kas lama & reimburse hanya bila ada), dan status pencocokan BCA. */
+function htmlSaldoKas() {
+  var saldo = saldoKas(), bca = saldoAkun(AKUN_BCA), tunai = saldoAkun(AKUN_TUNAI), lama = saldoAkun(AKUN_LAMA), utang = reimburseTerutang(), c = cocokTerakhir();
+  var baris = function (k, v, cls2, ket) { return '<tr><td>' + k + (ket ? '<div class="meta">' + ket + '</div>' : '') + '</td><td class="r ' + (cls2 || '') + '">' + rp(v) + '</td></tr>'; };
+  return '<div class="card pad kas-saldo"><div class="meta">Saldo kas divisi</div><div class="big ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div>' +
+    '<table>' + baris('BCA Posetive', bca, bca < 0 ? 'neg' : '') + baris('Tunai / pegangan crew', tunai, tunai < 0 ? 'neg' : '') +
+    (Math.round(lama) ? baris('Kas lama (sebelum BCA)', lama, '', 'pindahkan ke BCA lewat Pindah dana') : '') + '</table>' +
+    (utang ? '<div class="meta neg" style="margin-top:6px">Reimburse belum diganti <b>' + rp(utang) + '</b> — utang divisi ke pribadi, tidak termasuk saldo di atas.</div>' : '') +
+    '<div class="bar" style="margin:10px 0 0"><div class="meta">' + (c ? 'Dicocokkan ' + esc(tgl(String(c.waktu).slice(0, 10))) + ' · ' + (num(c.selisih) ? '<span class="neg">selisih ' + rp(c.selisih) + '</span>' : '<span class="pos">cocok</span>') : 'Belum pernah dicocokkan dengan BCA') + '</div>' +
+    '<button class="ubah btn sm ghost" onclick="bukaCocokBca()">Cocokkan</button></div></div>';
 }
 
 // ---------------------------------------------------------------- cocokkan dengan BCA
