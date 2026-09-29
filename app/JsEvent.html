@@ -99,6 +99,7 @@ function vDetailEvent() {
     '<div class="meta" style="margin-bottom:8px">Setelah alokasi Jepreto + penyusutan: <b class="' + cls(r.labaBersih) + '">' + rp(r.labaBersih) + '</b></div><table>' +
     '<tr><td>Pemasukan</td><td class="r">' + rp(r.masuk) + '</td></tr>' +
     '<tr><td>Biaya langsung</td><td class="r">−' + rp(r.keluar) + '</td></tr>' +
+    '<tr class="total"><td>Arus kas event<div class="meta">uang masuk − keluar di event ini (angka yang ikut di Kas)</div></td><td class="r ' + cls(r.masuk - r.keluar) + '">' + rp(r.masuk - r.keluar) + '</td></tr>' +
     '<tr><td>Bahan · ' + r.tercetak + ' lbr × ' + rp(r.bl) + '</td><td class="r">−' + rp(r.bahan) + '</td></tr>' +
     '<tr><td>Alokasi per event</td><td class="r">−' + rp(r.alokasi) + '</td></tr></table>';
   hk += '</div>';
@@ -314,6 +315,7 @@ function dataLaporanEvent(e) {
   baris(s, ['KEUANGAN'], 'bagian');
   kv(s, 'Pemasukan', r.masuk, 'rp');
   kv(s, 'Biaya langsung (kas keluar)', -r.keluar, 'rp');
+  kv(s, 'Arus kas event (masuk − keluar)', r.masuk - r.keluar, 'rp', 'total');
   kv(s, 'Bahan cetak (' + r.tercetak + ' lembar × ' + rp(r.bl) + (r.lap && num(r.lap.grad_book_terjual) + num(r.lap.buku_rusak) ? ' + buku' : '') + ')', -r.bahan, 'rp');
   kv(s, 'Laba kotor', r.labaKotor, 'rp', 'total');
   kv(s, 'Alokasi penyusutan + Jepreto', -r.alokasi, 'rp');
@@ -420,20 +422,21 @@ function dataLaporanEvent(e) {
   }
 
   // ---- Kas
-  s = lembar('Kas', [95, 80, 70, 170, 260, 90, 115, 115, 230], true);
+  s = lembar('Kas', [95, 80, 90, 170, 260, 90, 150, 115, 115, 230], true);
   kepala(s, 'Transaksi kas');
-  baris(s, ['Tanggal', 'Kode', 'Jenis', 'Kategori', 'Keterangan', 'Metode', 'Masuk', 'Keluar', 'Nota'], 'head');
+  baris(s, ['Tanggal', 'Kode', 'Jenis', 'Kategori', 'Keterangan', 'Metode', 'Akun', 'Masuk', 'Keluar', 'Nota'], 'head');
   var kasUrut = r.kas.slice().sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : (a.id < b.id ? -1 : 1); });
   kasUrut.forEach(function (k) {
-    var m = k.jenis === 'Masuk';
-    baris(s, [k.tanggal, k.id, k.jenis, k.kategori || '', k.keterangan || '', k.metode || '', m ? num(k.nominal) : '', m ? '' : num(k.nominal), /^https?:/.test(k.no_nota || '') ? k.no_nota : ''],
-      '', ['tgl', '', '', '', '', '', 'rp', 'rp']);
+    var m = k.jenis === 'Masuk', pindah = k.jenis === JENIS_PINDAH;
+    baris(s, [k.tanggal, k.id, k.jenis, pindah ? '' : k.kategori || '', (k.keterangan || '') + (pindah ? ' (' + labelAkun(akunKas(k)) + ' → ' + labelAkun(k.akun_tujuan) + ', ' + rp(k.nominal) + ')' : ''), k.metode || '', labelAkun(akunKas(k)),
+      m ? num(k.nominal) : '', m || pindah ? '' : num(k.nominal), /^https?:/.test(k.no_nota || '') ? k.no_nota : ''],
+      '', ['tgl', '', '', '', '', '', '', 'rp', 'rp']);
   });
   if (!kasUrut.length) baris(s, ['Belum ada transaksi kas untuk event ini.']);
   var tMasuk = sum(kasUrut.filter(function (k) { return k.jenis === 'Masuk'; }), function (k) { return k.nominal; });
   var tKeluar = sum(kasUrut.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
-  baris(s, ['Total', '', '', '', '', '', tMasuk, tKeluar, ''], 'total', ['', '', '', '', '', '', 'rp', 'rp']);
-  baris(s, ['Saldo event (masuk − keluar)', '', '', '', '', '', tMasuk - tKeluar, '', ''], '', ['', '', '', '', '', '', 'rp']);
+  baris(s, ['Total', '', '', '', '', '', '', tMasuk, tKeluar, ''], 'total', ['', '', '', '', '', '', '', 'rp', 'rp']);
+  baris(s, ['Saldo event (masuk − keluar)', '', '', '', '', '', '', tMasuk - tKeluar, '', ''], '', ['', '', '', '', '', '', '', 'rp']);
 
   // ---- Alat
   var alat = D.pemakaian.filter(function (a) { return a.id_event === e.id_event; });

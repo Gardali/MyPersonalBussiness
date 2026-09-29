@@ -106,6 +106,20 @@ dengan jam, lokasi, klien + WA, dan rekan crew — tanpa kontrak, fee, kas, atau
 - Kalkulator skema (Pipeline → Kalkulator) kini memakai nilai bawaan formulir kerja sama. Pengaturan `SKEMA_*` di tab
   PENGATURAN tidak dipakai lagi.
 
+## Akun kas & rekening BCA Posetive
+- Setiap catatan Kas punya **Akun** — di mana uangnya: **BCA Posetive** (bawaan catatan baru), **Tunai / pegangan crew**,
+  **Dibayar owner langsung**, **Reimburse** (dibayar dulu dengan uang pribadi, diganti nanti), **Kas lama** (semua catatan
+  sebelum rekening BCA).
+- **Saldo kas divisi = BCA Posetive + tunai/pegangan + kas lama.** *Dibayar owner langsung* dan *Reimburse* tetap ikut laba
+  event, tapi tidak mengubah saldo. Reimburse yang belum diganti tampil sebagai utang divisi.
+- **Pindah dana** (jenis kas) untuk uang yang hanya berpindah tempat — bukan pemasukan/pengeluaran:
+  saldo awal Kas lama → BCA, pegangan BCA → Tunai, sisa pegangan Tunai → BCA, ganti reimburse BCA → Reimburse.
+- **Kas → Cocokkan dengan BCA**: ketik saldo m-banking; aplikasi menampilkan selisih & transaksi BCA sejak pencocokan
+  terakhir, dan bisa langsung mencatat penyesuaian. Riwayatnya di tab **REKONSILIASI**. Lakukan tiap minggu.
+- Beranda mengingatkan: saldo BCA di bawah `KAS_MIN_TOPUP` (PENGATURAN, bawaan Rp300.000) → minta top-up ke owner;
+  reimburse belum diganti; tunai/pegangan yang belum kembali; belum dicocokkan > 7 hari.
+- Kategori baru: *Setor ke Owner* (keluar), *Sewa Alat* (masuk), *Penyesuaian Saldo*.
+
 ## Voucher mitra (mis. Sinektive)
 - **Ubah event → Voucher mitra**: isi nama mitra (bawaan *Sinektive*) dan **potongan per voucher** (yang ditagih ke mitra).
 - Detail event → **Voucher** → **Tambah voucher**: tempel daftar kode, satu per baris (`KODE` atau `KODE, nama pemegang`),

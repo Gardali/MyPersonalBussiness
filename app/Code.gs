@@ -35,7 +35,8 @@ var PENGATURAN_BARU = [
   ['REKENING', '', 'teks', 'Rekening pembayaran di invoice, mis. BCA 123456 a.n. ...'],
   ['NAMA_MANAJER', 'Garda Ali Rayhaan', 'teks', 'Nama penyusun laporan bulanan'],
   ['PENYUSUTAN_HARGA_MIN', 250000, 'Rp', 'Barang Inventaris (kategori Aset, milik Posetive) di bawah harga ini tidak dihitung penyusutan'],
-  ['EMAIL_LAPORAN', '', 'teks', 'Email penerima notifikasi laporan dari crew (pisahkan dengan koma). Kosong = email akun Posetive']
+  ['EMAIL_LAPORAN', '', 'teks', 'Email penerima notifikasi laporan dari crew (pisahkan dengan koma). Kosong = email akun Posetive'],
+  ['KAS_MIN_TOPUP', 300000, 'Rp', 'Peringatan minta top-up ke owner bila saldo BCA Posetive di bawah angka ini']
 ];
 // Kolom baru di tab LAPORAN_EVENT, EVENT, INVENTARIS, dan KAS yang ditambahkan otomatis bila belum ada (di kolom paling kanan).
 var LAPORAN_KOLOM_BARU = ['sesi_terjual', 'lembar_tambahan', 'admin_qris', 'admin_pencairan', 'realisasi_penyusutan', 'realisasi_jepreto',
@@ -51,7 +52,10 @@ var KAS_KOLOM_BARU = ['sumber'];
 var CREW_KOLOM_BARU = ['email'];
 var TUGAS_KOLOM_BARU = ['peran']; // FC / Operator Depan / Operator Cetak (lihat Sop.gs)
 // Pilihan dropdown baru yang ditambahkan otomatis ke tab PILIHAN bila belum ada.
-var PILIHAN_BARU = { 'Kategori Kas': ['Admin QRIS', 'Admin Pencairan QRIS', 'Bagi Hasil Panitia', 'Pembayaran Panitia', 'Klaim Voucher Mitra'] };
+var PILIHAN_BARU = {
+  'Kategori Kas': ['Admin QRIS', 'Admin Pencairan QRIS', 'Bagi Hasil Panitia', 'Pembayaran Panitia', 'Klaim Voucher Mitra', 'Setor ke Owner', 'Sewa Alat', 'Penyesuaian Saldo'],
+  'Jenis Kas': ['Pindah dana']
+};
 
 /** Menambahkan nilai dropdown baru ke kolom PILIHAN yang sudah ada, di bawah nilai lama (tidak menyentuh nilai lama). */
 function tambahPilihan_() {
@@ -176,6 +180,7 @@ function siapkan_() {
   siapkanSop_();
   siapkanKs_();
   siapkanVoucher_();
+  siapkanKasAkun_();
 
   if (ss.getSheetByName('MUTASI_STOK')) return;
   var sh = ss.insertSheet('MUTASI_STOK');
@@ -222,6 +227,7 @@ function getData_() {
     sopEvent: readTab_('SOP_EVENT'),
     riwayatKs: readTab_('RIWAYAT_KS'),
     voucher: readTab_('VOUCHER'),
+    rekonsiliasi: readTab_('REKONSILIASI'),
     kalender: kalenderAktif_(),
     hariIni: Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd')
   };
@@ -296,6 +302,7 @@ function saveRecord_(tab, rec) {
       if (!cfg.prefix) throw new Error('Kode ' + cfg.id + ' wajib diisi.');
       id = nextId_(values, idCol, cfg);
       rec[cfg.id] = id;
+      if (tab === 'KAS' && !rec.akun) rec.akun = AKUN_KAS_BARU; // catatan kas baru (termasuk otomatis) masuk BCA Posetive
     }
     var old = rowIdx > 0 ? values[rowIdx] : null;
     var row = head.map(function (h, c) {

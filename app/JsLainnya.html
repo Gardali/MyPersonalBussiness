@@ -189,7 +189,7 @@ function dataLaporan(bulan) {
   r.alat = sum(kas.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === 'Pengadaan Barang'; }), function (k) { return k.nominal; });
   r.setoran = sum(kas.filter(function (k) { return k.jenis === 'Masuk' && k.kategori === 'Setoran Owner'; }), function (k) { return k.nominal; });
   var akhir = bulan + '-31';
-  r.saldo = sum(D.kas.filter(function (k) { return String(k.tanggal) <= akhir; }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); });
+  r.saldo = sum(D.kas.filter(function (k) { return String(k.tanggal) <= akhir; }), kontribusiKas);
   r.event = D.event.filter(function (e) { return inM(e.tanggal); }).sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : 1; }).map(function (e) { return {e: e, h: hasilEvent(e)}; });
   r.selesai = r.event.filter(function (x) { return x.e.status === 'Selesai'; });
   r.labaKotor = sum(r.selesai, function (x) { return x.h.labaKotor; });

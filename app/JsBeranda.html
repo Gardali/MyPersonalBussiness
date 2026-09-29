@@ -85,6 +85,7 @@ function vBeranda() {
   semuaCrewBentrok().forEach(function (b) {
     n += '<div onclick="bukaEvent(\'' + b.ev[0].id_event + '\')" style="cursor:pointer">' + notice('bad', '<b>' + esc(namaCrew(b.id_crew)) + ' bentrok ' + tgl(b.tanggal) + '</b> — ditugaskan di ' + b.ev.map(function (e) { return esc(e.nama_event) + (e.jam_buka ? ' (' + esc(e.jam_buka) + ')' : ''); }).join(' & ') + '.') + '</div>';
   });
+  peringatanKas().forEach(function (w) { n += '<div onclick="tampil(\'kas\')" style="cursor:pointer">' + notice(w.j, w.h) + '</div>'; });
   klaimVoucherTertunda().forEach(function (x) {
     n += '<div onclick="bukaEvent(\'' + x.e.id_event + '\')" style="cursor:pointer">' + notice('', '<b>Tagih ' + esc(x.k.mitra) + ' ' + rp(x.k.kurang) + '</b> — ' + x.k.jumlah + ' voucher ditukar di ' + esc(x.e.nama_event) + ' (' + tgl(x.e.tanggal) + ').') + '</div>';
   });

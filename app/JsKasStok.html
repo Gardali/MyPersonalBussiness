@@ -4,8 +4,11 @@ function notaBtn(url) {
   return /^https?:\/\//.test(url || '') ? '<a class="att" href="' + esc(url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="Lihat nota">' + ikon('nota') + '</a>' : '';
 }
 function barisKas(k) {
-  var m = k.jenis === 'Masuk';
-  return item({lead: '<div class="ic ' + (m ? 'in' : '') + '">' + ikon(m ? 'down' : 'up') + '</div>', t: esc(k.keterangan || k.kategori), s: tgl(k.tanggal) + ' · ' + esc(k.kategori) + (k.id_event ? ' · ' + esc(k.id_event) : ''),
+  var m = k.jenis === 'Masuk', a = akunKas(k);
+  if (k.jenis === JENIS_PINDAH) return item({lead: '<div class="ic">' + ikon('refresh') + '</div>', t: esc(k.keterangan || 'Pindah dana'),
+    s: tgl(k.tanggal) + ' · ' + esc(labelAkun(a)) + ' → ' + esc(labelAkun(k.akun_tujuan)) + (k.id_event ? ' · ' + esc(k.id_event) : ''), end: notaBtn(k.no_nota) + '<span>⇄ ' + rp(k.nominal) + '</span>', on: "formKas('" + k.id + "')"});
+  var tanda = a === AKUN_OWNER ? ' · <span class="pill">owner langsung</span>' : a === AKUN_REIMBURSE ? ' · <span class="pill p-warn">reimburse</span>' : a === AKUN_TUNAI ? ' · <span class="pill">tunai</span>' : '';
+  return item({lead: '<div class="ic ' + (m ? 'in' : '') + '">' + ikon(m ? 'down' : 'up') + '</div>', t: esc(k.keterangan || k.kategori), s: tgl(k.tanggal) + ' · ' + esc(k.kategori) + (k.id_event ? ' · ' + esc(k.id_event) : '') + tanda,
     end: notaBtn(k.no_nota) + '<span class="' + (m ? 'pos' : '') + '">' + (m ? '+' : '−') + rp(k.nominal) + '</span>', on: "formKas('" + k.id + "')"});
 }
 
@@ -22,8 +25,9 @@ function vKas() {
   var h = '<div class="bar"><div class="pagetitle" style="margin:0">Kas</div><div style="display:flex;gap:8px;align-items:center"><select class="plain" onchange="FILTER.kas=this.value;tampil(\'kas\')"><option value="">Semua bulan</option>' +
     bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select><button class="ubah btn sm" onclick="formKas()">+ Catat</button></div></div>';
   h += '<div class="head2"><div class="hero" style="margin-top:0"><div class="k">Saldo kas divisi</div><div class="v ' + (saldo < 0 ? 'neg' : '') + '">' + rp(saldo) + '</div></div>';
+  h += htmlAkunKas();
   h += '<div class="stats" style="grid-template-columns:repeat(2,1fr)"><div class="stat"><div class="k">Kas Posetive (operasional)</div><div class="v">' + rp(saldoPosetive()) + '</div></div>' +
-    '<div class="stat"><div class="k">Dari event</div><div class="v">' + rp(saldoEvent()) + '</div></div></div>';
+    '<div class="stat"><div class="k">Arus kas event (sebelum bahan)</div><div class="v">' + rp(saldoEvent()) + '</div></div></div>';
   h += '<div class="stats uang"><div class="stat"><div class="k">Pemasukan</div><div class="v pos">' + rp(masuk) + '</div></div>' +
     '<div class="stat"><div class="k">Dari owner</div><div class="v">' + rp(setoran) + '</div></div>' +
     '<div class="stat"><div class="k">Keluar</div><div class="v">' + rp(keluar) + '</div></div></div></div>';
@@ -95,10 +99,10 @@ function pilihBukti(inp) {
 // Kategori kas per jenis. Kategori baru di tab PILIHAN yang tidak ada di daftar ini dikenali dari riwayat Kas
 // (dipakai hanya untuk satu jenis); bila belum pernah dipakai, muncul di kedua jenis.
 var KAT_KAS = {
-  Masuk: ['Penjualan Event', 'Penjualan', 'DP / Pelunasan Kontrak', 'Setoran Owner', 'Pembayaran Panitia', 'Klaim Voucher Mitra'],
+  Masuk: ['Penjualan Event', 'Penjualan', 'DP / Pelunasan Kontrak', 'Setoran Owner', 'Pembayaran Panitia', 'Klaim Voucher Mitra', 'Sewa Alat'],
   Keluar: ['Pengadaan Barang', 'Media Cetak', 'Fee Crew', 'Transport', 'Konsumsi', 'Fee Panitia / Sewa Lapak', 'Langganan Software',
-    'Admin QRIS', 'Admin Pencairan QRIS', 'Bagi Hasil Panitia'],
-  Keduanya: ['Lainnya']
+    'Admin QRIS', 'Admin Pencairan QRIS', 'Bagi Hasil Panitia', 'Setor ke Owner'],
+  Keduanya: ['Lainnya', 'Penyesuaian Saldo']
 };
 function jenisKategori(k) {
   if (KAT_KAS.Keduanya.indexOf(k) >= 0) return '';
@@ -117,26 +121,34 @@ function opsiKategoriKas(jenis, sekarang) {
 }
 /** Jenis diganti → pilihan kategori ikut berganti; kategori yang tidak cocok dikosongkan. */
 function isiUlangKategoriKas(lama, jenis) {
+  if (jenis === JENIS_PINDAH) return; // Pindah dana tidak memakai kategori
   var sel = document.getElementById('frm').elements.kategori; if (!sel) return;
   var v = sel.value, opsi = opsiKategoriKas(jenis), cocok = opsi.some(function (o) { return o[0] === v; });
   sel.innerHTML = '<option value="">— pilih —</option>' + opsi.map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + '</option>'; }).join('');
   sel.value = cocok ? v : '';
   if (v && !cocok) toast('Kategori "' + v + '" bukan untuk kas ' + String(jenis).toLowerCase() + ' — pilih lagi');
 }
+function jenisPindah(r) { return r.jenis === JENIS_PINDAH; }
+function bukanPindah(r) { return r.jenis !== JENIS_PINDAH; }
 var F_KAS = [
   {n: 'tanggal', l: 'Tanggal', t: 'date', def: 'today', wajib: 1}, {n: 'jenis', l: 'Jenis', t: 'sel', o: pil('Jenis Kas'), def: 'Keluar', wajib: 1, setelahGanti: isiUlangKategoriKas},
   {n: 'nominal', l: 'Nominal (Rp)', t: 'num', wajib: 1},
-  {n: 'kategori', l: 'Kategori', t: 'sel', wajib: 1, o: function () { return opsiKategoriKas(FORM && FORM.rec.jenis, FORM && FORM.rec.kategori); }},
+  {n: 'kategori', l: 'Kategori', t: 'sel', wajib: bukanPindah, show: bukanPindah, o: function () { return opsiKategoriKas(FORM && FORM.rec.jenis, FORM && FORM.rec.kategori); }},
+  {n: 'akun', l: 'Akun — dari mana / ke mana uangnya (Pindah dana: akun asal)', t: 'sel', wajib: 1, def: AKUN_BCA, o: function () { return AKUN_KAS; }},
+  {n: 'akun_tujuan', l: 'Ke akun', t: 'sel', wajib: jenisPindah, show: jenisPindah, o: function () { return AKUN_KAS.filter(function (a) { return a[0] !== AKUN_OWNER; }); },
+    cek: function (r) { return r.jenis === JENIS_PINDAH && r.akun === r.akun_tujuan ? 'Pindah dana: akun asal dan tujuan tidak boleh sama.' : ''; }},
   {n: 'keterangan', l: 'Keterangan'}, {n: 'id_event', l: 'Event terkait', t: 'sel', o: pilEvent},
   {n: 'metode', l: 'Metode', t: 'sel', o: pil('Metode')}, {n: 'no_nota', l: 'Nota / bukti (PNG, JPG, atau PDF)', t: 'bukti'}, {n: 'catatan', l: 'Catatan', t: 'area'}
 ];
 function formKas(id, idEvent, isian) {
   var k = id ? cari(D.kas, 'id', id) : Object.assign({id_event: idEvent || ''}, isian);
+  if (id && !k.akun) k = Object.assign({}, k, {akun: AKUN_LAMA}); // catatan sebelum ada kolom akun
   NOTA_BARU = null;
   var extra = id ? '<button class="ubah btn danger" type="button" onclick="hapus(\'KAS\',\'' + id + '\')">Hapus</button>' : '';
   if (k && String(k.sumber || '').indexOf('LAPORAN:') === 0) extra = '<div class="meta">Dibuat otomatis dari laporan ' + esc(k.id_event) + ' (admin QRIS/pencairan). Ubah laporannya, bukan catatan ini.</div>';
   if (k && String(k.sumber || '').indexOf('TUGAS:') === 0) extra = '<div class="meta">Dibuat otomatis dari pembayaran fee crew (' + esc(String(k.sumber).slice(6)) + '). Ubah fee atau batalkan pembayaran dari halaman event ' + esc(k.id_event) + '.</div>';
   bukaForm(id ? 'Kas ' + id : 'Catat kas', F_KAS, k, function (r) {
+    if (r.jenis === JENIS_PINDAH) r.kategori = 'Pindah Dana'; else r.akun_tujuan = '';
     return panggil('saveRecord', 'KAS', r).then(function (idBaru) {
       if (!NOTA_BARU) return idBaru;
       var ext = {'image/png': '.png', 'image/jpeg': '.jpg', 'application/pdf': '.pdf'}[NOTA_BARU.mime] || '';

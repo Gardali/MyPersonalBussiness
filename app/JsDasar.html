@@ -263,9 +263,10 @@ function semuaCrewBentrok() {
     .sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : 1; });
 }
 
-function saldoKas() { return sum(D.kas, function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
-function saldoPosetive() { return sum(D.kas.filter(function (k) { return !k.id_event; }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
-function saldoEvent() { return sum(D.kas.filter(function (k) { return k.id_event; }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); }); }
+// Saldo kas divisi = uang di akun divisi (BCA Posetive + tunai/pegangan + kas lama) — lihat kontribusiKas di JsAkun.
+function saldoKas() { return sum(D.kas, kontribusiKas); }
+function saldoPosetive() { return sum(D.kas.filter(function (k) { return !k.id_event; }), kontribusiKas); }
+function saldoEvent() { return sum(D.kas.filter(function (k) { return k.id_event; }), kontribusiKas); }
 function perluCek() {
   var out = [];
   [['PIPELINE', 'id'], ['EVENT', 'id_event'], ['LAPORAN_EVENT', 'id_event'], ['KAS', 'id'], ['INVENTARIS', 'id_alat']].forEach(function (t) {

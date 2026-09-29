@@ -1,0 +1,96 @@
+<script>
+// Posetive — akun kas: di mana uang Posetive berada (BCA Posetive, tunai/pegangan crew, kas lama), transaksi yang dibayar
+// owner langsung atau di-reimburse (tidak mengubah saldo divisi), Pindah dana, dan Cocokkan dengan BCA. Server: KasAkun.gs.
+var AKUN_KAS = [
+  ['BCA Posetive', 'BCA Posetive'],
+  ['Tunai / pegangan crew', 'Tunai / pegangan crew'],
+  ['Dibayar owner langsung', 'Dibayar / diterima owner langsung (tidak masuk saldo)'],
+  ['Reimburse', 'Reimburse — dibayar dulu dengan uang pribadi, diganti nanti'],
+  ['Kas lama', 'Kas lama (sebelum rekening BCA)']
+];
+var AKUN_BCA = 'BCA Posetive', AKUN_TUNAI = 'Tunai / pegangan crew', AKUN_OWNER = 'Dibayar owner langsung', AKUN_REIMBURSE = 'Reimburse', AKUN_LAMA = 'Kas lama';
+var AKUN_DIVISI = [AKUN_BCA, AKUN_TUNAI, AKUN_LAMA]; // uang yang benar-benar dipegang divisi
+var JENIS_PINDAH = 'Pindah dana';
+
+/** Catatan lama (sebelum kolom akun ada) = Kas lama. */
+function akunKas(k) { return k.akun || AKUN_LAMA; }
+function akunDivisi(a) { return AKUN_DIVISI.indexOf(a || AKUN_LAMA) >= 0; }
+/**
+ * Pengaruh satu catatan terhadap saldo kas divisi. Masuk/Keluar hanya dihitung bila akunnya milik divisi
+ * (owner langsung & reimburse tidak); Pindah dana hanya berpengaruh bila keluar/masuk dari akun divisi.
+ */
+function kontribusiKas(k) {
+  var n = num(k.nominal);
+  if (k.jenis === JENIS_PINDAH) return (akunDivisi(k.akun_tujuan) ? n : 0) - (akunDivisi(akunKas(k)) ? n : 0);
+  if (!akunDivisi(akunKas(k))) return 0;
+  return k.jenis === 'Masuk' ? n : k.jenis === 'Keluar' ? -n : 0;
+}
+/** Saldo satu akun: masuk − keluar di akun itu, dikurangi pindah keluar, ditambah pindah masuk. */
+function saldoAkun(a, sampai) {
+  return sum((D.kas || []).filter(function (k) { return !sampai || String(k.tanggal) <= sampai; }), function (k) {
+    var n = num(k.nominal);
+    if (k.jenis === JENIS_PINDAH) return (k.akun_tujuan === a ? n : 0) - (akunKas(k) === a ? n : 0);
+    return akunKas(k) !== a ? 0 : k.jenis === 'Masuk' ? n : k.jenis === 'Keluar' ? -n : 0;
+  });
+}
+/** Reimburse yang belum diganti = pengeluaran akun Reimburse − penggantian (Pindah dana ke Reimburse). */
+function reimburseTerutang() { return Math.max(0, -saldoAkun(AKUN_REIMBURSE)); }
+function pakaiBca() { return (D.kas || []).some(function (k) { return k.akun === AKUN_BCA || k.akun_tujuan === AKUN_BCA; }); }
+function cocokTerakhir() { return (D.rekonsiliasi || []).slice().sort(function (a, b) { return a.waktu < b.waktu ? 1 : -1; })[0] || null; }
+function labelAkun(a) { var x = AKUN_KAS.filter(function (o) { return o[0] === a; })[0]; return x ? x[0] : a; }
+
+// ---------------------------------------------------------------- kartu saldo per akun (halaman Kas)
+function htmlAkunKas() {
+  var bca = saldoAkun(AKUN_BCA), tunai = saldoAkun(AKUN_TUNAI), lama = saldoAkun(AKUN_LAMA), utang = reimburseTerutang(), c = cocokTerakhir();
+  var kotak = function (k, v, cls2, ket) { return '<div class="stat"><div class="k">' + k + '</div><div class="v ' + (cls2 || '') + '">' + rp(v) + '</div>' + (ket ? '<div class="meta" style="font-size:12px">' + ket + '</div>' : '') + '</div>'; };
+  var h = '<div class="stats uang">' + kotak('BCA Posetive', bca, bca < 0 ? 'neg' : '') + kotak('Tunai / pegangan crew', tunai, tunai < 0 ? 'neg' : '') +
+    (Math.round(lama) ? kotak('Kas lama (sebelum BCA)', lama, '', 'pindahkan ke BCA lewat Pindah dana') : '') +
+    (utang ? kotak('Reimburse belum diganti', utang, 'neg', 'utang divisi ke pribadi') : '') + '</div>';
+  h += '<div class="bar" style="margin:-8px 0 16px"><div class="meta">' + (c ? 'Terakhir dicocokkan ' + esc(c.waktu) + ' · ' + (num(c.selisih) ? '<span class="neg">selisih ' + rp(c.selisih) + '</span>' : '<span class="pos">cocok</span>') : 'Belum pernah dicocokkan dengan rekening BCA') + '</div>' +
+    '<button class="ubah btn sm ghost" onclick="bukaCocokBca()">Cocokkan dengan BCA</button></div>';
+  return h;
+}
+
+// ---------------------------------------------------------------- cocokkan dengan BCA
+function bukaCocokBca() {
+  var c = cocokTerakhir(), app = saldoAkun(AKUN_BCA), dari = c ? String(c.waktu).slice(0, 10) : '';
+  var sejak = (D.kas || []).filter(function (k) { return (akunKas(k) === AKUN_BCA || k.akun_tujuan === AKUN_BCA) && (!dari || String(k.tanggal) >= dari); })
+    .sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : -1; });
+  var h = '<div class="grab"></div><h2>Cocokkan dengan BCA</h2>' +
+    '<div class="meta" style="margin-bottom:10px">Buka m-banking BCA Posetive, lalu ketik saldonya. Kalau tunai dari booth belum disetor, setorkan dulu atau catat sebagai akun Tunai.</div>' +
+    '<div class="card pad"><table><tr><td>Saldo BCA menurut aplikasi</td><td class="r"><b>' + rp(app) + '</b></td></tr></table>' +
+    '<div class="f" style="margin-top:10px"><label>Saldo di m-banking</label><input id="cb_bank" type="text" inputmode="numeric" data-rp oninput="this.value=teksRp(this.value);hitungCocokBca()"></div>' +
+    '<div class="f"><label>Catatan (opsional)</label><input id="cb_catatan" type="text"></div><div id="cb_hasil"></div></div>' +
+    '<div class="btns"><button class="btn" type="button" style="flex:1" onclick="simpanCocokBcaUI(this)">Simpan pencocokan</button><button class="btn ghost" type="button" onclick="tutupForm()">Tutup</button></div>' +
+    '<div class="grp">Transaksi BCA ' + (dari ? 'sejak ' + tgl(dari) : 'semua') + ' (' + sejak.length + ')</div><div class="card">' +
+    (sejak.length ? sejak.map(barisKas).join('') : '<div class="empty">Belum ada transaksi di akun BCA.</div>') + '</div>';
+  document.getElementById('panel').innerHTML = h;
+  document.getElementById('sheet').classList.add('open');
+}
+function hitungCocokBca() {
+  var bank = angkaRp(document.getElementById('cb_bank').value), el = document.getElementById('cb_hasil'), app = saldoAkun(AKUN_BCA);
+  if (!el) return;
+  if (bank === '') { el.innerHTML = ''; return; }
+  var s = bank - app;
+  el.innerHTML = s === 0 ? notice('', '<b>Cocok.</b> Saldo aplikasi sama dengan rekening.') :
+    notice('bad', '<b>Selisih ' + rp(s) + '</b> — rekening ' + (s > 0 ? 'lebih besar' : 'lebih kecil') + ' dari catatan. Cari transaksi yang belum/salah dicatat di daftar bawah. Kalau tidak ketemu, catat sebagai penyesuaian.' +
+      '<div class="btns" style="margin:8px 0 0"><button class="ubah btn sm ghost" type="button" onclick="tutupForm();formKas(null,\'\',{jenis:\'' + (s > 0 ? 'Masuk' : 'Keluar') + '\',kategori:\'Penyesuaian Saldo\',nominal:' + Math.abs(s) + ',akun:\'' + AKUN_BCA + '\',keterangan:\'Penyesuaian saldo BCA\'})">Catat penyesuaian ' + rp(Math.abs(s)) + '</button></div>');
+}
+function simpanCocokBcaUI(btn) {
+  var bank = angkaRp(document.getElementById('cb_bank').value);
+  if (bank === '') { toast('Ketik saldo di m-banking dulu'); return; }
+  btn.disabled = true; btn.textContent = 'Menyimpan…';
+  panggil('simpanCocokBank', bank, saldoAkun(AKUN_BCA), document.getElementById('cb_catatan').value).then(function () { tutupForm(); toast('Pencocokan tersimpan'); return muat(true); })
+    .catch(function (e) { btn.disabled = false; btn.textContent = 'Simpan pencocokan'; toast('Gagal: ' + (e && e.message || e)); });
+}
+
+// ---------------------------------------------------------------- peringatan di Beranda
+function peringatanKas() {
+  var out = [], c = cocokTerakhir(), bca = saldoAkun(AKUN_BCA), batas = Pd('KAS_MIN_TOPUP', 300000), utang = reimburseTerutang(), tunai = saldoAkun(AKUN_TUNAI);
+  if (pakaiBca() && bca < batas) out.push({j: 'bad', h: '<b>Saldo BCA Posetive ' + rp(bca) + '</b> — di bawah batas ' + rp(batas) + '. Ajukan top-up ke owner dengan rekap kas, jangan ditalangi.'});
+  if (utang) out.push({j: '', h: '<b>Reimburse belum diganti ' + rp(utang) + '</b> — ganti dari BCA lewat Kas → Pindah dana (BCA Posetive → Reimburse).'});
+  if (Math.round(tunai) > 0) out.push({j: '', h: '<b>Tunai / pegangan di crew ' + rp(tunai) + '</b> — setor ke BCA atau catat pemakaiannya.'});
+  if (pakaiBca() && (!c || selisihHari(D.hariIni, String(c.waktu).slice(0, 10)) > 7)) out.push({j: '', h: '<b>Cocokkan saldo BCA</b> — ' + (c ? 'terakhir ' + tgl(String(c.waktu).slice(0, 10)) : 'belum pernah') + '. Kas → Cocokkan dengan BCA.'});
+  return out;
+}
+</script>

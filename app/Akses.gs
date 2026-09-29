@@ -21,7 +21,7 @@ function izin_() {
   getData: [getData_, LIHAT], getFotoCrew: [getFotoCrew_, LIHAT], statusOtomatis: [statusOtomatis_, LIHAT],
   buatLaporanPdf: [buatLaporanPdf_, LIHAT], buatInvoice: [buatInvoice_, LIHAT], buatLaporanEventSheet: [buatLaporanEventSheet_, LIHAT],
   fotoLaporan: [fotoLaporan_, LIHAT], setujuiLaporan: [setujuiLaporan_, ADMIN, true], batalSetujuiLaporan: [batalSetujuiLaporan_, ADMIN, true],
-  centangSop: [centangSop_, ADMIN, true],
+  centangSop: [centangSop_, ADMIN, true], simpanCocokBank: [simpanCocokBank_, ADMIN, true],
   tambahVoucher: [tambahVoucher_, ADMIN, true], hapusVoucher: [hapusVoucher_, ADMIN, true], tukarVoucher: [tukarVoucher_, ADMIN, true],
   saveRecord: [saveRecord_, ADMIN], deleteRecord: [deleteRecord_, ADMIN],
   dealKeEvent: [dealKeEvent_, ADMIN], simpanEvent: [simpanEvent_, ADMIN], hapusEvent: [hapusEvent_, ADMIN],

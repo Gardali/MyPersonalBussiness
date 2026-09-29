@@ -9,11 +9,11 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
     `Code.gs` (inti: baca/tulis tab, `doGet`, `include`), `Akses.gs` (login, sesi, `api()` + tabel izin), `Event.gs` (event, laporan, kas, stok, checklist),
     `EventSaya.gs` (tampilan crew: data tersaring & simpan yang dijaga), `LaporanCrew.gs` (foto bukti, kirim ke admin + email, persetujuan),
     `Sop.gs` (SOP event & centang per event; isi awalnya di `SopAwal.gs`, yang sengaja tidak masuk repo),
-    `KerjaSama.gs` (kerja sama panitia: kunci setelah Disetujui, riwayat perubahan), `Voucher.gs` (voucher mitra per event),
+    `KerjaSama.gs` (kerja sama panitia: kunci setelah Disetujui, riwayat perubahan), `Voucher.gs` (voucher mitra per event), `KasAkun.gs` (akun kas & pencocokan BCA),
     `Crew.gs` (crew & fee), `Kalender.gs` (Google Calendar), `Laporan.gs` (PDF, Unduh Laporan, backup),
     `Pengingat.gs` (email harian & pemicu), `Pengaturan.gs` (pengaturan & HPP).
   - Tampilan: `Index.html` hanya kerangka yang memanggil `Css.html` dan `Js*.html` lewat `include()`.
-    `JsDasar` (utilitas & semua perhitungan, dimuat pertama), `JsKerjaSama` (kolom skema A–F, hitungan & teks perjanjian), `JsVoucher` (daftar voucher mitra), `JsBeranda`, `JsPipeline`, `JsEvent`, `JsKasStok`,
+    `JsDasar` (utilitas & semua perhitungan, dimuat pertama), `JsKerjaSama` (kolom skema A–F, hitungan & teks perjanjian), `JsVoucher` (daftar voucher mitra), `JsAkun` (saldo per akun, Pindah dana, Cocokkan dengan BCA), `JsBeranda`, `JsPipeline`, `JsEvent`, `JsKasStok`,
     `JsCrew`, `JsLainnya`, `JsEventSaya` (tampilan crew), `JsSop` (SOP), `JsForm`, `JsAkses` (masuk & pengguna), dan `JsMulai` (menjalankan aplikasi, dimuat terakhir).
 - `app/PANDUAN_PASANG.md` — langkah memasang & memperbarui aplikasi.
 - `package.json` — perintah clasp: `bun run masuk` (login Google), `bun run kirim` (kirim kode ke Apps Script).
@@ -35,3 +35,4 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 14. SOP event di aplikasi (tab SOP): bacaan + langkah per fase & per peran (FC / Operator Depan / Operator Cetak) yang dicentang tim per event; 7 poin uji coba wajib sebelum laporan dikirim; peran ditunjuk per penugasan; jam setup, powerstation, softfile gagal di laporan — selesai.
 15. Formulir kerja sama panitia (skema A–F) di Prospek & Event: kolom khusus per skema, tabel tingkat dengan pemeriksaan, harga per acara (dipakai untuk omzet laporan), hasil hitungan & teks perjanjian siap salin, kunci setelah Disetujui, riwayat perubahan, dan bagi hasil/tagihan panitia setelah acara dari laporan — selesai.
 16. Voucher mitra (mis. Sinektive) per event: daftar kode (tempel banyak sekaligus), crew mencentang saat ditukar — yang sudah ditukar turun & tercoret, tercatat siapa & jam; potongan dikurangkan dari omzet laporan dan ditagihkan ke mitra — selesai.
+17. Akun kas (BCA Posetive, tunai/pegangan crew, dibayar owner langsung, reimburse, kas lama), jenis Pindah dana, saldo per akun, reimburse belum diganti, Cocokkan dengan BCA (tab REKONSILIASI), peringatan top-up — selesai.
