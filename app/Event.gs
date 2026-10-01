@@ -75,6 +75,8 @@ function simpanLaporan_(rec, fotos) {
       Object.assign({}, base, { bahan: 'Kertas 4R', jenis: 'Hitung Fisik', jumlah: n(rec.stok_kertas_akhir_fisik), catatan: 'Hitung fisik akhir event' }));
   }
   sinkronAdminKas_(rec, tgl);
+  // Laporan yang sudah disetujui lalu diubah admin: catatan penjualan otomatis di KAS ikut disamakan.
+  if (rec.status_laporan === STATUS_LAPORAN.setuju) sinkronPenjualanKas_(rec, false);
   return rec.id_event;
 }
 

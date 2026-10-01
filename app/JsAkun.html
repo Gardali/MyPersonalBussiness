@@ -52,6 +52,33 @@ function htmlSaldoKas() {
     '<button class="ubah btn sm ghost" onclick="bukaCocokBca()">Cocokkan</button></div></div>';
 }
 
+// ---------------------------------------------------------------- tunai & pegangan crew per event (detail event)
+/** Uang tunai yang dipegang crew untuk satu event: pegangan diberi + penjualan tunai − terpakai − disetor/dikembalikan. */
+function peganganEvent(e) {
+  var kas = (D.kas || []).filter(function (k) { return k.id_event === e.id_event; }), n = function (k) { return num(k.nominal); };
+  var pindah = kas.filter(function (k) { return k.jenis === JENIS_PINDAH; }), tunai = kas.filter(function (k) { return k.jenis !== JENIS_PINDAH && akunKas(k) === AKUN_TUNAI; });
+  var p = {beri: sum(pindah.filter(function (k) { return k.akun_tujuan === AKUN_TUNAI; }), n), kembali: sum(pindah.filter(function (k) { return akunKas(k) === AKUN_TUNAI; }), n),
+    jual: sum(tunai.filter(function (k) { return k.jenis === 'Masuk'; }), n), pakai: sum(tunai.filter(function (k) { return k.jenis === 'Keluar'; }), n)};
+  p.sisa = p.beri + p.jual - p.pakai - p.kembali;
+  p.ada = !!(p.beri || p.kembali || p.jual || p.pakai);
+  return p;
+}
+/** Kartu di detail event: satu tombol untuk tiap langkah pegangan (beri → catat pemakaian → setor sisa), semuanya lewat form kas yang sudah terisi. */
+function htmlPeganganEvent(e) {
+  var p = peganganEvent(e), nama = esc(String(e.nama_event).replace(/['\\]/g, '')), id = e.id_event;
+  var buka = function (label, isian, utama) { return '<button class="ubah btn sm' + (utama ? '' : ' ghost') + '" onclick="formKas(null,\'' + id + '\',' + isian + ')">' + label + '</button>'; };
+  var beri = buka('+ Beri pegangan', '{jenis:\'' + JENIS_PINDAH + '\',akun:\'' + AKUN_BCA + '\',akun_tujuan:\'' + AKUN_TUNAI + '\',keterangan:\'Pegangan crew ' + nama + '\'}', !p.ada);
+  if (!p.ada) return '<div class="card pad"><div class="meta">Belum ada pegangan. Uang makan, transport, atau modal kembalian yang dibawa crew dicatat sebagai <b>Pindah dana</b> BCA → Tunai — bukan pengeluaran. Yang jadi biaya hanya yang benar-benar terpakai.</div><div class="btns">' + beri + '</div></div>';
+  var baris = function (k, v, cls2) { return '<tr><td>' + k + '</td><td class="r ' + (cls2 || '') + '">' + v + '</td></tr>'; }, sisa = Math.round(p.sisa);
+  return '<div class="card pad"><table>' + baris('Pegangan diberikan', rp(p.beri)) + (p.jual ? baris('Penjualan tunai', '+' + rp(p.jual)) : '') + baris('Terpakai', '−' + rp(p.pakai)) +
+    (p.kembali ? baris('Sudah disetor / dikembalikan', '−' + rp(p.kembali)) : '') +
+    '<tr class="total"><td>' + (sisa < 0 ? 'Ditalangi crew' : 'Masih di crew') + '</td><td class="r ' + (sisa < 0 ? 'neg' : '') + '">' + rp(Math.abs(sisa)) + (sisa ? '' : ' <span class="pill p-ok">Beres</span>') + '</td></tr></table>' +
+    (sisa < 0 ? '<div class="meta neg" style="margin-top:6px">Pemakaian melebihi pegangan — crew menalangi ' + rp(-sisa) + '. Ganti dari BCA.</div>' : '') +
+    '<div class="btns">' + buka('+ Catat pemakaian', '{jenis:\'Keluar\',akun:\'' + AKUN_TUNAI + '\'}', true) +
+    (sisa > 0 ? buka('Setor sisa ' + rp(sisa) + ' ke BCA', '{jenis:\'' + JENIS_PINDAH + '\',akun:\'' + AKUN_TUNAI + '\',akun_tujuan:\'' + AKUN_BCA + '\',nominal:' + sisa + ',keterangan:\'Setor sisa tunai ' + nama + '\'}') : '') +
+    (sisa < 0 ? buka('Ganti ' + rp(-sisa) + ' ke crew', '{jenis:\'' + JENIS_PINDAH + '\',akun:\'' + AKUN_BCA + '\',akun_tujuan:\'' + AKUN_TUNAI + '\',nominal:' + (-sisa) + ',keterangan:\'Ganti talangan crew ' + nama + '\'}') : '') + beri + '</div></div>';
+}
+
 // ---------------------------------------------------------------- cocokkan dengan BCA
 function bukaCocokBca() {
   var c = cocokTerakhir(), app = saldoAkun(AKUN_BCA), dari = c ? String(c.waktu).slice(0, 10) : '';

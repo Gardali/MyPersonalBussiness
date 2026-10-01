@@ -136,10 +136,32 @@ function isiUlangKategoriKas(lama, jenis) {
 }
 function jenisPindah(r) { return r.jenis === JENIS_PINDAH; }
 function bukanPindah(r) { return r.jenis !== JENIS_PINDAH; }
+var KAS_HARI_LAMA = 45, KAS_HARI_EVENT = 30;
+/**
+ * Peringatan (boleh dilewati) sebelum catatan kas disimpan: mungkin dobel, atau tanggalnya janggal.
+ * Catatan lama yang dibuka hanya diperiksa bila jenis, tanggal, nominal, atau event-nya diubah.
+ */
+function awasKas(r) {
+  var lama = (FORM && FORM.lama) || {}, teks = function (v) { return v == null ? '' : String(v); }, out = [];
+  if (r.id && !['jenis', 'tanggal', 'nominal', 'id_event'].some(function (k) { return teks(r[k]) !== teks(lama[k]); })) return '';
+  var kembar = (D.kas || []).filter(function (k) {
+    return k.id !== r.id && k.jenis === r.jenis && String(k.tanggal) === String(r.tanggal) && num(k.nominal) === num(r.nominal) && teks(k.id_event) === teks(r.id_event);
+  });
+  if (kembar.length && num(r.nominal)) out.push('MUNGKIN DOBEL — sudah ada catatan ' + String(r.jenis).toLowerCase() + ' ' + rp(r.nominal) + ' pada ' + tgl(r.tanggal) + (r.id_event ? ' untuk ' + r.id_event : '') + ':\n' +
+    kembar.slice(0, 3).map(function (k) { return '• ' + k.id + ' — ' + (k.keterangan || k.kategori || k.jenis); }).join('\n') + (kembar.length > 3 ? '\n• dan ' + (kembar.length - 3) + ' lainnya' : ''));
+  if (r.tanggal && D.hariIni) {
+    var mundur = selisihHari(D.hariIni, r.tanggal);
+    if (mundur < 0) out.push('TANGGAL DI MASA DEPAN — ' + tgl(r.tanggal) + ' (' + (-mundur) + ' hari lagi).');
+    else if (!r.id && mundur > KAS_HARI_LAMA) out.push('TANGGAL LAMA — ' + tgl(r.tanggal) + ' sudah ' + mundur + ' hari yang lalu. Periksa bulan & tahunnya.');
+    var ev = r.id_event ? cari(D.event, 'id_event', r.id_event) : null, jarak = ev && ev.tanggal ? Math.abs(selisihHari(r.tanggal, ev.tanggal)) : 0;
+    if (r.jenis === 'Keluar' && jarak > KAS_HARI_EVENT) out.push('JAUH DARI TANGGAL EVENT — ' + ev.nama_event + ' berlangsung ' + tgl(ev.tanggal) + ', catatan ini ' + tgl(r.tanggal) + ' (' + jarak + ' hari). Periksa tanggal atau event-nya.');
+  }
+  return out.join('\n\n');
+}
 var F_KAS = [
   // Keterangan paling atas, selebar form & wajib: inilah judul baris di daftar Kas (catatan lama yang kosong menampilkan kategorinya).
   {n: 'keterangan', l: 'Keterangan (judul catatan)', lebar: 1, wajib: 1, ph: 'mis. Makan crew, Bensin, QRIS event'},
-  {n: 'tanggal', l: 'Tanggal', t: 'date', def: 'today', wajib: 1}, {n: 'jenis', l: 'Jenis', t: 'sel', o: pil('Jenis Kas'), def: 'Keluar', wajib: 1, setelahGanti: isiUlangKategoriKas},
+  {n: 'tanggal', l: 'Tanggal', t: 'date', def: 'today', wajib: 1, awas: awasKas}, {n: 'jenis', l: 'Jenis', t: 'sel', o: pil('Jenis Kas'), def: 'Keluar', wajib: 1, setelahGanti: isiUlangKategoriKas},
   {n: 'nominal', l: 'Nominal (Rp)', t: 'num', wajib: 1},
   {n: 'kategori', l: 'Kategori', t: 'sel', wajib: bukanPindah, show: bukanPindah, o: function () { return opsiKategoriKas(FORM && FORM.rec.jenis, FORM && FORM.rec.kategori); }},
   {n: 'akun', l: 'Akun (Pindah dana: akun asal)', t: 'sel', wajib: 1, def: AKUN_BCA, o: function () { return AKUN_KAS; }},
@@ -153,7 +175,7 @@ function formKas(id, idEvent, isian) {
   if (id && !k.akun) k = Object.assign({}, k, {akun: AKUN_LAMA}); // catatan sebelum ada kolom akun
   NOTA_BARU = null;
   var extra = id ? '<button class="ubah btn danger" type="button" onclick="hapus(\'KAS\',\'' + id + '\')">Hapus</button>' : '';
-  if (k && String(k.sumber || '').indexOf('LAPORAN:') === 0) extra = '<div class="meta">Dibuat otomatis dari laporan ' + esc(k.id_event) + ' (admin QRIS/pencairan). Ubah laporannya, bukan catatan ini.</div>';
+  if (k && String(k.sumber || '').indexOf('LAPORAN:') === 0) extra = '<div class="meta">Dibuat otomatis dari laporan ' + esc(k.id_event) + (/:JUAL/.test(k.sumber) ? ' saat disetujui (penjualan). Nominal mengikuti laporan — ubah laporannya, bukan catatan ini. Akun boleh diubah bila uangnya masuk ke tempat lain.' : ' (admin QRIS/pencairan). Ubah laporannya, bukan catatan ini.') + '</div>';
   if (k && String(k.sumber || '').indexOf('TUGAS:') === 0) extra = '<div class="meta">Dibuat otomatis dari pembayaran fee crew (' + esc(String(k.sumber).slice(6)) + '). Ubah fee atau batalkan pembayaran dari halaman event ' + esc(k.id_event) + '.</div>';
   bukaForm(id ? 'Kas ' + id : 'Catat kas', F_KAS, k, function (r) {
     if (r.jenis === JENIS_PINDAH) r.kategori = 'Pindah Dana'; else r.akun_tujuan = '';

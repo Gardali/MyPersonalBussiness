@@ -120,6 +120,20 @@ dengan jam, lokasi, klien + WA, dan rekan crew — tanpa kontrak, fee, kas, atau
   reimburse belum diganti; tunai/pegangan yang belum kembali; belum dicocokkan > 7 hari.
 - Kategori baru: *Setor ke Owner* (keluar), *Sewa Alat* (masuk), *Penyesuaian Saldo*.
 
+## Pegangan crew, penjualan otomatis & peringatan catatan kas
+- **Tunai & pegangan crew** (detail event): **+ Beri pegangan** mencatat Pindah dana BCA → Tunai (uang makan, transport,
+  modal kembalian); **+ Catat pemakaian** mencatat pengeluaran dari akun Tunai; **Setor sisa … ke BCA** mengembalikan
+  sisanya. Kartu menampilkan berapa yang masih di crew. Kalau crew menalangi, muncul tombol **Ganti … ke crew**.
+- **Penjualan tercatat otomatis** saat laporan **disetujui**: tunai (tunai dihitung − modal kembalian) masuk akun
+  *Tunai / pegangan crew*, QRIS/transfer masuk akun *BCA Posetive*, kategori *Penjualan Event*. Tidak perlu diketik ulang.
+  - Laporan yang sudah disetujui lalu diubah → nominal di Kas ikut berubah. Persetujuan dibatalkan → catatannya dihapus.
+  - Akun catatan otomatis boleh diubah (mis. QRIS masuk ke rekening lain); perubahan itu tidak tertimpa.
+  - Kalau penjualan event itu **sudah dicatat manual** (kategori *Penjualan Event*), aplikasi tidak mencatat lagi supaya
+    tidak dobel — pastikan jumlahnya sama dengan "Uang diterima" di laporan.
+- **Peringatan sebelum menyimpan catatan kas** (boleh dilewati dengan "Tetap simpan"): mungkin dobel (jenis, tanggal,
+  nominal & event sama dengan catatan lain), tanggal di masa depan, catatan baru bertanggal lebih dari 45 hari lalu, atau
+  pengeluaran event yang berjarak lebih dari 30 hari dari tanggal event.
+
 ## Laporan kas bulanan
 - **Kas → kartu Ringkasan → pilih bulan → Unduh laporan kas**. Hasilnya Google Spreadsheet di folder Drive
   **Posetive - Laporan Kas**, satu file per bulan (`Kas 2026-09 - …`); diunduh ulang → file yang sama diperbarui, tidak dobel.

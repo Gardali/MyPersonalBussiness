@@ -144,6 +144,9 @@ function simpanForm() {
   if (kurang.length) { toast('Wajib diisi: ' + kurang.map(function (f) { return f.l; }).join(', ')); return; }
   var salah = tampil.map(function (f) { return f.cek ? f.cek(r) : ''; }).filter(Boolean);
   if (salah.length) { alert(salah.join('\n')); return; }
+  // awas = peringatan yang boleh dilewati (mis. catatan mungkin dobel); cek = larangan.
+  var awas = tampil.map(function (f) { return f.awas ? f.awas(r) : ''; }).filter(Boolean);
+  if (awas.length && !confirm(awas.join('\n\n') + '\n\nTetap simpan?')) return;
   FORM.fields.forEach(function (f) { if (f.n && !tampilKolom(f, r)) r[f.n] = ''; });
   delete r._row;
   var btn = document.querySelector('#frm button[type=submit]'); btn.disabled = true; btn.textContent = 'Menyimpan…';

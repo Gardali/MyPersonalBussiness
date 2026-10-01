@@ -66,17 +66,35 @@ function isiFotoBukti(list) {
     return '<a href="' + esc(f.url) + '" target="_blank" rel="noopener">' + (f.data ? '<img src="' + f.data + '" alt="' + esc(f.label) + '">' : '<div class="foto-kosong">Buka di Drive</div>') + '<span>' + esc(f.label) + '</span></a>';
   }).join('') + '</div>';
 }
+/**
+ * Penjualan menurut laporan yang akan dicatat otomatis di Kas saat disetujui (server: sinkronPenjualanKas_ di LaporanCrew.gs).
+ * manual = penjualan event ini sudah dicatat sendiri di Kas → tidak dicatat otomatis supaya tidak dobel.
+ */
+function penjualanLaporan(e, lap) {
+  var kas = (D.kas || []).filter(function (k) { return k.id_event === e.id_event && k.jenis === 'Masuk' && k.kategori === 'Penjualan Event'; });
+  var oto = kas.filter(function (k) { return String(k.sumber || '').indexOf('LAPORAN:') === 0; }), man = kas.filter(function (k) { return oto.indexOf(k) < 0; });
+  var j = {tunai: Math.max(0, num(lap.tunai_dihitung) - num(lap.modal_kembalian)), qris: Math.max(0, num(lap.qris_transfer))};
+  j.total = j.tunai + j.qris;
+  j.manual = !oto.length && man.length > 0;
+  j.manualTotal = sum(man, function (k) { return k.nominal; });
+  return j;
+}
 function setujuiLaporanUI(id, btn) {
-  var e = cari(D.event, 'id_event', id), lap = cari(D.laporan, 'id_event', id), r = hasilEvent(e), cat = [];
+  var e = cari(D.event, 'id_event', id), lap = cari(D.laporan, 'id_event', id), r = hasilEvent(e), cat = [], jl = penjualanLaporan(e, lap);
   if (r.selisihLembar) cat.push('selisih lembar ' + r.selisihLembar);
   if (r.selisihKas) cat.push('selisih kas ' + rp(r.selisihKas));
-  if (!confirm('Setujui laporan ' + e.nama_event + '?' + (cat.length ? '\n\nMasih ada ' + cat.join(' & ') + '.' : '') + (e.status === 'Terkonfirmasi' ? '\n\nEvent akan ditandai Selesai' : '') + (lap.dikirim_oleh ? ' dan crew tidak bisa mengubah laporan lagi.' : '.'))) return;
+  if (!confirm('Setujui laporan ' + e.nama_event + '?' + (cat.length ? '\n\nMasih ada ' + cat.join(' & ') + '.' : '') + (e.status === 'Terkonfirmasi' ? '\n\nEvent akan ditandai Selesai' : '') + (lap.dikirim_oleh ? ' dan crew tidak bisa mengubah laporan lagi.' : '.') +
+    (jl.total > 0 ? '\n\n' + (jl.manual ? 'Penjualan sudah dicatat manual di Kas, jadi tidak dicatat otomatis.' : 'Penjualan ' + rp(jl.total) + ' akan dicatat otomatis di Kas.') : ''))) return;
   btn.disabled = true; btn.textContent = 'Menyimpan…';
-  panggil('setujuiLaporan', id).then(function () { toast('Laporan disetujui'); return muat(true); })
+  panggil('setujuiLaporan', id).then(function (h) {
+    var jual = h && h.penjualan;
+    toast('Laporan disetujui' + (jual && jual.tercatat ? ' · penjualan ' + rp(jual.tercatat) + ' tercatat di Kas' : jual && jual.manual ? ' · penjualan tidak dicatat otomatis (sudah ada catatan manual)' : ''));
+    return muat(true);
+  })
     .catch(function (err) { btn.disabled = false; btn.textContent = 'Setujui laporan'; toast('Gagal: ' + (err && err.message || err)); });
 }
 function batalSetujuiUI(id, btn) {
-  if (!confirm('Batalkan persetujuan laporan ini? Status event tidak berubah — ubah lewat tombol Ubah bila perlu.')) return;
+  if (!confirm('Batalkan persetujuan laporan ini? Status event tidak berubah — ubah lewat tombol Ubah bila perlu. Catatan penjualan otomatis di Kas ikut dihapus dan dibuat lagi saat disetujui ulang.')) return;
   btn.disabled = true;
   panggil('batalSetujuiLaporan', id).then(function () { toast('Persetujuan dibatalkan'); return muat(true); })
     .catch(function (err) { btn.disabled = false; toast('Gagal: ' + (err && err.message || err)); });
@@ -151,7 +169,10 @@ function vDetailEvent() {
     lp += '</div>';
     lp += '<div class="card pad" style="margin-top:8px"><div class="meta" style="margin-bottom:8px">Foto bukti</div><div id="foto_bukti">' + htmlFotoBukti(lap) + '</div></div>';
     if (num(lap.cetak_ulang_voucher) > num(lap.lembar_gagal)) lp += '<div style="margin-top:8px">' + notice('bad', 'Cetak ulang pakai voucher (' + num(lap.cetak_ulang_voucher) + ') lebih banyak dari lembar gagal (' + num(lap.lembar_gagal) + '). Setiap cetak ulang harus punya satu lembar gagal — tanyakan ke tim.') + '</div>';
-    if (Math.abs(r.omzet - r.masuk) > 0) lp += '<div style="margin-top:8px">' + notice('', 'Omzet laporan ' + rp(r.omzet) + ' ≠ pemasukan di Kas ' + rp(r.masuk) + '. Pastikan penjualan sudah dicatat.') + '</div>';
+    var jl = penjualanLaporan(e, lap);
+    if (st !== 'Disetujui' && jl.total > 0) lp += '<div style="margin-top:8px">' + notice('', jl.manual ? 'Penjualan event ini sudah dicatat manual di Kas (' + rp(jl.manualTotal) + '), jadi tidak dicatat otomatis saat disetujui. Pastikan jumlahnya sama dengan uang diterima ' + rp(jl.total) + '.' :
+      'Saat disetujui, penjualan otomatis dicatat di Kas: ' + [jl.tunai > 0 ? 'tunai ' + rp(jl.tunai) + ' → Tunai / pegangan crew' : '', jl.qris > 0 ? 'QRIS/transfer ' + rp(jl.qris) + ' → BCA Posetive' : ''].filter(Boolean).join(', ') + '.') + '</div>';
+    else if (Math.abs(r.omzet - r.masuk) > 0) lp += '<div style="margin-top:8px">' + notice('', 'Omzet laporan ' + rp(r.omzet) + ' ≠ pemasukan di Kas ' + rp(r.masuk) + '. Pastikan penjualan sudah dicatat.') + '</div>';
     h += sec('Laporan produksi', lp);
   }
   var rabBaris = [['Penyusutan', r.rab.penyusutan, r.realisasi.penyusutan], ['Langganan Jepreto', r.rab.jepreto, r.realisasi.jepreto],
@@ -187,6 +208,7 @@ function vDetailEvent() {
   h += sec('Alat', '<div class="card pad" style="cursor:pointer" onclick="bukaChecklist(\'' + e.id_event + '\')">' + (alat.length ?
     '<div style="font-weight:700">' + alat.length + ' dibawa · ' + (alat.length - blm.length) + ' kembali</div>' + (blm.length ? '<div class="meta neg" style="margin-top:4px">Belum kembali: ' + blm.map(function (a) { return esc(a.nama_alat); }).join(', ') + '</div>' : '<div class="meta pos" style="margin-top:4px">Semua alat sudah kembali.</div>') :
     '<div class="meta">Belum ada checklist. Ketuk untuk mencentang alat yang dibawa.</div>') + '</div>');
+  if (e.status !== 'Batal' || peganganEvent(e).ada) h += sec('Tunai & pegangan crew', htmlPeganganEvent(e));
   h += sec('Transaksi', '<div class="card">' + (r.kas.length ? r.kas.map(barisKas).join('') : '<div class="empty">Belum ada catatan kas untuk event ini.</div>') + '</div>');
   return h + '</div></div>';
 }

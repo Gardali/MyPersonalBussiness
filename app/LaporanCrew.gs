@@ -73,7 +73,7 @@ function kirimLaporanCrew_(u, idEvent) {
   return { status: STATUS_LAPORAN.dikirim, email: cobaEmailLaporan_(idEvent, false) };
 }
 
-/** Admin menyetujui laporan: status Disetujui, event menjadi Selesai. */
+/** Admin menyetujui laporan: status Disetujui, event menjadi Selesai, penjualan tercatat di KAS. */
 function setujuiLaporan_(u, idEvent) {
   var l = laporanEvent_(idEvent);
   if (!l) throw new Error('Event ini belum punya laporan.');
@@ -81,7 +81,42 @@ function setujuiLaporan_(u, idEvent) {
   saveRecord_('LAPORAN_EVENT', { id_event: idEvent, status_laporan: STATUS_LAPORAN.setuju, disetujui_oleh: u.nama, disetujui_pada: waktuSekarang_() });
   var e = readTab_('EVENT').filter(function (x) { return x.id_event === idEvent; })[0];
   if (e && e.status === 'Terkonfirmasi') simpanEvent_({ id_event: idEvent, status: 'Selesai' });
-  return STATUS_LAPORAN.setuju;
+  return { status: STATUS_LAPORAN.setuju, penjualan: sinkronPenjualanKas_(l, false) };
+}
+
+// Penjualan menurut laporan yang disetujui → catatan Masuk "Penjualan Event" di KAS. Tunai dipegang crew sampai
+// disetor (akun Tunai / pegangan crew); QRIS/transfer masuk ke akun kas bawaan (BCA Posetive).
+var PENJUALAN_KAS = [
+  { tag: 'JUALTUNAI', akun: 'Tunai / pegangan crew', metode: 'Tunai', ket: 'Penjualan tunai', nilai: function (l) { return (Number(l.tunai_dihitung) || 0) - (Number(l.modal_kembalian) || 0); } },
+  { tag: 'JUALQRIS', akun: '', metode: 'QRIS', ket: 'Penjualan QRIS / transfer', nilai: function (l) { return Number(l.qris_transfer) || 0; } }
+];
+/**
+ * Menyamakan catatan penjualan otomatis di KAS dengan laporan l (kunci: sumber "LAPORAN:<event>:JUAL…").
+ * hapus = true → catatannya dibuang (persetujuan dibatalkan). Nominal mengikuti laporan; akun hanya diisi saat
+ * catatan dibuat, jadi akun yang sudah diubah admin tidak tertimpa. Kalau penjualan event ini sudah dicatat
+ * manual dan belum ada catatan otomatis, tidak membuat apa pun (supaya tidak dobel).
+ * Mengembalikan {tercatat: rupiah yang tercatat otomatis, manual: true bila dilewati karena catatan manual}.
+ */
+function sinkronPenjualanKas_(l, hapus) {
+  var kas = readTab_('KAS'), awalan = 'LAPORAN:' + l.id_event + ':', out = { tercatat: 0, manual: false };
+  var oto = {};
+  PENJUALAN_KAS.forEach(function (x) { oto[x.tag] = kas.filter(function (k) { return String(k.sumber) === awalan + x.tag; })[0] || null; });
+  var adaOto = PENJUALAN_KAS.some(function (x) { return oto[x.tag]; });
+  var manual = !adaOto && kas.some(function (k) { return k.id_event === l.id_event && k.jenis === 'Masuk' && k.kategori === 'Penjualan Event' && String(k.sumber || '').indexOf('LAPORAN:') !== 0; });
+  var e = readTab_('EVENT').filter(function (x) { return x.id_event === l.id_event; })[0] || {};
+  var tgl = e.tanggal || Utilities.formatDate(new Date(), ss_().getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+  PENJUALAN_KAS.forEach(function (x) {
+    var nominal = hapus ? 0 : Math.max(0, x.nilai(l)), ada = oto[x.tag];
+    if (manual) { if (nominal > 0) out.manual = true; return; }
+    if (nominal > 0) {
+      var rec = { tanggal: tgl, jenis: 'Masuk', kategori: 'Penjualan Event', nominal: nominal, id_event: l.id_event, metode: x.metode,
+        keterangan: x.ket + (e.nama_event ? ' ' + e.nama_event : ''), sumber: awalan + x.tag, catatan: 'Otomatis dari laporan ' + l.id_event + ' saat disetujui' };
+      if (ada) rec.id = ada.id; else rec.akun = x.akun || AKUN_KAS_BARU;
+      saveRecord_('KAS', rec);
+      out.tercatat += nominal;
+    } else if (ada) deleteRecord_('KAS', ada.id);
+  });
+  return out;
 }
 
 /** Membatalkan persetujuan (salah pencet): kembali "Menunggu dicek" bila dulu dikirim crew. Status event tidak diubah. */
@@ -90,6 +125,7 @@ function batalSetujuiLaporan_(u, idEvent) {
   if (!l || l.status_laporan !== STATUS_LAPORAN.setuju) throw new Error('Laporan ini belum disetujui.');
   var st = l.dikirim_pada ? STATUS_LAPORAN.dikirim : '';
   saveRecord_('LAPORAN_EVENT', { id_event: idEvent, status_laporan: st, disetujui_oleh: '', disetujui_pada: '' });
+  sinkronPenjualanKas_(l, true);
   return st;
 }
 
