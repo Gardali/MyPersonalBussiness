@@ -137,13 +137,15 @@ function isiUlangKategoriKas(lama, jenis) {
 function jenisPindah(r) { return r.jenis === JENIS_PINDAH; }
 function bukanPindah(r) { return r.jenis !== JENIS_PINDAH; }
 var F_KAS = [
+  // Keterangan paling atas, selebar form & wajib: inilah judul baris di daftar Kas (catatan lama yang kosong menampilkan kategorinya).
+  {n: 'keterangan', l: 'Keterangan (judul catatan)', lebar: 1, wajib: 1, ph: 'mis. Makan crew, Bensin, QRIS event'},
   {n: 'tanggal', l: 'Tanggal', t: 'date', def: 'today', wajib: 1}, {n: 'jenis', l: 'Jenis', t: 'sel', o: pil('Jenis Kas'), def: 'Keluar', wajib: 1, setelahGanti: isiUlangKategoriKas},
   {n: 'nominal', l: 'Nominal (Rp)', t: 'num', wajib: 1},
   {n: 'kategori', l: 'Kategori', t: 'sel', wajib: bukanPindah, show: bukanPindah, o: function () { return opsiKategoriKas(FORM && FORM.rec.jenis, FORM && FORM.rec.kategori); }},
   {n: 'akun', l: 'Akun — dari mana / ke mana uangnya (Pindah dana: akun asal)', t: 'sel', wajib: 1, def: AKUN_BCA, o: function () { return AKUN_KAS; }},
   {n: 'akun_tujuan', l: 'Ke akun', t: 'sel', wajib: jenisPindah, show: jenisPindah, o: function () { return AKUN_KAS.filter(function (a) { return a[0] !== AKUN_OWNER; }); },
     cek: function (r) { return r.jenis === JENIS_PINDAH && r.akun === r.akun_tujuan ? 'Pindah dana: akun asal dan tujuan tidak boleh sama.' : ''; }},
-  {n: 'keterangan', l: 'Keterangan'}, {n: 'id_event', l: 'Event terkait', t: 'sel', o: pilEvent},
+  {n: 'id_event', l: 'Event terkait', t: 'sel', o: pilEvent},
   {n: 'metode', l: 'Metode', t: 'sel', o: pil('Metode')}, {n: 'no_nota', l: 'Nota / bukti (PNG, JPG, atau PDF)', t: 'bukti'}, {n: 'catatan', l: 'Catatan', t: 'area'}
 ];
 function formKas(id, idEvent, isian) {

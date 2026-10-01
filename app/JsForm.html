@@ -42,9 +42,9 @@ function bukaForm(judul, fields, rec, onSave, extra, preview, boleh) {
       '<input type="file" accept="image/png,image/jpeg,application/pdf" onchange="pilihBukti(this)"><span id="bukti_nama" class="meta"></span></div>';
     else {
       var type = {date: 'date', time: 'time', num: 'number', pct: 'number', tel: 'tel', email: 'email'}[f.t] || 'text';
-      inp = '<input name="' + f.n + '" type="' + type + '"' + (type === 'number' ? ' inputmode="decimal" step="any"' : '') + ' value="' + esc(v) + '">';
+      inp = '<input name="' + f.n + '" type="' + type + '"' + (type === 'number' ? ' inputmode="decimal" step="any"' : '') + (f.ph ? ' placeholder="' + esc(f.ph) + '"' : '') + ' value="' + esc(v) + '">';
     }
-    h += '<div class="f' + (f.t === 'area' || f.t === 'file' || f.t === 'bukti' || f.t === 'foto' || f.t === 'tingkat' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? '<span class="wj"> *</span>' : '') + '</label>' + inp + '</div>';
+    h += '<div class="f' + (f.lebar || f.t === 'area' || f.t === 'file' || f.t === 'bukti' || f.t === 'foto' || f.t === 'tingkat' ? ' wide' : '') + '" data-i="' + i + '"><label>' + esc(f.l) + (f.wajib ? '<span class="wj"> *</span>' : '') + '</label>' + inp + '</div>';
   });
   if (FORM.preview) h += '<div id="preview" class="f wide" style="margin-top:10px"></div>';
   h += '<div class="btns">' + (ubah ? '<button class="btn" type="submit" style="flex:1">Simpan</button>' : '') + '<button class="btn ghost" type="button" onclick="tutupForm()"' + (ubah ? '' : ' style="flex:1"') + '>' + (ubah ? 'Batal' : 'Tutup') + '</button></div>' +
