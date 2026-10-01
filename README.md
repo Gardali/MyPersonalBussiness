@@ -13,7 +13,7 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
     `Crew.gs` (crew & fee), `Kalender.gs` (Google Calendar), `Laporan.gs` (PDF, Unduh Laporan, backup),
     `Pengingat.gs` (email harian & pemicu), `Pengaturan.gs` (pengaturan & HPP).
   - Tampilan: `Index.html` hanya kerangka yang memanggil `Css.html` dan `Js*.html` lewat `include()`.
-    `JsDasar` (utilitas & semua perhitungan, dimuat pertama), `JsKerjaSama` (kolom skema A–F, hitungan & teks perjanjian), `JsVoucher` (daftar voucher mitra), `JsAkun` (saldo per akun, Pindah dana, Cocokkan dengan BCA), `JsBeranda`, `JsPipeline`, `JsEvent`, `JsKasStok`,
+    `JsDasar` (utilitas & semua perhitungan, dimuat pertama), `JsKerjaSama` (kolom skema A–F, hitungan & teks perjanjian), `JsVoucher` (daftar voucher mitra), `JsAkun` (saldo per akun, Pindah dana, Cocokkan dengan BCA), `JsBeranda`, `JsPipeline`, `JsEvent`, `JsKasStok`, `JsLaporanKas` (laporan kas bulanan),
     `JsCrew`, `JsLainnya`, `JsEventSaya` (tampilan crew), `JsSop` (SOP), `JsForm`, `JsAkses` (masuk & pengguna), dan `JsMulai` (menjalankan aplikasi, dimuat terakhir).
 - `app/PANDUAN_PASANG.md` — langkah memasang & memperbarui aplikasi.
 - `package.json` — perintah clasp: `bun run masuk` (login Google), `bun run kirim` (kirim kode ke Apps Script).
@@ -36,3 +36,4 @@ Aplikasi pribadi untuk mengelola divisi photobooth Posetive: pipeline, event, la
 15. Formulir kerja sama panitia (skema A–F) di Prospek & Event: kolom khusus per skema, tabel tingkat dengan pemeriksaan, harga per acara (dipakai untuk omzet laporan), hasil hitungan & teks perjanjian siap salin, kunci setelah Disetujui, riwayat perubahan, dan bagi hasil/tagihan panitia setelah acara dari laporan — selesai.
 16. Voucher mitra (mis. Sinektive) per event: daftar kode (tempel banyak sekaligus), crew mencentang saat ditukar — yang sudah ditukar turun & tercoret, tercatat siapa & jam; potongan dikurangkan dari omzet laporan dan ditagihkan ke mitra — selesai.
 17. Akun kas (BCA Posetive, tunai/pegangan crew, dibayar owner langsung, reimburse, kas lama), jenis Pindah dana, saldo per akun, reimburse belum diganti, Cocokkan dengan BCA (tab REKONSILIASI), peringatan top-up — selesai.
+18. Laporan kas bulanan ("Unduh laporan kas" di halaman Kas): Google Spreadsheet satu file per bulan berisi Ringkasan (saldo per akun, pemasukan & pengeluaran per kategori, pencocokan BCA), Buku kas dengan saldo berjalan, Per event, dan Mutasi BCA; bisa diunduh .xlsx — selesai.

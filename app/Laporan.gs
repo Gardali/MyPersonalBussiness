@@ -67,12 +67,26 @@ function tulisSheetLaporan_(sh, def) {
  * Laporan event sebagai Google Spreadsheet (beberapa sheet, sudah dirapikan) di folder "Posetive - Laporan Event".
  * Satu file per event: diunduh ulang → file yang sama ditimpa & diberi nama terbaru. Mengembalikan link buka & link unduh .xlsx.
  */
-function buatLaporanEventSheet_(idEvent, nama, data) {
-  var folder = folder_('Posetive - Laporan Event'), ss = null;
+function buatLaporanEventSheet_(idEvent, nama, data) { return buatLaporanSheet_('Posetive - Laporan Event', idEvent + ' - ', nama, data); }
+
+/**
+ * Laporan kas bulanan (Ringkasan, Buku kas, Per event, Mutasi BCA) di folder "Posetive - Laporan Kas".
+ * Satu file per bulan ("Kas 2026-09 - …"); isinya disusun di tampilan (dataLaporanKas di JsLaporanKas).
+ */
+function buatLaporanKasSheet_(bulan, nama, data) {
+  if (!/^\d{4}-\d{2}$/.test(String(bulan))) throw new Error('Pilih bulan laporan dulu.');
+  return buatLaporanSheet_('Posetive - Laporan Kas', 'Kas ' + bulan + ' - ', nama, data);
+}
+
+/** Menulis laporan ke satu Google Spreadsheet di folder itu; file yang namanya berawalan `awalan` ditimpa (tidak dobel). */
+function buatLaporanSheet_(folderNama, awalan, nama, data) {
+  if (!data || !data.sheets || !data.sheets.length) throw new Error('Isi laporan kosong.');
+  if (String(nama).indexOf(awalan) !== 0) throw new Error('Nama laporan tidak sesuai.');
+  var folder = folder_(folderNama), ss = null;
   var it = folder.getFilesByType(MimeType.GOOGLE_SHEETS);
   while (it.hasNext() && !ss) {
     var f = it.next();
-    if (f.getName().indexOf(idEvent + ' - ') === 0 && !f.isTrashed()) ss = SpreadsheetApp.openById(f.getId());
+    if (f.getName().indexOf(awalan) === 0 && !f.isTrashed()) ss = SpreadsheetApp.openById(f.getId());
   }
   if (ss) {
     ss.rename(nama);

@@ -1,0 +1,158 @@
+<script>
+// Posetive — laporan kas bulanan (Google Spreadsheet): Ringkasan, Buku kas, Per event, Mutasi BCA.
+// Format baris sama dengan dataLaporanEvent: {sheets: [{nama, lebar, grid, rows: [{v, t, f, w}]}]}; ditulis server (Laporan.gs).
+var BULAN_PANJANG = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+function namaBulan(b) { return BULAN_PANJANG[Number(String(b).slice(5)) - 1] + ' ' + String(b).slice(0, 4); }
+/** Tanggal terakhir bulan b ('yyyy-mm') dan hari sebelum tanggal 1-nya. */
+function batasBulan(b) {
+  var y = Number(b.slice(0, 4)), m = Number(b.slice(5)), berikut = (m === 12 ? (y + 1) + '-01' : y + '-' + ('0' + (m + 1)).slice(-2)) + '-01';
+  return {awal: b + '-01', sebelum: addHari(b + '-01', -1), akhir: addHari(berikut, -1)};
+}
+function kasBulan(b) {
+  return (D.kas || []).filter(function (k) { return String(k.tanggal).slice(0, 7) === b; })
+    .sort(function (x, y) { return x.tanggal < y.tanggal ? -1 : x.tanggal > y.tanggal ? 1 : (x.id < y.id ? -1 : 1); });
+}
+
+function dataLaporanKas(b) {
+  var t = batasBulan(b), kas = kasBulan(b), usaha = D.pengaturan.NAMA_USAHA || 'Posetive Photobooth', sheets = [];
+  var lembar = function (nama, lebar, grid) { var s = {nama: nama, lebar: lebar, grid: !!grid, rows: []}; sheets.push(s); return s; };
+  var baris = function (s, v, tp, f, w) { s.rows.push({v: v, t: tp || '', f: f || [], w: !!w}); };
+  var kosong = function (s) { baris(s, []); };
+  var kepala = function (s, sub) {
+    baris(s, [usaha + ' — Laporan Kas'], 'sub');
+    baris(s, ['Kas ' + namaBulan(b) + (sub ? ' · ' + sub : '')], 'judul');
+    baris(s, ['Periode ' + tgl(t.awal) + ' – ' + tgl(t.akhir) + ' · dibuat ' + tgl(D.hariIni)], 'sub');
+    kosong(s);
+  };
+  var pindah = function (k) { return k.jenis === JENIS_PINDAH; };
+  var grup = function (list) {
+    var per = {};
+    list.forEach(function (k) { var c = k.kategori || 'Tanpa kategori', o = per[c] = per[c] || {n: 0, total: 0}; o.n++; o.total += num(k.nominal); });
+    return Object.keys(per).sort(function (x, y) { return per[y].total - per[x].total; }).map(function (c) { return [c, per[c].n, per[c].total]; });
+  };
+
+  // ---- Ringkasan
+  var s = lembar('Ringkasan', [260, 130, 130, 130, 150, 130]);
+  kepala(s);
+  baris(s, ['SALDO PER AKUN'], 'bagian');
+  baris(s, ['Akun', 'Saldo awal', 'Masuk', 'Keluar', 'Pindah dana (bersih)', 'Saldo akhir'], 'head');
+  var tot = [0, 0, 0, 0, 0], rpF = ['', 'rp', 'rp', 'rp', 'rp', 'rp'];
+  AKUN_DIVISI.forEach(function (a) {
+    var awal = saldoAkun(a, t.sebelum), akhir = saldoAkun(a, t.akhir);
+    var m = sum(kas.filter(function (k) { return k.jenis === 'Masuk' && akunKas(k) === a; }), function (k) { return k.nominal; });
+    var kl = sum(kas.filter(function (k) { return k.jenis === 'Keluar' && akunKas(k) === a; }), function (k) { return k.nominal; });
+    var pd = sum(kas.filter(pindah), function (k) { return (k.akun_tujuan === a ? num(k.nominal) : 0) - (akunKas(k) === a ? num(k.nominal) : 0); });
+    if (a === AKUN_LAMA && !Math.round(awal) && !Math.round(akhir) && !m && !kl && !pd) return; // kas lama sudah kosong & tidak dipakai
+    baris(s, [a === AKUN_LAMA ? 'Kas lama (sebelum BCA)' : a, awal, m, kl, pd, akhir], '', rpF);
+    [awal, m, kl, pd, akhir].forEach(function (x, i) { tot[i] += x; });
+  });
+  baris(s, ['Saldo kas divisi'].concat(tot), 'total', rpF);
+  kosong(s);
+
+  var masukList = kas.filter(function (k) { return k.jenis === 'Masuk' && k.kategori !== 'Setoran Owner'; });
+  var setoranList = kas.filter(function (k) { return k.jenis === 'Masuk' && k.kategori === 'Setoran Owner'; });
+  var keluarList = kas.filter(function (k) { return k.jenis === 'Keluar'; });
+  var tMasuk = sum(masukList, function (k) { return k.nominal; }), tSetoran = sum(setoranList, function (k) { return k.nominal; }), tKeluar = sum(keluarList, function (k) { return k.nominal; });
+  baris(s, ['PEMASUKAN'], 'bagian');
+  baris(s, ['Kategori', 'Jumlah transaksi', 'Nominal'], 'head');
+  grup(masukList).forEach(function (x) { baris(s, x, '', ['', 'n', 'rp']); });
+  if (!masukList.length) baris(s, ['Tidak ada pemasukan bulan ini.']);
+  baris(s, ['Total pemasukan', masukList.length, tMasuk], 'total', ['', 'n', 'rp']);
+  if (setoranList.length) baris(s, ['Setoran owner (modal, bukan pemasukan)', setoranList.length, tSetoran], '', ['', 'n', 'rp']);
+  kosong(s);
+  baris(s, ['PENGELUARAN'], 'bagian');
+  baris(s, ['Kategori', 'Jumlah transaksi', 'Nominal'], 'head');
+  grup(keluarList).forEach(function (x) { baris(s, x, '', ['', 'n', 'rp']); });
+  if (!keluarList.length) baris(s, ['Tidak ada pengeluaran bulan ini.']);
+  baris(s, ['Total pengeluaran', keluarList.length, tKeluar], 'total', ['', 'n', 'rp']);
+  kosong(s);
+
+  var diLuar = sum(kas.filter(function (k) { return !pindah(k) && !akunDivisi(akunKas(k)); }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); });
+  var utang = Math.max(0, -saldoAkun(AKUN_REIMBURSE, t.akhir));
+  baris(s, ['HASIL PERIODE'], 'bagian');
+  baris(s, ['Pemasukan', tMasuk], '', ['', 'rp']);
+  baris(s, ['Setoran owner', tSetoran], '', ['', 'rp']);
+  baris(s, ['Pengeluaran', -tKeluar], '', ['', 'rp']);
+  baris(s, ['Bersih periode ini', tMasuk + tSetoran - tKeluar], 'total', ['', 'rp']);
+  // Jembatan ke perubahan saldo: transaksi di luar kas divisi dikeluarkan lagi, pindah dana dari/ke luar kas divisi ditambahkan.
+  if (Math.round(diLuar)) baris(s, ['Dibayar owner langsung / reimburse (tidak lewat kas divisi)', -diLuar], '', ['', 'rp']);
+  if (Math.round(tot[3])) baris(s, ['Pindah dana dari/ke luar kas divisi (mis. ganti reimburse)', tot[3]], '', ['', 'rp']);
+  baris(s, ['Perubahan saldo kas divisi', tot[4] - tot[0]], 'total', ['', 'rp']);
+  baris(s, ['Reimburse belum diganti per akhir bulan', utang], '', ['', 'rp']);
+  kosong(s);
+
+  var cocok = (D.rekonsiliasi || []).filter(function (c) { return String(c.waktu).slice(0, 10) <= t.akhir; }).sort(function (x, y) { return x.waktu < y.waktu ? 1 : -1; })[0];
+  baris(s, ['PENCOCOKAN DENGAN REKENING BCA'], 'bagian');
+  if (cocok) {
+    baris(s, ['Terakhir dicocokkan', String(cocok.waktu) + (cocok.oleh ? ' oleh ' + cocok.oleh : '')]);
+    baris(s, ['Saldo di m-banking', num(cocok.saldo_bank)], '', ['', 'rp']);
+    baris(s, ['Saldo BCA menurut aplikasi', num(cocok.saldo_aplikasi)], '', ['', 'rp']);
+    baris(s, ['Selisih', num(cocok.selisih), num(cocok.selisih) ? 'Periksa' : 'Cocok'], 'total', ['', 'rp']);
+    if (cocok.catatan) baris(s, ['Catatan', String(cocok.catatan)], '', [], true);
+  } else baris(s, ['Belum pernah dicocokkan dengan rekening BCA sampai akhir bulan ini.']);
+
+  // ---- Buku kas (saldo berjalan kas divisi)
+  s = lembar('Buku kas', [95, 80, 95, 170, 280, 80, 170, 115, 115, 130, 230], true);
+  kepala(s, 'Buku kas');
+  baris(s, ['Tanggal', 'Kode', 'Jenis', 'Kategori', 'Keterangan', 'Event', 'Akun', 'Masuk', 'Keluar', 'Saldo kas divisi', 'Nota'], 'head');
+  var fB = ['tgl', '', '', '', '', '', '', 'rp', 'rp', 'rp'], jalan = tot[0];
+  baris(s, ['', '', '', '', 'Saldo awal', '', '', '', '', jalan, ''], '', fB);
+  kas.forEach(function (k) {
+    var a = akunKas(k), p = pindah(k), m = k.jenis === 'Masuk';
+    jalan += kontribusiKas(k);
+    baris(s, [k.tanggal, k.id, k.jenis, p ? '' : k.kategori || '', (k.keterangan || '') + (p ? ' (' + labelAkun(a) + ' → ' + labelAkun(k.akun_tujuan) + ', ' + rp(k.nominal) + ')' : ''), k.id_event || '',
+      labelAkun(a) + (!p && !akunDivisi(a) ? ' — tidak mengubah saldo' : ''), m ? num(k.nominal) : '', !m && !p ? num(k.nominal) : '', jalan, /^https?:/.test(k.no_nota || '') ? k.no_nota : ''], '', fB);
+  });
+  if (!kas.length) baris(s, ['Tidak ada transaksi bulan ini.']);
+  baris(s, ['Total', '', '', '', '', '', '', tMasuk + tSetoran, tKeluar, jalan, ''], 'total', fB);
+
+  // ---- Per event (event yang tanggalnya di bulan ini)
+  var ev = (D.event || []).filter(function (e) { return String(e.tanggal).slice(0, 7) === b && e.status !== 'Batal'; }).sort(function (x, y) { return x.tanggal < y.tanggal ? -1 : 1; });
+  s = lembar('Per event', [95, 75, 240, 160, 110, 115, 115, 115, 115, 115, 95], true);
+  kepala(s, 'Hasil per event');
+  baris(s, ['Tanggal', 'Kode', 'Event', 'Model', 'Status', 'Uang masuk', 'Biaya', 'Arus kas', 'Bahan cetak', 'Laba kotor', 'Sesi berbayar'], 'head');
+  var fE = ['tgl', '', '', '', '', 'rp', 'rp', 'rp', 'rp', 'rp', 'n'], tE = [0, 0, 0, 0, 0, 0];
+  ev.forEach(function (e) {
+    var r = hasilEvent(e), x = [r.masuk, r.keluar, r.masuk - r.keluar, r.bahan, r.labaKotor, r.lap ? r.sesiTerjual : 0];
+    baris(s, [e.tanggal, e.id_event, e.nama_event, e.model_pendapatan || '', e.status || ''].concat(x.slice(0, 5), [r.lap ? r.sesiTerjual : '']), '', fE);
+    x.forEach(function (v, i) { tE[i] += v; });
+  });
+  if (!ev.length) baris(s, ['Tidak ada event bulan ini.']);
+  else baris(s, ['Total', '', ev.length + ' event', '', ''].concat(tE), 'total', fE);
+  baris(s, ['Arus kas = uang masuk − biaya yang tercatat di Kas untuk event itu (sepanjang waktu). Laba kotor = arus kas − bahan cetak (lembar tercetak × HPP).'], 'sub');
+
+  // ---- Mutasi BCA (untuk disandingkan dengan mutasi m-banking)
+  var bca = kas.filter(function (k) { return akunKas(k) === AKUN_BCA || k.akun_tujuan === AKUN_BCA; }), sb = saldoAkun(AKUN_BCA, t.sebelum);
+  s = lembar('Mutasi BCA', [95, 80, 320, 80, 115, 115, 130], true);
+  kepala(s, 'Mutasi akun BCA Posetive');
+  baris(s, ['Tanggal', 'Kode', 'Keterangan', 'Event', 'Masuk', 'Keluar', 'Saldo BCA'], 'head');
+  var fM = ['tgl', '', '', '', 'rp', 'rp', 'rp'], mM = 0, mK = 0;
+  baris(s, ['', '', 'Saldo awal', '', '', '', sb], '', fM);
+  bca.forEach(function (k) {
+    var n = num(k.nominal), p = pindah(k), masuk = p ? k.akun_tujuan === AKUN_BCA : k.jenis === 'Masuk';
+    sb += masuk ? n : -n; if (masuk) mM += n; else mK += n;
+    baris(s, [k.tanggal, k.id, (k.keterangan || k.kategori || '') + (p ? ' (' + labelAkun(akunKas(k)) + ' → ' + labelAkun(k.akun_tujuan) + ')' : ''), k.id_event || '', masuk ? n : '', masuk ? '' : n, sb], '', fM);
+  });
+  if (!bca.length) baris(s, ['Tidak ada transaksi di akun BCA Posetive bulan ini.']);
+  baris(s, ['Total', '', '', '', mM, mK, sb], 'total', fM);
+  return {sheets: sheets};
+}
+
+/** Tombol di kartu ringkasan halaman Kas — memakai bulan yang sedang dipilih. */
+function unduhLaporanKas(btn) {
+  var b = FILTER.kas;
+  if (!b) { toast('Pilih bulan dulu di kartu ringkasan'); return; }
+  var nama = ('Kas ' + b + ' - ' + (D.pengaturan.NAMA_USAHA || 'Posetive Photobooth') + ' ' + namaBulan(b)).replace(/[\/\\]/g, '-');
+  btn.disabled = true; btn.textContent = 'Menyiapkan…';
+  var selesai = function () { btn.disabled = false; btn.textContent = 'Unduh laporan kas'; };
+  panggil('buatLaporanKasSheet', b, nama, dataLaporanKas(b)).then(function (hasil) {
+    selesai();
+    document.getElementById('panel').innerHTML = '<div class="grab"></div><h2>Laporan kas ' + esc(namaBulan(b)) + '</h2>' +
+      '<p class="meta">Tersimpan sebagai Google Spreadsheet di folder "Posetive - Laporan Kas" (lembar Ringkasan, Buku kas, Per event, Mutasi BCA). Unduh ulang kapan saja — file bulan yang sama diperbarui, tidak dobel.</p>' +
+      '<div class="btns"><a class="btn" style="text-decoration:none;flex:1;text-align:center" href="' + esc(hasil.url) + '" target="_blank" rel="noopener">Buka Spreadsheet</a>' +
+      '<a class="btn ghost" style="text-decoration:none;flex:1;text-align:center" href="' + esc(hasil.xlsx) + '" target="_blank" rel="noopener">Unduh .xlsx</a></div>' +
+      '<div class="btns"><button class="btn ghost" onclick="tutupForm()" style="flex:1">Tutup</button></div>';
+    document.getElementById('sheet').classList.add('open');
+  }).catch(function (err) { selesai(); toast('Gagal: ' + (err && err.message || err)); });
+}
+</script>

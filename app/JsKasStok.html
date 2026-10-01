@@ -21,20 +21,22 @@ function vKas() {
   var masuk = sum(list.filter(bukanSetoran), function (k) { return k.nominal; });
   var setoran = sum(list.filter(function (k) { return k.jenis === 'Masuk' && k.kategori === 'Setoran Owner'; }), function (k) { return k.nominal; });
   var keluar = sum(list.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
-  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Kas</div><div style="display:flex;gap:8px;align-items:center"><select class="plain" onchange="FILTER.kas=this.value;tampil(\'kas\')"><option value="">Semua bulan</option>' +
-    bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select><button class="ubah btn sm" onclick="formKas()">+ Catat</button></div></div>';
-  // Ringkasan mengikuti filter bulan & chip. Pindah dana tidak dihitung (bukan pemasukan/pengeluaran).
-  var judul = (f ? BLN[Number(f.slice(5)) - 1] + ' ' + f.slice(0, 4) : 'Semua bulan') + ' · ' + (sb === 'umum' ? 'transaksi Posetive' : sb === 'event' ? 'transaksi event' : 'semua transaksi');
+  var h = '<div class="bar"><div class="pagetitle" style="margin:0">Kas</div><button class="ubah btn sm" onclick="formKas()">+ Catat</button></div>';
+  // Kartu ringkasan periode: pilihan bulan ada di kartunya; isinya mengikuti bulan & chip. Pindah dana tidak dihitung.
+  var pilihBulan = '<select class="plain" aria-label="Periode" onchange="FILTER.kas=this.value;tampil(\'kas\')"><option value="">Semua bulan</option>' +
+    bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select>';
+  var judul = 'Ringkasan · ' + (sb === 'umum' ? 'transaksi Posetive' : sb === 'event' ? 'transaksi event' : 'semua transaksi');
   var bersih = masuk + setoran - keluar;
   // Transaksi owner langsung / reimburse ikut pemasukan & pengeluaran (laba), tapi tidak mengubah saldo kas divisi.
   var diLuar = sum(list.filter(function (k) { return k.jenis !== JENIS_PINDAH && !akunDivisi(akunKas(k)); }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); });
   h += '<div class="head2 head2b kas-kepala">' + htmlSaldoKas() +
-    '<div class="card pad"><div class="meta">' + judul + '</div><table style="margin-top:4px">' +
+    '<div class="card pad"><div class="bar" style="margin:0 0 4px"><div class="meta">' + judul + '</div>' + pilihBulan + '</div><table>' +
     '<tr><td>Pemasukan</td><td class="r pos">+' + rp(masuk) + '</td></tr>' +
     '<tr><td>Setoran owner</td><td class="r">+' + rp(setoran) + '</td></tr>' +
     '<tr><td>Pengeluaran</td><td class="r">−' + rp(keluar) + '</td></tr>' +
     '<tr class="total"><td>Bersih periode ini</td><td class="r ' + cls(bersih) + '">' + (bersih > 0 ? '+' : '') + rp(bersih) + '</td></tr></table>' +
-    (Math.round(diLuar) ? '<div class="meta" style="margin-top:6px">Termasuk ' + rp(Math.abs(diLuar)) + ' dibayar owner langsung / reimburse — ikut dihitung di sini, tapi tidak mengubah saldo kas divisi.</div>' : '') + '</div></div>';
+    (Math.round(diLuar) ? '<div class="meta" style="margin-top:6px">Termasuk ' + rp(Math.abs(diLuar)) + ' dibayar owner langsung / reimburse — ikut dihitung di sini, tapi tidak mengubah saldo kas divisi.</div>' : '') +
+    '<div class="btns" style="margin:10px 0 0"><button class="btn sm ghost" style="flex:1" onclick="unduhLaporanKas(this)">Unduh laporan kas' + (f ? ' ' + BLN[Number(f.slice(5)) - 1] + ' ' + f.slice(0, 4) : '') + '</button></div></div></div>';
   h += '<div class="chips" style="margin-bottom:14px">' + [['', 'Semua'], ['umum', 'Posetive'], ['event', 'Event']].map(function (c) {
     return '<button class="chip ' + (c[0] === sb ? 'on' : '') + '" onclick="FILTER.kasSumber=\'' + c[0] + '\';tampil(\'kas\')">' + c[1] + '</button>';
   }).join('') + '</div>';

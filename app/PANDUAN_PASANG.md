@@ -120,6 +120,19 @@ dengan jam, lokasi, klien + WA, dan rekan crew — tanpa kontrak, fee, kas, atau
   reimburse belum diganti; tunai/pegangan yang belum kembali; belum dicocokkan > 7 hari.
 - Kategori baru: *Setor ke Owner* (keluar), *Sewa Alat* (masuk), *Penyesuaian Saldo*.
 
+## Laporan kas bulanan
+- **Kas → kartu Ringkasan → pilih bulan → Unduh laporan kas**. Hasilnya Google Spreadsheet di folder Drive
+  **Posetive - Laporan Kas**, satu file per bulan (`Kas 2026-09 - …`); diunduh ulang → file yang sama diperbarui, tidak dobel.
+  Bisa dibuka langsung atau diunduh sebagai .xlsx. Admin dan pemantau bisa membuatnya.
+- Isi empat lembar:
+  - **Ringkasan** — saldo per akun (awal, masuk, keluar, pindah dana, akhir), pemasukan & pengeluaran per kategori,
+    hasil periode beserta jembatannya ke perubahan saldo, reimburse yang belum diganti, dan pencocokan BCA terakhir.
+  - **Buku kas** — semua transaksi bulan itu dengan saldo kas divisi berjalan. Transaksi *dibayar owner langsung* /
+    *reimburse* tetap tampil tetapi ditandai "tidak mengubah saldo".
+  - **Per event** — uang masuk, biaya, arus kas, bahan cetak, dan laba kotor tiap event di bulan itu.
+  - **Mutasi BCA** — hanya transaksi akun BCA Posetive dengan saldo berjalan, untuk disandingkan dengan mutasi m-banking.
+- Cocokkan dulu saldo BCA (Kas → Cocokkan) sebelum mengunduh laporan akhir bulan, supaya hasil pencocokannya ikut tercantum.
+
 ## Voucher mitra (mis. Sinektive)
 - **Ubah event → Voucher mitra**: isi nama mitra (bawaan *Sinektive*) dan **potongan per voucher** (yang ditagih ke mitra).
 - Detail event → **Voucher** → **Tambah voucher**: tempel daftar kode, satu per baris (`KODE` atau `KODE, nama pemegang`),

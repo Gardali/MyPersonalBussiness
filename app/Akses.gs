@@ -19,7 +19,7 @@ function izin_() {
   sesiSaya: [function (u) { return publik_(u); }, SEMUA, true],
   gantiPin: [gantiPin_, SEMUA, true],
   getData: [getData_, LIHAT], getFotoCrew: [getFotoCrew_, LIHAT], statusOtomatis: [statusOtomatis_, LIHAT],
-  buatLaporanPdf: [buatLaporanPdf_, LIHAT], buatInvoice: [buatInvoice_, LIHAT], buatLaporanEventSheet: [buatLaporanEventSheet_, LIHAT],
+  buatLaporanPdf: [buatLaporanPdf_, LIHAT], buatInvoice: [buatInvoice_, LIHAT], buatLaporanEventSheet: [buatLaporanEventSheet_, LIHAT], buatLaporanKasSheet: [buatLaporanKasSheet_, LIHAT],
   fotoLaporan: [fotoLaporan_, LIHAT], setujuiLaporan: [setujuiLaporan_, ADMIN, true], batalSetujuiLaporan: [batalSetujuiLaporan_, ADMIN, true],
   centangSop: [centangSop_, ADMIN, true], simpanCocokBank: [simpanCocokBank_, ADMIN, true],
   tambahVoucher: [tambahVoucher_, ADMIN, true], hapusVoucher: [hapusVoucher_, ADMIN, true], tukarVoucher: [tukarVoucher_, ADMIN, true],
