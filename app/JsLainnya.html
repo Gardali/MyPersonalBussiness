@@ -8,15 +8,9 @@ function vInventaris() {
   var aset = D.inventaris.filter(function (x) { return x.kategori === 'Aset'; });
   var butuhUmur = aset.filter(function (x) { return itemPenyusutan(x).butuhUmur; });
   var h = '<button class="back" onclick="tampil(\'lainnya\')">‹ Lainnya</button><div class="bar"><div class="pagetitle" style="margin:0">Inventaris</div><button class="ubah btn sm" onclick="formInventaris()">+ Barang</button></div>';
-  var target = targetEventBulan();
   h += '<div class="stats uang"><div class="stat"><div class="k">Nilai aset (' + aset.length + ')</div><div class="v">' + rp(sum(aset, function (x) { return x.nilai_beli; })) + '</div></div>' +
-    '<div class="stat"><div class="k">Penyusutan/bulan</div><div class="v">' + rp(totalPenyusutanBulanan()) + '</div></div>' +
-    '<div class="stat"><div class="k">Alokasi/event</div><div class="v">' + rp(totalPenyusutanBulanan() / target) + '</div></div></div>';
-  h += '<div class="card pad" style="margin-bottom:10px"><div class="bar" style="margin:0;gap:10px"><label for="inv_target" style="font-weight:600">Target event per bulan</label>' +
-    '<div style="display:flex;gap:8px;align-items:center"><input id="inv_target" type="number" inputmode="numeric" min="1" step="1" value="' + target + '" style="width:72px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit;text-align:center">' +
-    '<button class="ubah btn sm" onclick="simpanTargetEvent(this)">Simpan</button></div></div>' +
-    '<div class="meta" style="margin-top:8px">Alokasi per event = ' + rp(totalPenyusutanBulanan()) + ' ÷ ' + target + ' event = <b>' + rp(totalPenyusutanBulanan() / target) + '</b>. Dipakai untuk RAB event baru, kalkulator skema, dan event yang belum dilaporkan; event yang sudah ada laporannya tetap terkunci.</div></div>';
-  h += '<div class="meta" style="margin-bottom:14px">Dihitung dari barang kategori Aset, milik Posetive, harga ≥ ' + rp(Pd('PENYUSUTAN_HARGA_MIN', 250000)) + ' (atur di PENGATURAN), dan umur manfaat terisi.</div>';
+    '<div class="stat"><div class="k">Penyusutan/bulan</div><div class="v">' + rp(totalPenyusutanBulanan()) + '</div></div></div>';
+  h += '<div class="meta" style="margin-bottom:14px">Dihitung dari barang kategori Aset, milik Posetive, harga ≥ ' + rp(Pd('PENYUSUTAN_HARGA_MIN', 250000)) + ' (atur di PENGATURAN), dan umur manfaat terisi. Penyusutan tidak dibebankan ke event — masuk ke laporan bulanan.</div>';
   if (butuhUmur.length) h += notice('', '<b>' + butuhUmur.length + ' aset</b> di atas harga minimal belum diisi umur manfaat, belum ikut dihitung penyusutan: ' + butuhUmur.map(function (x) { return esc(x.nama); }).join(', ') + '.');
   h += '<div class="chips" style="margin-bottom:14px">' + [['', 'Semua'], ['Aset', 'Aset'], ['Barang Habis Pakai', 'Habis Pakai']].map(function (c) {
     return '<button class="chip ' + (c[0] === f ? 'on' : '') + '" onclick="FILTER.inventaris=\'' + c[0] + '\';tampil(\'inventaris\')">' + c[1] + '</button>';
@@ -25,7 +19,7 @@ function vInventaris() {
     var p = itemPenyusutan(x), pinjam = x.pemilik && x.pemilik !== 'Posetive';
     var sub = esc(x.kategori || '—') + (x.jumlah ? ' · ' + x.jumlah + ' ' + esc(x.satuan || '') : '') + (pinjam ? ' · pinjaman ' + esc(x.pemilik) : '');
     var end = x.nilai_beli ? rp(x.nilai_beli) : '';
-    if (p.umur) end += '<div class="s">' + (p.aktif ? rp(p.bulanan) + '/bln · ' + rp(p.bulanan / target) + '/event' : 'lunas susut') + '</div><div class="s">buku ' + rp(p.nilaiBuku) + '</div>';
+    if (p.umur) end += '<div class="s">' + (p.aktif ? rp(p.bulanan) + '/bln' : 'lunas susut') + '</div><div class="s">buku ' + rp(p.nilaiBuku) + '</div>';
     return item({t: esc(x.nama) + (x.kondisi && x.kondisi !== 'Baik' ? ' <span class="pill p-warn">' + esc(x.kondisi) + '</span>' : ''), s: sub, end: end, on: "formInventaris('" + x.id_alat + "')"});
   }).join('') : '<div class="empty">Belum ada barang.</div>') + '</div>';
   return h;
@@ -88,13 +82,6 @@ function formHpp() {
     el.innerHTML = '<div class="card pad" style="background:var(--soft);box-shadow:none"><div class="meta">Pratinjau</div><div style="font-weight:700;margin:2px 0 8px">HPP ' + rp(x.lembar) + '/lembar' +
       (x.lembar !== biayaLembar() ? ' <span class="meta">(sekarang ' + rp(biayaLembar()) + ')</span>' : '') + '</div>' + tabelMargin(x.produk) + '</div>';
   });
-}
-function simpanTargetEvent(btn) {
-  var n = Math.round(Number(document.getElementById('inv_target').value));
-  if (!(n >= 1)) { toast('Target minimal 1 event per bulan'); return; }
-  btn.disabled = true; btn.textContent = 'Menyimpan…';
-  panggil('simpanPengaturan', 'EVENT_BULAN', n).then(function () { toast('Target ' + n + ' event/bulan tersimpan'); return muat(true); })
-    .catch(function (e) { btn.disabled = false; btn.textContent = 'Simpan'; toast('Gagal: ' + (e && e.message || e)); });
 }
 var F_INVENTARIS = [
   {n: 'nama', l: 'Nama barang', wajib: 1},
@@ -193,6 +180,8 @@ function dataLaporan(bulan) {
   r.event = D.event.filter(function (e) { return inM(e.tanggal); }).sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : 1; }).map(function (e) { return {e: e, h: hasilEvent(e)}; });
   r.selesai = r.event.filter(function (x) { return x.e.status === 'Selesai'; });
   r.labaKotor = sum(r.selesai, function (x) { return x.h.labaKotor; });
+  r.bulanan = biayaBulanan(bulan);
+  r.labaBersih = r.labaKotor - r.bulanan.total;
   r.piutang = D.event.map(function (e) { return {e: e, h: hasilEvent(e)}; }).filter(function (x) { return x.h.piutang > 0 && x.e.status !== 'Batal'; });
   r.prospekBaru = D.pipeline.filter(function (p) { return inM(p.tanggal_masuk); });
   r.deal = D.pipeline.filter(function (p) { return p.status === 'Deal' && inM(p.tanggal_masuk); });
@@ -214,7 +203,10 @@ function htmlLaporan(bulan, catatan, cetak) {
   h += h3('Ringkasan') + tb([
     ['Event di bulan ini', r.event.length + ' (' + r.selesai.length + ' selesai)'],
     ['Pemasukan', rp(r.masuk)], ['Biaya operasional', rp(r.biaya)], ['<b>Hasil operasional</b>', '<b>' + rp(r.masuk - r.biaya) + '</b>'],
-    ['Laba kotor event selesai (setelah bahan)', rp(r.labaKotor)], ['Belanja alat', rp(r.alat)], ['Dana dari owner', rp(r.setoran)], ['Saldo kas akhir bulan', rp(r.saldo)]]);
+    ['Laba kotor event selesai (setelah bahan)', rp(r.labaKotor)],
+    ['Langganan Jepreto (aplikasi booth)', rp(-r.bulanan.jepreto)], ['Penyusutan alat', rp(-r.bulanan.penyusutan)],
+    ['<b>Laba bersih bulan ini</b> <span style="color:#7a736a">(laba kotor event − Jepreto − penyusutan)</span>', '<b>' + rp(r.labaBersih) + '</b>'],
+    ['Belanja alat', rp(r.alat)], ['Dana dari owner', rp(r.setoran)], ['Saldo kas akhir bulan', rp(r.saldo)]]);
   h += h3('Event') + (r.event.length ? tb([['<b>Event</b>', '<b>Omzet</b>', '<b>Biaya</b>', '<b>Laba kotor</b>']].concat(r.event.map(function (x) {
     return [tgl(x.e.tanggal) + ' · ' + esc(x.e.nama_event) + ' <span style="color:#7a736a">(' + esc(x.e.model_pendapatan || '-') + ', ' + esc(x.e.status) + ')</span>', rp(x.h.masuk), rp(x.h.keluar + x.h.bahan), rp(x.h.labaKotor)];
   }))) : '<div>Tidak ada event.</div>');

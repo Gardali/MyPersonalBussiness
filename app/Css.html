@@ -652,6 +652,28 @@
     font-weight: 400
   }
 
+  /* Sekat tanggal di daftar Kas */
+  .tgl-sep {
+    display: flex;
+    justify-content: space-between;
+    margin: 0 -14px;
+    padding: 6px 14px;
+    background: var(--soft);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums
+  }
+
+  .tgl-sep:first-child {
+    margin-top: -4px;
+    border-radius: 16px 16px 0 0
+  }
+
+  .tgl-sep + .it {
+    border-top: 0
+  }
+
   .dt {
     width: 44px;
     height: 48px;
@@ -1186,6 +1208,11 @@
 
     .card {
       padding: 4px 12px
+    }
+
+    .tgl-sep {
+      margin: 0 -12px;
+      padding: 6px 12px
     }
   }
 

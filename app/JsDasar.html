@@ -91,9 +91,16 @@ function statusPill(s) { var c = {Deal: 'p-ok', Selesai: 'p-ok', Kalah: 'p-bad',
 // ---------------------------------------------------------------- perhitungan
 function P(k) { return num(D.pengaturan[k]); }
 function biayaLembar() { return (P('HARGA_KERTAS') / (P('ISI_KERTAS') || 1) + P('HARGA_TINTA') / (P('KAPASITAS_TINTA') || 1)) * (1 + P('CADANGAN_GAGAL')); }
-/** Target event per bulan (PENGATURAN EVENT_BULAN) — pembagi alokasi penyusutan & Jepreto per event. */
-function targetEventBulan() { return Pd('EVENT_BULAN', 4) || 1; }
-function alokasiEvent() { return (P('JEPRETO_BULAN') + totalPenyusutanBulanan()) / targetEventBulan(); }
+/**
+ * Biaya tetap bulan b ('yyyy-mm'): langganan Jepreto (aplikasi booth) + penyusutan alat.
+ * Tidak dibebankan ke event — hanya tampil di laporan bulanan.
+ */
+function biayaBulanan(b) {
+  // ponytail: tarif Jepreto = PENGATURAN saat ini untuk semua bulan; simpan riwayat tarif bila perlu laporan bulan lama yang persis.
+  var o = {jepreto: P('JEPRETO_BULAN'), penyusutan: totalPenyusutanBulanan(b + '-31')};
+  o.total = o.jepreto + o.penyusutan;
+  return o;
+}
 function bukanSetoran(k) { return k.jenis === 'Masuk' && k.kategori !== 'Setoran Owner'; }
 
 // ---- penyusutan inventaris
@@ -102,16 +109,20 @@ function bulanAntara(a, b) {
   var m = (Number(pb[0]) - Number(pa[0])) * 12 + (Number(pb[1]) - Number(pa[1])) - (Number(pb[2]) < Number(pa[2]) ? 1 : 0);
   return Math.max(0, m);
 }
-/** Penyusutan garis lurus: hanya barang kategori Aset, milik Posetive, harga ≥ PENYUSUTAN_HARGA_MIN, dan umur manfaat terisi. */
-function itemPenyusutan(x) {
+/**
+ * Penyusutan garis lurus: hanya barang kategori Aset, milik Posetive, harga ≥ PENYUSUTAN_HARGA_MIN, dan umur manfaat terisi.
+ * per = tanggal acuan (bawaan hari ini); bila diisi, barang yang baru masuk setelah tanggal itu belum disusutkan.
+ */
+function itemPenyusutan(x, per) {
   var layak = x.kategori === 'Aset' && (!x.pemilik || x.pemilik === 'Posetive') && num(x.nilai_beli) >= Pd('PENYUSUTAN_HARGA_MIN', 250000);
   if (!layak) return {layak: false, bulanan: 0};
   if (!num(x.umur_manfaat_bulan)) return {layak: true, butuhUmur: true, bulanan: 0};
-  var nilai = num(x.nilai_beli), umur = num(x.umur_manfaat_bulan), elapsed = x.tanggal_masuk ? bulanAntara(x.tanggal_masuk, D.hariIni) : 0;
-  var aktif = elapsed < umur, perBulan = nilai / umur;
+  var belumMasuk = !!per && String(x.tanggal_masuk || '') > per;
+  var nilai = num(x.nilai_beli), umur = num(x.umur_manfaat_bulan), elapsed = x.tanggal_masuk ? bulanAntara(x.tanggal_masuk, per || D.hariIni) : 0;
+  var aktif = elapsed < umur && !belumMasuk, perBulan = nilai / umur;
   return {layak: true, bulanan: aktif ? perBulan : 0, aktif: aktif, elapsed: elapsed, umur: umur, nilaiBuku: Math.max(0, nilai - perBulan * Math.min(elapsed, umur))};
 }
-function totalPenyusutanBulanan() { return sum(D.inventaris, function (x) { return itemPenyusutan(x).bulanan; }); }
+function totalPenyusutanBulanan(per) { return sum(D.inventaris, function (x) { return itemPenyusutan(x, per).bulanan; }); }
 
 function hasilEvent(ev) {
   var kas = D.kas.filter(function (k) { return k.id_event === ev.id_event; });
@@ -125,20 +136,14 @@ function hasilEvent(ev) {
   h.tercetak = lap ? Math.max(0, num(lap.counter_akhir) - num(lap.counter_awal)) : 0;
   h.bahan = h.tercetak * h.bl + (lap ? (num(lap.grad_book_terjual) + num(lap.buku_rusak)) * h.biayaBuku : 0);
   var realisasiKategori = function (kat) { return sum(kas.filter(function (k) { return k.jenis === 'Keluar' && k.kategori === kat; }), function (k) { return k.nominal; }); };
-  h.rab = { penyusutan: num(ev.rab_penyusutan), jepreto: num(ev.rab_jepreto), feeCrew: num(ev.rab_fee_crew), transport: num(ev.rab_transport), konsumsi: num(ev.rab_konsumsi) };
-  h.realisasi = {
-    penyusutan: (lap && lap.realisasi_penyusutan !== '' && lap.realisasi_penyusutan != null) ? num(lap.realisasi_penyusutan) : totalPenyusutanBulanan() / targetEventBulan(),
-    jepreto: (lap && lap.realisasi_jepreto !== '' && lap.realisasi_jepreto != null) ? num(lap.realisasi_jepreto) : P('JEPRETO_BULAN') / targetEventBulan(),
-    feeCrew: realisasiKategori('Fee Crew'), transport: realisasiKategori('Transport'), konsumsi: realisasiKategori('Konsumsi')
-  };
-  h.alokasi = h.realisasi.penyusutan + h.realisasi.jepreto;
+  // Jepreto & penyusutan tidak dibebankan ke event (lihat biayaBulanan) — laba event berhenti di laba kotor.
+  h.rab = { feeCrew: num(ev.rab_fee_crew), transport: num(ev.rab_transport), konsumsi: num(ev.rab_konsumsi) };
+  h.realisasi = { feeCrew: realisasiKategori('Fee Crew'), transport: realisasiKategori('Transport'), konsumsi: realisasiKategori('Konsumsi') };
   h.labaKotor = h.masuk - h.keluar - h.bahan;
-  h.labaBersih = h.labaKotor - h.alokasi;
   h.untungLembar = hargaEv(ev, 'HARGA_4R') - h.bl;
   h.bepLapangan = h.untungLembar > 0 ? Math.ceil((h.keluar) / h.untungLembar) : null;
-  h.bepTotal = h.untungLembar > 0 ? Math.ceil((h.keluar + h.alokasi) / h.untungLembar) : null;
-  // Titik impas sesuai RAB: seluruh biaya yang direncanakan (penyusutan, Jepreto, fee crew, transport, konsumsi) ÷ untung per lembar.
-  h.rabTotal = h.rab.penyusutan + h.rab.jepreto + h.rab.feeCrew + h.rab.transport + h.rab.konsumsi;
+  // Titik impas sesuai RAB: seluruh biaya yang direncanakan (fee crew, transport, konsumsi) ÷ untung per lembar.
+  h.rabTotal = h.rab.feeCrew + h.rab.transport + h.rab.konsumsi;
   h.bepRab = h.untungLembar > 0 && h.rabTotal > 0 ? Math.ceil(h.rabTotal / h.untungLembar) : null;
   impasKs(ev, h);
   if (lap) {
@@ -337,10 +342,8 @@ function hitungSkema(o) {
   var crew = o.crew === '' || o.crew == null ? Pd('CREW_DEFAULT', 2) : num(o.crew);
   r.bahan = sesi * biayaLembar();
   r.lapangan = crew * (P('FEE_CREW') + P('KONSUMSI_ORANG')) + P('TRANSPORT_STD');
-  r.alokasi = alokasiEvent();
-  r.labaLapangan = r.pendapatan - r.panitia - r.bahan - r.lapangan;
-  r.laba = r.labaLapangan - r.alokasi;
-  r.status = r.laba >= 0 ? 'AMAN' : r.labaLapangan >= 0 ? 'TIPIS' : 'RUGI';
+  r.laba = r.pendapatan - r.panitia - r.bahan - r.lapangan;
+  r.status = r.laba >= 0 ? 'AMAN' : 'RUGI';
   r.crew = crew;
   if (['Kontrak Klien', 'E. Voucher Prabayar', 'F. Bundling Peserta'].indexOf(o.skema) < 0 && !o.tanpaImpas) {
     r.impas = null;
@@ -359,7 +362,7 @@ function estimasiPipeline(p) {
   if (sk === 'Kontrak Klien' ? !num(p.harga_deal || p.harga_penawaran) : !num(p.estimasi_sesi)) return null;
   return hitungSkema({skema: sk, sesi: p.estimasi_sesi, harga: p.harga_deal || p.harga_penawaran, ks: p});
 }
-function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', TIPIS: 'p-warn', RUGI: 'p-bad'}[st] + '">' + st + '</span>'; }
+function pillStatus(st) { return '<span class="pill ' + {AMAN: 'p-ok', RUGI: 'p-bad'}[st] + '">' + st + '</span>'; }
 
 // ---------------------------------------------------------------- tampilan
 function tampil(v) {

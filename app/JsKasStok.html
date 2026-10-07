@@ -9,38 +9,51 @@ function barisKas(k) {
     s: tgl(k.tanggal) + ' · ' + esc(labelAkun(a)) + ' → ' + esc(labelAkun(k.akun_tujuan)) + (k.id_event ? ' · ' + esc(k.id_event) : ''), end: notaBtn(k.no_nota) + '<span>⇄ ' + rp(k.nominal) + '</span>', on: "formKas('" + k.id + "')"});
   var tanda = a === AKUN_OWNER ? ' · <span class="pill">owner langsung</span>' : a === AKUN_REIMBURSE ? ' · <span class="pill p-warn">reimburse</span>' : a === AKUN_TUNAI ? ' · <span class="pill">tunai</span>' : '';
   return item({lead: '<div class="ic ' + (m ? 'in' : '') + '">' + ikon(m ? 'down' : 'up') + '</div>', t: esc(k.keterangan || k.kategori), s: tgl(k.tanggal) + ' · ' + esc(k.kategori) + (k.id_event ? ' · ' + esc(k.id_event) : '') + tanda,
-    end: notaBtn(k.no_nota) + '<span class="' + (m ? 'pos' : '') + '">' + (m ? '+' : '−') + rp(k.nominal) + '</span>', on: "formKas('" + k.id + "')"});
+    end: notaBtn(k.no_nota) + '<span class="' + (m ? 'pos' : 'neg') + '">' + (m ? '+' : '−') + rp(k.nominal) + '</span>', on: "formKas('" + k.id + "')"});
 }
 
 function vKas() {
   var bulanList = Array.from(new Set(D.kas.map(function (k) { return String(k.tanggal).slice(0, 7); }))).sort().reverse();
   var f = FILTER.kas, sb = FILTER.kasSumber;
   var list = D.kas.filter(function (k) { return !f || String(k.tanggal).slice(0, 7) === f; })
-    .filter(function (k) { return !sb || (sb === 'umum' ? !k.id_event : !!k.id_event); })
+    .filter(function (k) { return !sb || (sb === 'umum' ? !k.id_event : sb === 'owner' ? modalLangsung(k) : !!k.id_event); })
     .sort(function (a, b) { return a.tanggal < b.tanggal ? 1 : a.tanggal > b.tanggal ? -1 : (a.id < b.id ? 1 : -1); });
   var masuk = sum(list.filter(bukanSetoran), function (k) { return k.nominal; });
   var setoran = sum(list.filter(function (k) { return k.jenis === 'Masuk' && k.kategori === 'Setoran Owner'; }), function (k) { return k.nominal; });
+  var modalOwner = sum(list.filter(modalLangsung), function (k) { return k.nominal; });
   var keluar = sum(list.filter(function (k) { return k.jenis === 'Keluar'; }), function (k) { return k.nominal; });
   var h = '<div class="bar"><div class="pagetitle" style="margin:0">Kas</div><button class="ubah btn sm" onclick="formKas()">+ Catat</button></div>';
   // Kartu ringkasan periode: pilihan bulan ada di kartunya; isinya mengikuti bulan & chip. Pindah dana tidak dihitung.
   var pilihBulan = '<select class="plain" aria-label="Periode" onchange="FILTER.kas=this.value;tampil(\'kas\')"><option value="">Semua bulan</option>' +
     bulanList.map(function (b) { return '<option value="' + b + '"' + (b === f ? ' selected' : '') + '>' + BLN[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4) + '</option>'; }).join('') + '</select>';
-  var judul = 'Ringkasan · ' + (sb === 'umum' ? 'transaksi Posetive' : sb === 'event' ? 'transaksi event' : 'semua transaksi');
-  var bersih = masuk + setoran - keluar;
-  // Transaksi owner langsung / reimburse ikut pemasukan & pengeluaran (laba), tapi tidak mengubah saldo kas divisi.
-  var diLuar = sum(list.filter(function (k) { return k.jenis !== JENIS_PINDAH && !akunDivisi(akunKas(k)); }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); });
+  var judul = 'Ringkasan · ' + (sb === 'umum' ? 'transaksi Posetive' : sb === 'event' ? 'transaksi event' : sb === 'owner' ? 'pengeluaran dibayar owner' : 'semua transaksi');
+  var bersih = masuk + setoran + modalOwner - keluar;
+  // Pengeluaran owner langsung = modal owner (masuk & keluar sama besar). Sisanya (diterima owner langsung / reimburse)
+  // ikut pemasukan & pengeluaran, tapi tidak mengubah saldo kas divisi.
+  var diLuar = sum(list.filter(function (k) { return k.jenis !== JENIS_PINDAH && !akunDivisi(akunKas(k)) && !modalLangsung(k); }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); });
   h += '<div class="head2 head2b kas-kepala">' + htmlSaldoKas() +
     '<div class="card pad"><div class="bar" style="margin:0 0 4px"><div class="meta">' + judul + '</div>' + pilihBulan + '</div><table>' +
     '<tr><td>Pemasukan</td><td class="r pos">+' + rp(masuk) + '</td></tr>' +
     '<tr><td>Setoran owner</td><td class="r">+' + rp(setoran) + '</td></tr>' +
-    '<tr><td>Pengeluaran</td><td class="r">−' + rp(keluar) + '</td></tr>' +
+    (modalOwner ? '<tr><td>Modal owner (dibayar langsung)</td><td class="r">+' + rp(modalOwner) + '</td></tr>' : '') +
+    '<tr><td>Pengeluaran</td><td class="r neg">−' + rp(keluar) + '</td></tr>' +
     '<tr class="total"><td>Bersih periode ini</td><td class="r ' + cls(bersih) + '">' + (bersih > 0 ? '+' : '') + rp(bersih) + '</td></tr></table>' +
-    (Math.round(diLuar) ? '<div class="meta" style="margin-top:6px">Termasuk ' + rp(Math.abs(diLuar)) + ' dibayar owner langsung / reimburse — ikut dihitung di sini, tapi tidak mengubah saldo kas divisi.</div>' : '') +
+    (Math.round(diLuar) ? '<div class="meta" style="margin-top:6px">Termasuk ' + rp(Math.abs(diLuar)) + ' diterima owner langsung / reimburse — ikut dihitung di sini, tapi tidak mengubah saldo kas divisi.</div>' : '') +
     '<div class="btns" style="margin:10px 0 0"><button class="btn sm ghost" style="flex:1" onclick="unduhLaporanKas(this)">Unduh laporan kas' + (f ? ' ' + BLN[Number(f.slice(5)) - 1] + ' ' + f.slice(0, 4) : '') + '</button></div></div></div>';
-  h += '<div class="chips" style="margin-bottom:14px">' + [['', 'Semua'], ['umum', 'Posetive'], ['event', 'Event']].map(function (c) {
+  h += '<div class="chips" style="margin-bottom:14px">' + [['', 'Semua'], ['umum', 'Posetive'], ['event', 'Event'], ['owner', 'Dibayar owner']].map(function (c) {
     return '<button class="chip ' + (c[0] === sb ? 'on' : '') + '" onclick="FILTER.kasSumber=\'' + c[0] + '\';tampil(\'kas\')">' + c[1] + '</button>';
   }).join('') + '</div>';
-  h += '<div class="card">' + (list.length ? list.map(barisKas).join('') : '<div class="empty">Belum ada transaksi.</div>') + '</div>';
+  // Sekat per tanggal: judul tanggal + arus bersih hari itu (pindah dana tidak dihitung).
+  var isi = '', hari = null;
+  list.forEach(function (k, i) {
+    if (k.tanggal !== hari) {
+      hari = k.tanggal;
+      var net = sum(list.filter(function (x) { return x.tanggal === hari && x.jenis !== JENIS_PINDAH; }), function (x) { return x.jenis === 'Masuk' ? x.nominal : -num(x.nominal); });
+      isi += '<div class="tgl-sep"><span>' + tgl(hari) + '</span><span class="' + cls(net) + '">' + (net > 0 ? '+' : net < 0 ? '−' : '') + rp(Math.abs(net)) + '</span></div>';
+    }
+    isi += barisKas(k);
+  });
+  h += '<div class="card">' + (isi || '<div class="empty">Belum ada transaksi.</div>') + '</div>';
   return h;
 }
 

@@ -21,12 +21,12 @@ function vEvent() {
 function bukaEvent(id) { DETAIL = id; tampil('event'); }
 
 /**
- * Kartu titik impas: tiga target lembar — sesuai RAB (biaya rencana), biaya nyata + alokasi, dan biaya lapangan nyata.
+ * Kartu titik impas: dua target lembar — sesuai RAB (biaya rencana) dan biaya lapangan nyata.
  * Bar diskalakan ke target terbesar; ◆ = RAB, ▲ = biaya lapangan nyata.
  */
 function htmlTitikImpas(r, terjual, e) {
-  var skala = Math.max(r.bepTotal || 0, r.bepRab || 0, terjual, 1), pos = function (n) { return Math.min(100, Math.round(n / skala * 100)); };
-  var utama = r.bepRab !== null ? r.bepRab : r.bepTotal, tanda = function (n, simbol) { return '<div style="position:absolute;left:' + pos(n) + '%;transform:translateX(-50%);top:2px;font-size:11px;color:var(--muted);white-space:nowrap">' + simbol + ' ' + n + '</div>'; };
+  var skala = Math.max(r.bepLapangan || 0, r.bepRab || 0, terjual, 1), pos = function (n) { return Math.min(100, Math.round(n / skala * 100)); };
+  var utama = r.bepRab !== null ? r.bepRab : r.bepLapangan, tanda = function (n, simbol) { return '<div style="position:absolute;left:' + pos(n) + '%;transform:translateX(-50%);top:2px;font-size:11px;color:var(--muted);white-space:nowrap">' + simbol + ' ' + n + '</div>'; };
   var target = function (label, n, ket) {
     if (n === null) return r.bepKs ? '<tr><td>' + label + '</td><td class="r"><b class="neg">tidak impas</b><div class="meta">bagi hasil terlalu besar</div></td></tr>' : '';
     var capai = terjual >= n;
@@ -37,7 +37,6 @@ function htmlTitikImpas(r, terjual, e) {
     '<div style="position:relative;height:10px;border-radius:10px;background:var(--soft);overflow:hidden"><div style="height:100%;width:' + pos(terjual) + '%;background:' + (terjual >= utama ? 'var(--ok)' : 'var(--accent)') + ';border-radius:10px"></div></div>' +
     '<div style="position:relative;height:18px">' + (r.bepRab !== null ? tanda(r.bepRab, '◆') : '') + (r.bepLapangan !== null && r.bepLapangan !== r.bepRab ? tanda(r.bepLapangan, '▲') : '') + '</div>' +
     '<table>' + (r.rabTotal > 0 ? target('◆ Sesuai RAB', r.bepRab, 'RAB ' + rp(r.rabTotal) + (r.bepKs ? '' : ' ÷ ' + rp(r.untungLembar))) : '') +
-    target('Biaya nyata + alokasi', r.bepTotal, rp(r.keluar) + ' + alokasi ' + rp(r.alokasi)) +
     target('▲ Biaya lapangan nyata', r.bepLapangan, 'kas keluar ' + rp(r.keluar) + (r.bepKs ? ' (bagi hasil yang sudah dibayar tidak dihitung dua kali)' : '')) + '</table>' +
     (r.bepKs ? '<div class="meta" style="margin-top:6px">Sudah memperhitungkan ' + (r.bepKs === 'D' ? 'fee panitia ' + rp(r.feePanitia) + ' sebagai biaya tetap' : 'bagi hasil panitia Skema ' + r.bepKs + ' (' + esc(KS_NAMA[r.bepKs]) + ') per jumlah sesi') + '.</div>' : '') +
     (r.rabTotal > 0 ? '' : '<div class="meta" style="margin-top:6px">Isi RAB di Ubah event untuk melihat titik impas sesuai rencana.</div>') + '</div>';
@@ -114,12 +113,11 @@ function vDetailEvent() {
   if (String(e.catatan || '').indexOf('CEK:') === 0) h += notice('', esc(e.catatan.slice(4).trim()));
 
   var hk = '<div class="card pad"><div class="meta">Laba kotor</div><div class="big ' + cls(r.labaKotor) + '">' + rp(r.labaKotor) + '</div>' +
-    '<div class="meta" style="margin-bottom:8px">Setelah alokasi Jepreto + penyusutan: <b class="' + cls(r.labaBersih) + '">' + rp(r.labaBersih) + '</b></div><table>' +
+    '<div class="meta" style="margin-bottom:8px">Belum termasuk langganan Jepreto & penyusutan — dihitung di laporan bulanan.</div><table>' +
     '<tr><td>Pemasukan</td><td class="r">' + rp(r.masuk) + '</td></tr>' +
     '<tr><td>Biaya langsung</td><td class="r">−' + rp(r.keluar) + '</td></tr>' +
     '<tr class="total"><td>Arus kas event<div class="meta">uang masuk − keluar di event ini (angka yang ikut di Kas)</div></td><td class="r ' + cls(r.masuk - r.keluar) + '">' + rp(r.masuk - r.keluar) + '</td></tr>' +
-    '<tr><td>Bahan · ' + r.tercetak + ' lbr × ' + rp(r.bl) + '</td><td class="r">−' + rp(r.bahan) + '</td></tr>' +
-    '<tr><td>Alokasi per event</td><td class="r">−' + rp(r.alokasi) + '</td></tr></table>';
+    '<tr><td>Bahan · ' + r.tercetak + ' lbr × ' + rp(r.bl) + '</td><td class="r">−' + rp(r.bahan) + '</td></tr></table>';
   hk += '</div>';
   var tg = tagihan(e, r);
   if (tg) {
@@ -175,8 +173,7 @@ function vDetailEvent() {
     else if (Math.abs(r.omzet - r.masuk) > 0) lp += '<div style="margin-top:8px">' + notice('', 'Omzet laporan ' + rp(r.omzet) + ' ≠ pemasukan di Kas ' + rp(r.masuk) + '. Pastikan penjualan sudah dicatat.') + '</div>';
     h += sec('Laporan produksi', lp);
   }
-  var rabBaris = [['Penyusutan', r.rab.penyusutan, r.realisasi.penyusutan], ['Langganan Jepreto', r.rab.jepreto, r.realisasi.jepreto],
-    ['Fee crew', r.rab.feeCrew, r.realisasi.feeCrew], ['Transport', r.rab.transport, r.realisasi.transport], ['Konsumsi', r.rab.konsumsi, r.realisasi.konsumsi]];
+  var rabBaris = [['Fee crew', r.rab.feeCrew, r.realisasi.feeCrew], ['Transport', r.rab.transport, r.realisasi.transport], ['Konsumsi', r.rab.konsumsi, r.realisasi.konsumsi]];
   if (rabBaris.some(function (x) { return x[1]; })) {
     var rabTotal = 0, realTotal = 0;
     var rb = '<div class="card pad"><table><tr><td></td><td class="r" style="font-weight:600">RAB</td><td class="r" style="font-weight:600">Realisasi</td><td class="r" style="font-weight:600">Selisih</td></tr>' +
@@ -186,7 +183,7 @@ function vDetailEvent() {
         return '<tr><td>' + x[0] + '</td><td class="r">' + rp(x[1]) + '</td><td class="r">' + rp(x[2]) + '</td><td class="r ' + (s > 0 ? 'neg' : s < 0 ? 'pos' : '') + '">' + (s ? rp(s) : '—') + '</td></tr>';
       }).join('') +
       '<tr class="total"><td>Total</td><td class="r">' + rp(rabTotal) + '</td><td class="r">' + rp(realTotal) + '</td><td class="r ' + (realTotal > rabTotal ? 'neg' : realTotal < rabTotal ? 'pos' : '') + '">' + (realTotal !== rabTotal ? rp(realTotal - rabTotal) : '—') + '</td></tr></table></div>';
-    h += sec('RAB vs Realisasi', rb + '<div class="meta" style="margin-top:8px">' + (lap ? 'Penyusutan & Jepreto terkunci sesuai kondisi Inventaris saat laporan pertama kali disimpan.' : 'Penyusutan & Jepreto masih perkiraan langsung dari Inventaris — terkunci setelah laporan diisi.') + '</div>');
+    h += sec('RAB vs Realisasi', rb);
   }
   h += '</div><div class="col">';
   var tugas = D.tugas.filter(function (t) { return t.id_event === e.id_event; });
@@ -340,12 +337,10 @@ function dataLaporanEvent(e) {
   kv(s, 'Arus kas event (masuk − keluar)', r.masuk - r.keluar, 'rp', 'total');
   kv(s, 'Bahan cetak (' + r.tercetak + ' lembar × ' + rp(r.bl) + (r.lap && num(r.lap.grad_book_terjual) + num(r.lap.buku_rusak) ? ' + buku' : '') + ')', -r.bahan, 'rp');
   kv(s, 'Laba kotor', r.labaKotor, 'rp', 'total');
-  kv(s, 'Alokasi penyusutan + Jepreto', -r.alokasi, 'rp');
-  kv(s, 'Laba bersih', r.labaBersih, 'rp', 'total');
   if (r.masuk) kv(s, 'Margin laba kotor', r.labaKotor / r.masuk, 'pct');
   if (e.model_pendapatan !== 'Kontrak Klien' && r.untungLembar > 0) {
     if (r.bepRab !== null) kv(s, 'Titik impas sesuai RAB (lembar)', r.bepRab, 'n');
-    if (r.bepTotal !== null) kv(s, 'Titik impas biaya nyata + alokasi (lembar)', r.bepTotal, 'n');
+    if (r.bepLapangan !== null) kv(s, 'Titik impas biaya lapangan nyata (lembar)', r.bepLapangan, 'n');
   }
   kosong(s);
 
@@ -361,8 +356,7 @@ function dataLaporanEvent(e) {
     kosong(s);
   }
 
-  var rab = [['Penyusutan', r.rab.penyusutan, r.realisasi.penyusutan], ['Langganan Jepreto', r.rab.jepreto, r.realisasi.jepreto],
-    ['Fee crew', r.rab.feeCrew, r.realisasi.feeCrew], ['Transport', r.rab.transport, r.realisasi.transport], ['Konsumsi', r.rab.konsumsi, r.realisasi.konsumsi]];
+  var rab = [['Fee crew', r.rab.feeCrew, r.realisasi.feeCrew], ['Transport', r.rab.transport, r.realisasi.transport], ['Konsumsi', r.rab.konsumsi, r.realisasi.konsumsi]];
   if (rab.some(function (x) { return x[1]; })) {
     baris(s, ['RAB VS REALISASI'], 'bagian');
     baris(s, ['Kategori', 'RAB', 'Realisasi', 'Selisih'], 'head');
@@ -523,8 +517,6 @@ var F_EVENT = [
   {n: 'voucher_mitra', l: 'Nama mitra voucher', def: 'Sinektive', isiUlang: 1},
   {n: 'voucher_nilai', l: 'Potongan per voucher (ditagih ke mitra) — daftar kode diisi lewat tombol Voucher di detail event', t: 'rp'},
   {g: 'RAB (Rencana Anggaran Biaya)'},
-  {n: 'rab_penyusutan', l: 'Alokasi penyusutan (Rp) — saran dari Inventaris ÷ target event/bulan', t: 'num', def: function () { return Math.round(totalPenyusutanBulanan() / targetEventBulan()); }},
-  {n: 'rab_jepreto', l: 'Alokasi langganan Jepreto (Rp) — saran dari PENGATURAN ÷ target event/bulan', t: 'num', def: function () { return Math.round(P('JEPRETO_BULAN') / targetEventBulan()); }},
   {n: 'rab_fee_crew', l: 'Fee crew (Rp)', t: 'num'}, {n: 'rab_transport', l: 'Transport (Rp)', t: 'num'}, {n: 'rab_konsumsi', l: 'Konsumsi (Rp)', t: 'num'},
   {n: 'catatan', l: 'Catatan', t: 'area'}
 ]);
@@ -578,8 +570,8 @@ function formLaporan(idEvent) {
     if (b !== null) l.stok_buku_awal = b;
   }
   bukaForm('Laporan ' + idEvent, F_LAPORAN, l, function (r) {
-    r.id_event = idEvent; // HPP & alokasi dikunci di server (kunciLaporan_)
+    r.id_event = idEvent; // HPP dikunci di server (kunciLaporan_)
     return panggil('simpanLaporan', r, ambilFotoForm());
-  }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. Alokasi penyusutan & Jepreto, serta HPP bahan per lembar & per buku, terkunci sesuai kondisi Inventaris & PENGATURAN saat laporan pertama kali disimpan — perubahan berikutnya (termasuk menyunting laporan ini) tidak mengubah angka event ini lagi. Admin QRIS & admin pencairan otomatis tercatat sebagai transaksi Kas Keluar (sudah termasuk di "Biaya langsung"), tidak perlu dicatat manual lagi di Kas.</div>');
+  }, '<div class="meta">Stok kertas & buku otomatis berkurang sesuai counter printer dan buku terjual. HPP bahan per lembar & per buku terkunci sesuai PENGATURAN saat laporan pertama kali disimpan — perubahan berikutnya (termasuk menyunting laporan ini) tidak mengubah angka event ini lagi. Admin QRIS & admin pencairan otomatis tercatat sebagai transaksi Kas Keluar (sudah termasuk di "Biaya langsung"), tidak perlu dicatat manual lagi di Kas.</div>');
 }
 </script>

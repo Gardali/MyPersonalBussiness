@@ -49,7 +49,7 @@ function hapusEvent_(id) {
 
 /**
  * Menyimpan laporan event lalu memperbarui stok otomatis: kertas keluar = lembar tercetak (counter),
- * buku keluar = terjual + rusak, dan hitung fisik kertas bila diisi. HPP & alokasi dikunci di server (kunciLaporan_).
+ * buku keluar = terjual + rusak, dan hitung fisik kertas bila diisi. HPP dikunci di server (kunciLaporan_).
  * Stok & admin kas dihitung dari baris laporan lengkap setelah disimpan, jadi isian yang tidak dikirim (mis. admin
  * QRIS saat crew menyimpan) tetap dipakai, bukan dianggap nol. fotos: foto bukti baru, lihat simpanFotoLaporan_.
  */

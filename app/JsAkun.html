@@ -4,7 +4,7 @@
 var AKUN_KAS = [
   ['BCA Posetive', 'BCA Posetive'],
   ['Tunai / pegangan crew', 'Tunai / pegangan crew'],
-  ['Dibayar owner langsung', 'Dibayar / diterima owner langsung (tidak masuk saldo)'],
+  ['Dibayar owner langsung', 'Dibayar / diterima owner langsung (pengeluaran = modal owner, tidak masuk saldo)'],
   ['Reimburse', 'Reimburse — dibayar dulu dengan uang pribadi, diganti nanti'],
   ['Kas lama', 'Kas lama (sebelum rekening BCA)']
 ];
@@ -14,6 +14,8 @@ var JENIS_PINDAH = 'Pindah dana';
 
 /** Catatan lama (sebelum kolom akun ada) = Kas lama. */
 function akunKas(k) { return k.akun || AKUN_LAMA; }
+/** Pengeluaran yang dibayar owner langsung = modal/investasi owner (bukan utang, bukan reimburse). */
+function modalLangsung(k) { return k.jenis === 'Keluar' && akunKas(k) === AKUN_OWNER; }
 function akunDivisi(a) { return AKUN_DIVISI.indexOf(a || AKUN_LAMA) >= 0; }
 /**
  * Pengaruh satu catatan terhadap saldo kas divisi. Masuk/Keluar hanya dihitung bila akunnya milik divisi

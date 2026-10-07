@@ -45,11 +45,11 @@ function hitungKalkulator() {
     .map(function (sk) { return hitungSkema({skema: sk, sesi: KALK.sesi, crew: KALK.crew, harga: KALK.harga}); })
     .sort(function (a, b) { return b.laba - a.laba; });
   var r0 = rows[0] || {};
-  var h = '<div class="meta" style="margin:4px 0 8px">Biaya tetap per event: bahan ' + rp(biayaLembar()) + '/sesi · lapangan ' + rp(r0.lapangan) + ' (' + r0.crew + ' crew + transport) · alokasi ' + rp(r0.alokasi) + '</div><div class="card">';
+  var h = '<div class="meta" style="margin:4px 0 8px">Biaya tetap per event: bahan ' + rp(biayaLembar()) + '/sesi · lapangan ' + rp(r0.lapangan) + ' (' + r0.crew + ' crew + transport)</div><div class="card">';
   h += rows.map(function (r) {
     return item({t: esc(r.skema), s: esc(r.ket) + ' · omzet ' + rp(r.pendapatan) + (r.panitia ? ' · panitia ' + rp(r.panitia) : '') + (r.impas !== undefined ? ' · impas ' + (r.impas === null ? '>1000' : r.impas) + ' sesi' : ''),
       end: '<span class="' + cls(r.laba) + '">' + rp(r.laba) + '</span><div class="s" style="margin-top:3px">' + pillStatus(r.status) + '</div>'});
-  }).join('') + '</div><div class="meta" style="margin-top:8px"><b>AMAN</b> = untung setelah alokasi Jepreto & penyusutan. <b>TIPIS</b> = biaya lapangan tertutup, alokasi belum. <b>RUGI</b> = biaya lapangan pun tidak tertutup.</div>';
+  }).join('') + '</div><div class="meta" style="margin-top:8px"><b>AMAN</b> = bahan & biaya lapangan tertutup. <b>RUGI</b> = tidak tertutup. Langganan Jepreto & penyusutan tidak dihitung per event — lihat laporan bulanan.</div>';
   document.getElementById('k_hasil').innerHTML = h;
 }
 
@@ -64,8 +64,7 @@ function previewPipeline(r) {
     '<tr><td>Omzet' + (e.ket ? ' <span class="meta">(' + esc(e.ket) + ')</span>' : '') + '</td><td class="r">' + rp(e.pendapatan) + '</td></tr>' +
     (e.panitia ? '<tr><td>Ke panitia</td><td class="r">−' + rp(e.panitia) + '</td></tr>' : '') +
     '<tr><td>Bahan (' + e.sesi + ' sesi)</td><td class="r">−' + rp(e.bahan) + '</td></tr>' +
-    '<tr><td>Lapangan (' + e.crew + ' crew + transport)</td><td class="r">−' + rp(e.lapangan) + '</td></tr>' +
-    '<tr><td>Alokasi Jepreto + penyusutan</td><td class="r">−' + rp(e.alokasi) + '</td></tr></table>' +
+    '<tr><td>Lapangan (' + e.crew + ' crew + transport)</td><td class="r">−' + rp(e.lapangan) + '</td></tr></table>' +
     (e.impas !== undefined ? '<div class="meta" style="margin-top:6px">Impas di ' + (e.impas === null ? 'lebih dari 1000' : e.impas) + ' sesi.</div>' : '') + '</div>';
 }
 

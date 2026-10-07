@@ -52,6 +52,7 @@ function dataLaporanKas(b) {
   var masukList = kas.filter(function (k) { return k.jenis === 'Masuk' && k.kategori !== 'Setoran Owner'; });
   var setoranList = kas.filter(function (k) { return k.jenis === 'Masuk' && k.kategori === 'Setoran Owner'; });
   var keluarList = kas.filter(function (k) { return k.jenis === 'Keluar'; });
+  var modalList = kas.filter(modalLangsung), tModal = sum(modalList, function (k) { return k.nominal; });
   var tMasuk = sum(masukList, function (k) { return k.nominal; }), tSetoran = sum(setoranList, function (k) { return k.nominal; }), tKeluar = sum(keluarList, function (k) { return k.nominal; });
   baris(s, ['PEMASUKAN'], 'bagian');
   baris(s, ['Kategori', 'Jumlah transaksi', 'Nominal'], 'head');
@@ -59,6 +60,7 @@ function dataLaporanKas(b) {
   if (!masukList.length) baris(s, ['Tidak ada pemasukan bulan ini.']);
   baris(s, ['Total pemasukan', masukList.length, tMasuk], 'total', ['', 'n', 'rp']);
   if (setoranList.length) baris(s, ['Setoran owner (modal, bukan pemasukan)', setoranList.length, tSetoran], '', ['', 'n', 'rp']);
+  if (modalList.length) baris(s, ['Modal owner — pengeluaran dibayar owner langsung', modalList.length, tModal], '', ['', 'n', 'rp']);
   kosong(s);
   baris(s, ['PENGELUARAN'], 'bagian');
   baris(s, ['Kategori', 'Jumlah transaksi', 'Nominal'], 'head');
@@ -67,15 +69,16 @@ function dataLaporanKas(b) {
   baris(s, ['Total pengeluaran', keluarList.length, tKeluar], 'total', ['', 'n', 'rp']);
   kosong(s);
 
-  var diLuar = sum(kas.filter(function (k) { return !pindah(k) && !akunDivisi(akunKas(k)); }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); });
+  var diLuar = sum(kas.filter(function (k) { return !pindah(k) && !akunDivisi(akunKas(k)) && !modalLangsung(k); }), function (k) { return k.jenis === 'Masuk' ? k.nominal : -num(k.nominal); });
   var utang = Math.max(0, -saldoAkun(AKUN_REIMBURSE, t.akhir));
   baris(s, ['HASIL PERIODE'], 'bagian');
   baris(s, ['Pemasukan', tMasuk], '', ['', 'rp']);
   baris(s, ['Setoran owner', tSetoran], '', ['', 'rp']);
   baris(s, ['Pengeluaran', -tKeluar], '', ['', 'rp']);
-  baris(s, ['Bersih periode ini', tMasuk + tSetoran - tKeluar], 'total', ['', 'rp']);
+  if (tModal) baris(s, ['Modal owner (dibayar langsung)', tModal], '', ['', 'rp']);
+  baris(s, ['Bersih periode ini', tMasuk + tSetoran + tModal - tKeluar], 'total', ['', 'rp']);
   // Jembatan ke perubahan saldo: transaksi di luar kas divisi dikeluarkan lagi, pindah dana dari/ke luar kas divisi ditambahkan.
-  if (Math.round(diLuar)) baris(s, ['Dibayar owner langsung / reimburse (tidak lewat kas divisi)', -diLuar], '', ['', 'rp']);
+  if (Math.round(diLuar)) baris(s, ['Diterima owner langsung / reimburse (tidak lewat kas divisi)', -diLuar], '', ['', 'rp']);
   if (Math.round(tot[3])) baris(s, ['Pindah dana dari/ke luar kas divisi (mis. ganti reimburse)', tot[3]], '', ['', 'rp']);
   baris(s, ['Perubahan saldo kas divisi', tot[4] - tot[0]], 'total', ['', 'rp']);
   baris(s, ['Reimburse belum diganti per akhir bulan', utang], '', ['', 'rp']);
@@ -119,7 +122,12 @@ function dataLaporanKas(b) {
   });
   if (!ev.length) baris(s, ['Tidak ada event bulan ini.']);
   else baris(s, ['Total', '', ev.length + ' event', '', ''].concat(tE), 'total', fE);
-  baris(s, ['Arus kas = uang masuk − biaya yang tercatat di Kas untuk event itu (sepanjang waktu). Laba kotor = arus kas − bahan cetak (lembar tercetak × HPP).'], 'sub');
+  // Biaya tetap bulanan: tidak dibebankan ke event, dipotong sekali dari total laba kotor bulan ini.
+  var bb = biayaBulanan(b), barisBulanan = function (label, v, tp) { baris(s, ['', '', label, '', '', '', '', '', '', v], tp, fE); };
+  barisBulanan('Langganan Jepreto (aplikasi booth)', -bb.jepreto);
+  barisBulanan('Penyusutan alat', -bb.penyusutan);
+  barisBulanan('Laba bersih bulan ini', tE[4] - bb.total, 'total');
+  baris(s, ['Arus kas = uang masuk − biaya yang tercatat di Kas untuk event itu (sepanjang waktu). Laba kotor = arus kas − bahan cetak (lembar tercetak × HPP). Laba bersih bulan = total laba kotor − langganan Jepreto − penyusutan alat.'], 'sub');
 
   // ---- Mutasi BCA (untuk disandingkan dengan mutasi m-banking)
   var bca = kas.filter(function (k) { return akunKas(k) === AKUN_BCA || k.akun_tujuan === AKUN_BCA; }), sb = saldoAkun(AKUN_BCA, t.sebelum);

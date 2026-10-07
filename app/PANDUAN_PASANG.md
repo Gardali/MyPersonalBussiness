@@ -111,7 +111,8 @@ dengan jam, lokasi, klien + WA, dan rekan crew — tanpa kontrak, fee, kas, atau
   **Dibayar owner langsung**, **Reimburse** (dibayar dulu dengan uang pribadi, diganti nanti), **Kas lama** (semua catatan
   sebelum rekening BCA).
 - **Saldo kas divisi = BCA Posetive + tunai/pegangan + kas lama.** *Dibayar owner langsung* dan *Reimburse* tetap ikut laba
-  event, tapi tidak mengubah saldo. Reimburse yang belum diganti tampil sebagai utang divisi.
+  event, tapi tidak mengubah saldo. Pengeluaran *dibayar owner langsung* dihitung sebagai **modal owner** (investasi,
+  bukan utang); Reimburse yang belum diganti tampil sebagai utang divisi.
 - **Pindah dana** (jenis kas) untuk uang yang hanya berpindah tempat — bukan pemasukan/pengeluaran:
   saldo awal Kas lama → BCA, pegangan BCA → Tunai, sisa pegangan Tunai → BCA, ganti reimburse BCA → Reimburse.
 - **Kas → Cocokkan dengan BCA**: ketik saldo m-banking; aplikasi menampilkan selisih & transaksi BCA sejak pencocokan
@@ -194,7 +195,8 @@ dengan jam, lokasi, klien + WA, dan rekan crew — tanpa kontrak, fee, kas, atau
 ## Aturan pakai
 - Isi data **lewat aplikasi**. Membuka spreadsheet langsung tetap boleh, tapi jangan mengubah judul
   kolom (baris 1) atau nama tab.
-- HPP, harga jual, dan target event per bulan diubah lewat aplikasi (**Lainnya → HPP & harga jual**,
-  **Lainnya → Inventaris**) supaya laporan event lama ikut terkunci. Angka lain di tab **PENGATURAN**.
+- HPP dan harga jual diubah lewat aplikasi (**Lainnya → HPP & harga jual**) supaya laporan event lama
+  ikut terkunci. Angka lain di tab **PENGATURAN** (termasuk `JEPRETO_BULAN`, biaya langganan per bulan
+  yang dipotong di laporan bulanan).
 - Baris dengan catatan diawali `CEK:` muncul di Beranda sebagai "Perlu dicek". Hapus tulisan `CEK:`
   setelah diperiksa.
